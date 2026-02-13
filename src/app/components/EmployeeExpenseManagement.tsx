@@ -175,52 +175,52 @@ export function EmployeeExpenseManagement() {
       {/* Financial Summary Cards */}
       <div className="grid grid-cols-3 gap-6">
         {/* Total Payroll */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Users size={24} className="text-[#3B82F6]" />
-            </div>
-            <div className="text-xs text-gray-500">شهر فبراير</div>
-          </div>
-          <div className="text-sm text-gray-600 mb-1">إجمالي الرواتب والتعويضات</div>
-          <div className="text-3xl font-bold text-[#1E293B]">
-            {totalPayroll.toLocaleString()} <span className="text-lg">ج.م</span>
-          </div>
-          <div className="mt-3 text-xs text-gray-500">{employees.length} موظف نشط</div>
-        </div>
+        
+        <div className="bg-[#E0F2FE] rounded-xl shadow-sm border border-gray-200 p-6">
+  <div className="flex items-center justify-between mb-4">
+    <div className="w-14 h-14 bg-[#BFDBFE] rounded-lg flex items-center justify-center">
+      <Users size={28} className="text-[#3B82F6]" />
+    </div>
+    <div className="text-sm text-gray-500">شهر فبراير</div>
+  </div>
+  <div className="text-base text-gray-600 mb-1">إجمالي الرواتب والتعويضات</div>
+  <div className="text-4xl font-bold text-[#1E293B]">
+    {totalPayroll.toLocaleString()} <span className="text-lg">ج.م</span>
+  </div>
+  <div className="mt-3 text-sm text-gray-500">{employees.length} موظف نشط</div>
+</div>
 
-        {/* Total Expenses */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-              <DollarSign size={24} className="text-[#F59E0B]" />
-            </div>
-            <div className="text-xs text-gray-500">حتى الآن</div>
-          </div>
-          <div className="text-sm text-gray-600 mb-1">المصاريف التشغيلية</div>
-          <div className="text-3xl font-bold text-[#1E293B]">
-            {totalExpenses.toLocaleString()} <span className="text-lg">ج.م</span>
-          </div>
-          <div className="mt-3 text-xs text-gray-500">{expenses.length} عملية مصروف</div>
-        </div>
+        <div className="bg-[#FFF7ED] rounded-xl shadow-sm border border-gray-200 p-6">
+    <div className="flex items-center justify-between mb-4">
+      <div className="w-14 h-14 bg-[#FFE7C0] rounded-lg flex items-center justify-center">
+        <DollarSign size={28} className="text-[#F59E0B]" />
+      </div>
+      <div className="text-sm text-gray-500">حتى الآن</div>
+    </div>
+    <div className="text-base text-gray-600 mb-1">المصاريف التشغيلية</div>
+    <div className="text-4xl font-bold text-[#1E293B]">
+      {totalExpenses.toLocaleString()} <span className="text-lg">ج.م</span>
+    </div>
+    <div className="mt-3 text-sm text-gray-500">{expenses.length} عملية مصروف</div>
+  </div>
 
-        {/* Estimated Net Profit */}
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow-sm border-2 border-[#10B981] p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-[#10B981] rounded-lg flex items-center justify-center shadow-lg">
-              <TrendingUp size={24} className="text-white" />
-            </div>
-            <div className="text-xs text-green-700 font-semibold">تقديري</div>
-          </div>
-          <div className="text-sm text-green-700 mb-1 font-semibold">صافي الربح التقديري</div>
-          <div className="text-3xl font-bold text-[#10B981]">
-            {estimatedProfit.toLocaleString()} <span className="text-lg">ج.م</span>
-          </div>
-          <div className="mt-3 flex items-center gap-1 text-xs text-green-600">
-            <TrendingUp size={14} />
-            <span>زيادة 12% عن الشهر السابق</span>
-          </div>
-        </div>
+
+        <div className="bg-[#ECFDF5] rounded-xl shadow-sm border border-[#10B981] p-6">
+    <div className="flex items-center justify-between mb-4">
+      <div className="w-14 h-14 bg-[#A7F3D0] rounded-lg flex items-center justify-center shadow-lg">
+        <TrendingUp size={28} className="text-[#10B981]" />
+      </div>
+      <div className="text-sm text-green-700 font-semibold">تقديري</div>
+    </div>
+    <div className="text-base text-green-700 mb-1 font-semibold">صافي الربح التقديري</div>
+    <div className="text-4xl font-bold text-[#10B981]">
+      {estimatedProfit.toLocaleString()} <span className="text-lg">ج.م</span>
+    </div>
+    <div className="mt-3 flex items-center gap-1 text-sm text-green-600">
+      <TrendingUp size={16} />
+      <span>زيادة 12% عن الشهر السابق</span>
+    </div>
+      </div>
       </div>
 
       {/* Tab Navigation */}

@@ -9,9 +9,14 @@ import { EmployeeExpenseManagement } from './components/EmployeeExpenseManagemen
 import { SystemSettings } from './components/SystemSettings';
 import { UserManagement } from './components/UserManagement';
 import { LoginScreen } from './components/LoginScreen';
+import { SignUpScreen } from './components/SignUpScreen';
+
+
 import { Dashboard } from './components/Dashboard';
 import { InstallmentsManagement } from './components/InstallmentsManagement';
 import { SalesRepresentatives } from './components/SalesRepresentatives';
+
+
 
 // Mock product data
 export interface Product {
@@ -38,7 +43,7 @@ const mockProducts: Product[] = [
   { id: '7', name: 'كاميرا رقمية', price: 12000, category: 'إلكترونيات', image: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=400' },
   { id: '8', name: 'حقيبة جلدية', price: 650, category: 'إكسسوارات', image: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=400' },
   { id: '9', name: 'نظارة شمسية', price: 320, category: 'إكسسوارات', image: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400' },
-  { id: '10', name: 'تابلت آيباد', price: 9500, category: 'إلكرونيات', image: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=400' },
+  // { id: '10', name: 'تابلت آيباد', price: 9500, category: 'إلكرونيات', image: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=400' },
   { id: '11', name: 'ماوس لاسلكي', price: 180, category: 'إلكترونيات', image: 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=400' },
   { id: '12', name: 'كيبورد ميكانيكي', price: 850, category: 'إلكترونيات', image: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=400' },
 ];
@@ -51,11 +56,30 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [discount, setDiscount] = useState<number>(0);
+  const [authScreen, setAuthScreen] = useState<'login' | 'signup'>('login');
 
-  // If not logged in, show login screen
-  if (!isLoggedIn) {
-    return <LoginScreen onLogin={() => setIsLoggedIn(true)} />;
+
+
+if (!isLoggedIn) {
+  if (authScreen === 'login') {
+    return (
+      <LoginScreen
+        onLogin={() => setIsLoggedIn(true)}
+        onGoToSignUp={() => setAuthScreen('signup')}
+      />
+    );
   }
+
+  if (authScreen === 'signup') {
+    return (
+      <SignUpScreen
+        onBackToLogin={() => setAuthScreen('login')}
+      />
+    );
+  }
+}
+
+
 
   const addToCart = (product: Product) => {
     setCartItems((prev) => {
@@ -171,11 +195,14 @@ export default function App() {
         </div>
       )}
 
-      {activeScreen === 'login' && (
+      {/* {activeScreen === 'login' && (
         <div className="flex-1">
           <LoginScreen />
         </div>
-      )}
+      )} */}
+
+
+
 
       {activeScreen === 'home' && (
         <div className="flex-1">
