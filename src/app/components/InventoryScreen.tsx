@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Search, Barcode, FileDown, Edit2, Trash2 } from 'lucide-react';
 import { ProductModal } from './ProductModal';
+import { createProduct, deleteProduct, getProducts, updateProduct } from '../../api/inventoryApi'; // استدعاء دالة الاتصال بالباك إند
 
 export interface InventoryProduct {
   id: string;
@@ -142,13 +143,40 @@ const mockInventory: InventoryProduct[] = [
 ];
 
 export function InventoryScreen() {
-  const [products, setProducts] = useState<InventoryProduct[]>(mockInventory);
+  // بدأنا بـ Data فاضية بدل الموك داتا عشان نجيب من الداتابيز الأول
+  const [products, setProducts] = useState<InventoryProduct[]>([]);
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('الكل');
   const [selectedSupplier, setSelectedSupplier] = useState('الكل');
   const [selectedStatus, setSelectedStatus] = useState('الكل');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<InventoryProduct | null>(null);
+
+  // جلب البيانات من Django أول ما الصفحة تفتح
+  useEffect(() => {
+    const fetchMyData = async () => {
+      try {
+        const data = await getProducts();
+        
+        // لو جانغو رجع داتا، هنحطها في الـ State
+        if (data && data.length > 0) {
+          // ملاحظة: لو أسماء الحقول في جانغو (cost_price) مختلفة عن ريأكت (costPrice) هنحتاج نعمل لها Map هنا
+          // مؤقتاً هنفترض إنها متطابقة أو هنحط الداتا مباشرة
+          setProducts(data);
+        } else {
+          // لو الداتابيز فاضية، نعرض الموك داتا للتجربة
+          setProducts(mockInventory);
+        }
+      } catch (error) {
+        console.error("Error fetching from Django, using mock data fallback", error);
+        // لو السيرفر مقفول، برضه نعرض الموك داتا عشان الصفحة ماتضربش
+        setProducts(mockInventory);
+      }
+    };
+
+    fetchMyData();
+  }, []);
 
   const categories = ['الكل', ...Array.from(new Set(products.map((p) => p.category)))];
   const suppliers = ['الكل', ...Array.from(new Set(products.map((p) => p.supplier)))];
@@ -175,21 +203,67 @@ export function InventoryScreen() {
     setIsModalOpen(true);
   };
 
-  const handleDeleteProduct = (id: string) => {
-    if (confirm('هل أنت متأكد من حذف هذا المنتج؟')) {
-      setProducts((prev) => prev.filter((p) => p.id !== id));
+  const handleDeleteProduct = async (id: string) => {
+    if (window.confirm('هل أنت متأكد من حذف هذا المنتج؟')) {
+
+      try {
+            await deleteProduct(id); // نداء للباك إند
+            setProducts((prev) => prev.filter((p) => p.id !== id)); // تحديث الواجهة
+            alert('تم الحذف بنجاح');
+        } catch (error) {
+            alert('حدث خطأ أثناء الحذف، تأكد من اتصال السيرفر');
+        }
+    
     }
   };
 
-  const handleSaveProduct = (product: InventoryProduct) => {
-    if (editingProduct) {
-      setProducts((prev) => prev.map((p) => (p.id === product.id ? product : p)));
-    } else {
-      setProducts((prev) => [...prev, { ...product, id: Date.now().toString() }]);
+ const handleSaveProduct = async (product: InventoryProduct) => {
+    // 1. تحويل البيانات بدقة لأسماء الحقول التي يتوقعها Django
+    const djangoData = {
+        sku: product.barcode, // تأكدنا أن اسمه sku بناءً على الخطأ السابق
+        name: product.name,
+        category: product.category,
+        current_stock: Number(product.currentStock), // تحويل لرقم
+        cost_price: Number(product.costPrice),       // تحويل لرقم
+        retail_price: Number(product.retailPrice),   // تحويل لرقم
+        wholesale_price: Number(product.wholesalePrice) || 0,
+        half_wholesale_price: Number(product.halfWholesalePrice) || 0,
+        supplier: product.supplier,
+        unit: product.unit || 'قطعة',
+        min_reorder_level: Number(product.minReorderLevel) || 0,
+        status: product.status || 'available'
+    };
+
+    try {
+        if (editingProduct) {
+            // حالة التعديل
+            const updatedProduct = await updateProduct(product.id, djangoData);
+            setProducts((prev) => 
+                prev.map((p) => (p.id === product.id ? { ...p, ...updatedProduct } : p))
+            );
+        } else {
+            // حالة الإضافة
+            const newProductFromServer = await createProduct(djangoData);
+            // تحديث الواجهة فوراً بالمنتج الجديد
+            setProducts((prev) => [...prev, newProductFromServer]);
+        }
+        
+        setIsModalOpen(false);
+        setEditingProduct(null);
+    } catch (error: any) {
+        // الاستجابة السحرية: هنا جانغو هيقولك العيب فين بالظبط
+        const serverErrors = error.response?.data;
+        console.error("Django Debug Info:", serverErrors);
+        
+        if (serverErrors) {
+            alert(`خطأ من السيرفر: ${JSON.stringify(serverErrors)}`);
+        } else {
+            alert('حدث خطأ غير متوقع، تأكد من اتصال السيرفر');
+        }
     }
-    setIsModalOpen(false);
-    setEditingProduct(null);
-  };
+};
+
+
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -216,6 +290,8 @@ export function InventoryScreen() {
     }
   };
 
+  
+
   return (
     <div className="h-full flex flex-col p-6 gap-6">
       {/* Page Header */}
@@ -226,6 +302,7 @@ export function InventoryScreen() {
             <FileDown size={20} />
             تصدير Excel
           </button>
+          
           <button
             onClick={handleAddProduct}
             className="px-6 py-3 bg-[#3B82F6] hover:bg-[#2563EB] text-white font-semibold rounded-xl flex items-center gap-2 transition-colors"
@@ -342,9 +419,9 @@ export function InventoryScreen() {
                       {product.currentStock} {product.unit}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-700">{product.costPrice.toFixed(2)} ج.م</td>
+                  <td className="px-4 py-3 text-gray-700">{Number(product.costPrice).toFixed(2)} ج.م</td>
                   <td className="px-4 py-3 text-gray-700 font-semibold">
-                    {product.retailPrice.toFixed(2)} ج.م
+                    {Number(product.retailPrice).toFixed(2)} ج.م
                   </td>
                   <td className="px-4 py-3">{getStatusBadge(product.status)}</td>
                   <td className="px-4 py-3">
@@ -379,6 +456,8 @@ export function InventoryScreen() {
           </div>
         </div>
       </div>
+
+      
 
       {/* Product Modal */}
       {isModalOpen && (

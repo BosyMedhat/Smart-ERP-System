@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ProductGrid } from './components/ProductGrid';
 import { Cart } from './components/Cart';
-import { InventoryScreen } from './components/InventoryScreen';
+import {InventoryScreen}  from './components/InventoryScreen';
 import { AICenter } from './components/AICenter';
 import { AutomationEngine } from './components/AutomationEngine';
 import { EmployeeExpenseManagement } from './components/EmployeeExpenseManagement';

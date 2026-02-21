@@ -83,7 +83,7 @@ export function ProductModal({ product, onSave, onClose }: ProductModalProps) {
                 <input
                   type="text"
                   value={formData.name}
-                  onChange={(e) => handleChange('name', e.target.value)}
+                  onChange={(e) => handleChange('name', e.target.value )}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                   placeholder="أدخل اسم المنتج"
                   required
