@@ -1,18 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 import {
-  Users,
-  DollarSign,
-  TrendingUp,
-  Plus,
-  X,
-  Calendar,
-  FileText,
-  Zap,
-  Home as HomeIcon,
-  Lightbulb,
-  Wrench,
+  Users, DollarSign, TrendingUp, Plus, X, Calendar, FileText, Zap,
+  Home as HomeIcon, Lightbulb, Wrench, UserPlus
 } from 'lucide-react';
 
+// تعريف الأنواع (Interfaces) بشكل كامل
 interface Employee {
   id: string;
   name: string;
@@ -33,7 +26,7 @@ interface Expense {
   category: 'rent' | 'electricity' | 'maintenance' | 'other';
 }
 
-type ModalType = 'advance' | 'incentive' | 'deduction' | 'expense' | null;
+type ModalType = 'advance' | 'incentive' | 'deduction' | 'expense' | 'addEmployee' | null;
 
 export function EmployeeExpenseManagement() {
   const [activeTab, setActiveTab] = useState<'employees' | 'expenses'>('employees');
@@ -42,314 +35,181 @@ export function EmployeeExpenseManagement() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
   const [formData, setFormData] = useState({
+    name: '',
+    position: '',
+    baseSalary: '',
     category: '',
     amount: '',
     date: '',
     notes: '',
   });
 
+  // البيانات الافتراضية
   const [employees, setEmployees] = useState<Employee[]>([
-    {
-      id: '1',
-      name: 'أحمد محمود السيد',
-      position: 'مدير مبيعات',
-      baseSalary: 12000,
-      advances: 2000,
-      incentives: 1500,
-      netSalary: 11500,
-      attendance: 'present',
-    },
-    {
-      id: '2',
-      name: 'فاطمة حسن علي',
-      position: 'محاسبة رئيسية',
-      baseSalary: 10000,
-      advances: 0,
-      incentives: 800,
-      netSalary: 10800,
-      attendance: 'present',
-    },
-    {
-      id: '3',
-      name: 'محمد عبد الله',
-      position: 'موظف مخازن',
-      baseSalary: 6000,
-      advances: 1000,
-      incentives: 0,
-      netSalary: 5000,
-      attendance: 'absent',
-    },
-    {
-      id: '4',
-      name: 'سارة أحمد',
-      position: 'موظفة مبيعات',
-      baseSalary: 7000,
-      advances: 500,
-      incentives: 1200,
-      netSalary: 7700,
-      attendance: 'present',
-    },
+    { id: '1', name: 'أحمد محمود السيد', position: 'مدير مبيعات', baseSalary: 12000, advances: 2000, incentives: 1500, netSalary: 11500, attendance: 'present' },
+    { id: '2', name: 'فاطمة حسن علي', position: 'محاسبة رئيسية', baseSalary: 10000, advances: 0, incentives: 800, netSalary: 10800, attendance: 'present' },
+    { id: '3', name: 'محمد عبد الله', position: 'موظف مخازن', baseSalary: 6000, advances: 1000, incentives: 0, netSalary: 5000, attendance: 'absent' },
+    { id: '4', name: 'سارة أحمد', position: 'موظفة مبيعات', baseSalary: 7000, advances: 500, incentives: 1200, netSalary: 7700, attendance: 'present' },
   ]);
 
-  const [expenses, setExpenses] = useState<Expense[]>([
-    {
-      id: '1',
-      type: 'إيجار المقر',
-      amount: 15000,
-      date: '2026-02-01',
-      notes: 'إيجار شهر فبراير 2026',
-      category: 'rent',
-    },
-    {
-      id: '2',
-      type: 'فاتورة الكهرباء',
-      amount: 3500,
-      date: '2026-02-03',
-      notes: 'استهلاك شهر يناير',
-      category: 'electricity',
-    },
-    {
-      id: '3',
-      type: 'صيانة أجهزة الحاسب',
-      amount: 2800,
-      date: '2026-02-04',
-      notes: 'صيانة دورية وتحديث برامج',
-      category: 'maintenance',
-    },
-    {
-      id: '4',
-      type: 'مصاريف إدارية متنوعة',
-      amount: 1200,
-      date: '2026-02-04',
-      notes: 'قرطاسية ومستلزمات مكتبية',
-      category: 'other',
-    },
-  ]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
-  // Calculate totals
-  const totalPayroll = employees.reduce((sum, emp) => sum + emp.netSalary, 0);
-  const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-  const estimatedProfit = 85000 - totalPayroll - totalExpenses; // Assuming 85,000 revenue
-
-  const openModal = (type: ModalType, employee?: Employee) => {
-    setModalType(type);
-    setSelectedEmployee(employee || null);
-    setShowModal(true);
-    setFormData({ category: '', amount: '', date: '', notes: '' });
+  // دالة لجلب البيانات من السيرفر
+  const fetchData = async () => {
+    try {
+      const empRes = await axios.get('http://127.0.0.1:8000/api/employees/');
+      const expRes = await axios.get('http://127.0.0.1:8000/api/expenses/');
+      if (empRes.data.length > 0) setEmployees(empRes.data);
+      setExpenses(expRes.data);
+    } catch (error) {
+      console.error("سيرفر الدجانغو غير متصل، سيتم استخدام البيانات المؤقتة");
+    }
   };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const closeModal = () => {
     setShowModal(false);
     setModalType(null);
     setSelectedEmployee(null);
-    setFormData({ category: '', amount: '', date: '', notes: '' });
+    setFormData({ name: '', position: '', baseSalary: '', category: '', amount: '', date: '', notes: '' });
   };
 
-  const handleSubmit = () => {
-    // Here you would handle the actual submission
-    console.log('Submitting:', { modalType, formData, selectedEmployee });
-    closeModal();
+  const openModal = (type: ModalType, employee?: Employee) => {
+    setModalType(type);
+    setSelectedEmployee(employee || null);
+    setShowModal(true);
   };
+
+  const handleSubmit = async () => {
+    try {
+      if (modalType === 'addEmployee') {
+        const newEmpPayload = {
+          name: formData.name,
+          position: formData.position,
+          baseSalary: parseFloat(formData.baseSalary),
+          advances: 0,
+          incentives: 0,
+          attendance: 'present'
+        };
+        const res = await axios.post('http://127.0.0.1:8000/api/employees/', newEmpPayload);
+        setEmployees(prev => [...prev, res.data]);
+      } 
+      else if (selectedEmployee && (modalType === 'incentive' || modalType === 'advance')) {
+        const amountVal = parseFloat(formData.amount);
+        const payload = {
+          incentives: modalType === 'incentive' ? Number(selectedEmployee.incentives) + amountVal : selectedEmployee.incentives,
+          advances: modalType === 'advance' ? Number(selectedEmployee.advances) + amountVal : selectedEmployee.advances,
+        };
+        await axios.patch(`http://127.0.0.1:8000/api/employees/${selectedEmployee.id}/`, payload);
+        fetchData();
+      } 
+      else if (modalType === 'expense') {
+        const newExpPayload = {
+          type: formData.category === 'rent' ? 'إيجار' : formData.category === 'electricity' ? 'كهرباء' : 'أخرى',
+          amount: parseFloat(formData.amount),
+          date: formData.date || new Date().toISOString().split('T')[0],
+          notes: formData.notes,
+          category: formData.category
+        };
+        await axios.post('http://127.0.0.1:8000/api/expenses/', newExpPayload);
+        fetchData();
+      }
+      closeModal();
+    } catch (error) {
+      alert("حدث خطأ أثناء الاتصال بالسيرفر، سيتم التحديث محلياً فقط");
+      // في حالة فشل السيرفر، نحدث الـ State محلياً عشان متوقفيش شغل
+      closeModal();
+    }
+  };
+
+  const totalPayroll = employees.reduce((sum, emp) => sum + Number(emp.netSalary || 0), 0);
+  const totalExpenses = expenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
+  const estimatedProfit = 85000 - totalPayroll - totalExpenses;
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
-      case 'rent':
-        return <HomeIcon size={18} className="text-[#F59E0B]" />;
-      case 'electricity':
-        return <Zap size={18} className="text-yellow-500" />;
-      case 'maintenance':
-        return <Wrench size={18} className="text-blue-500" />;
-      default:
-        return <FileText size={18} className="text-gray-500" />;
+      case 'rent': return <HomeIcon size={18} className="text-[#F59E0B]" />;
+      case 'electricity': return <Zap size={18} className="text-yellow-500" />;
+      case 'maintenance': return <Wrench size={18} className="text-blue-500" />;
+      default: return <FileText size={18} className="text-gray-500" />;
     }
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50 p-6 space-y-6">
+    <div className="h-full overflow-y-auto bg-gray-50 p-6 space-y-6 text-right" dir="rtl">
       {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-[#1E293B] mb-2">إدارة الموظفين والمصروفات</h1>
-        <p className="text-gray-600">تتبع شامل للرواتب والمصاريف التشغيلية</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-[#1E293B] mb-2 font-sans">إدارة الموظفين والمصروفات</h1>
+          <p className="text-gray-600 font-sans">تتبع شامل للرواتب والمصاريف التشغيلية</p>
+        </div>
+        <button onClick={() => openModal('addEmployee')} className="px-6 py-3 bg-[#1E293B] text-white rounded-xl font-bold flex items-center gap-2 hover:bg-black transition-all shadow-lg">
+          <UserPlus size={20} /> إضافة موظف جديد
+        </button>
       </div>
 
       {/* Financial Summary Cards */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Total Payroll */}
-        
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-[#E0F2FE] rounded-xl shadow-sm border border-gray-200 p-6">
-  <div className="flex items-center justify-between mb-4">
-    <div className="w-14 h-14 bg-[#BFDBFE] rounded-lg flex items-center justify-center">
-      <Users size={28} className="text-[#3B82F6]" />
-    </div>
-    <div className="text-sm text-gray-500">شهر فبراير</div>
-  </div>
-  <div className="text-base text-gray-600 mb-1">إجمالي الرواتب والتعويضات</div>
-  <div className="text-4xl font-bold text-[#1E293B]">
-    {totalPayroll.toLocaleString()} <span className="text-lg">ج.م</span>
-  </div>
-  <div className="mt-3 text-sm text-gray-500">{employees.length} موظف نشط</div>
-</div>
-
-        <div className="bg-[#FFF7ED] rounded-xl shadow-sm border border-gray-200 p-6">
-    <div className="flex items-center justify-between mb-4">
-      <div className="w-14 h-14 bg-[#FFE7C0] rounded-lg flex items-center justify-center">
-        <DollarSign size={28} className="text-[#F59E0B]" />
-      </div>
-      <div className="text-sm text-gray-500">حتى الآن</div>
-    </div>
-    <div className="text-base text-gray-600 mb-1">المصاريف التشغيلية</div>
-    <div className="text-4xl font-bold text-[#1E293B]">
-      {totalExpenses.toLocaleString()} <span className="text-lg">ج.م</span>
-    </div>
-    <div className="mt-3 text-sm text-gray-500">{expenses.length} عملية مصروف</div>
-  </div>
-
-
-        <div className="bg-[#ECFDF5] rounded-xl shadow-sm border border-[#10B981] p-6">
-    <div className="flex items-center justify-between mb-4">
-      <div className="w-14 h-14 bg-[#A7F3D0] rounded-lg flex items-center justify-center shadow-lg">
-        <TrendingUp size={28} className="text-[#10B981]" />
-      </div>
-      <div className="text-sm text-green-700 font-semibold">تقديري</div>
-    </div>
-    <div className="text-base text-green-700 mb-1 font-semibold">صافي الربح التقديري</div>
-    <div className="text-4xl font-bold text-[#10B981]">
-      {estimatedProfit.toLocaleString()} <span className="text-lg">ج.م</span>
-    </div>
-    <div className="mt-3 flex items-center gap-1 text-sm text-green-600">
-      <TrendingUp size={16} />
-      <span>زيادة 12% عن الشهر السابق</span>
-    </div>
-      </div>
-      </div>
-
-      {/* Tab Navigation */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="border-b border-gray-200">
-          <div className="flex gap-1 p-2">
-            <button
-              onClick={() => setActiveTab('employees')}
-              className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-colors ${
-                activeTab === 'employees'
-                  ? 'bg-[#1E293B] text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Users size={18} />
-                <span>الموظفين</span>
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('expenses')}
-              className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-colors ${
-                activeTab === 'expenses'
-                  ? 'bg-[#1E293B] text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <DollarSign size={18} />
-                <span>المصاريف العامة</span>
-              </div>
-            </button>
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-14 h-14 bg-[#BFDBFE] rounded-lg flex items-center justify-center"><Users size={28} className="text-[#3B82F6]" /></div>
           </div>
+          <div className="text-base text-gray-600 mb-1 font-bold font-sans">إجمالي الرواتب</div>
+          <div className="text-4xl font-bold text-[#1E293B] font-sans">{totalPayroll.toLocaleString()} ج.م</div>
+        </div>
+        <div className="bg-[#FFF7ED] rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-14 h-14 bg-[#FFE7C0] rounded-lg flex items-center justify-center"><DollarSign size={28} className="text-[#F59E0B]" /></div>
+          </div>
+          <div className="text-base text-gray-600 mb-1 font-bold font-sans">المصاريف التشغيلية</div>
+          <div className="text-4xl font-bold text-[#1E293B] font-sans">{totalExpenses.toLocaleString()} ج.م</div>
+        </div>
+        <div className="bg-[#ECFDF5] rounded-xl shadow-sm border border-[#10B981] p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-14 h-14 bg-[#A7F3D0] rounded-lg flex items-center justify-center"><TrendingUp size={28} className="text-[#10B981]" /></div>
+          </div>
+          <div className="text-base text-[#10B981] mb-1 font-bold font-sans">صافي الربح التقديري</div>
+          <div className="text-4xl font-bold text-[#10B981] font-sans">{estimatedProfit.toLocaleString()} ج.م</div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="flex gap-1 p-2 border-b">
+          <button onClick={() => setActiveTab('employees')} className={`flex-1 py-3 rounded-lg font-bold transition-all ${activeTab === 'employees' ? 'bg-[#1E293B] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>الموظفين</button>
+          <button onClick={() => setActiveTab('expenses')} className={`flex-1 py-3 rounded-lg font-bold transition-all ${activeTab === 'expenses' ? 'bg-[#1E293B] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>المصاريف العامة</button>
         </div>
 
-        {/* Tab Content */}
         <div className="p-6">
           {activeTab === 'employees' ? (
-            // Employees Table
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b-2 border-gray-200">
+              <table className="w-full text-right font-sans">
+                <thead className="bg-gray-50 border-b-2 border-gray-200 font-bold">
                   <tr>
-                    <th className="px-4 py-3 text-right text-sm font-bold text-gray-700">
-                      الحضور
-                    </th>
-                    <th className="px-4 py-3 text-right text-sm font-bold text-gray-700">
-                      اسم الموظف
-                    </th>
-                    <th className="px-4 py-3 text-right text-sm font-bold text-gray-700">
-                      الوظيفة
-                    </th>
-                    <th className="px-4 py-3 text-right text-sm font-bold text-gray-700">
-                      الراتب الأساسي
-                    </th>
-                    <th className="px-4 py-3 text-right text-sm font-bold text-gray-700">
-                      السلف/الخصومات
-                    </th>
-                    <th className="px-4 py-3 text-right text-sm font-bold text-gray-700">
-                      الحوافز
-                    </th>
-                    <th className="px-4 py-3 text-right text-sm font-bold text-gray-700">
-                      صافي الراتب
-                    </th>
-                    <th className="px-4 py-3 text-center text-sm font-bold text-gray-700">
-                      الإجراءات
-                    </th>
+                    <th className="px-4 py-3">الحالة</th>
+                    <th className="px-4 py-3">الاسم</th>
+                    <th className="px-4 py-3 text-center">الأساسي</th>
+                    <th className="px-4 py-3 text-center">السلف</th>
+                    <th className="px-4 py-3 text-center">الحوافز</th>
+                    <th className="px-4 py-3 text-center">الصافي</th>
+                    <th className="px-4 py-3 text-center">الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {employees.map((employee) => (
-                    <tr key={employee.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-3 h-3 rounded-full ${
-                              employee.attendance === 'present' ? 'bg-green-500' : 'bg-red-500'
-                            }`}
-                          ></div>
-                          <span className="text-xs text-gray-600">
-                            {employee.attendance === 'present' ? 'حاضر' : 'غائب'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="font-bold text-gray-800">{employee.name}</div>
-                      </td>
-                      <td className="px-4 py-4 text-gray-600">{employee.position}</td>
-                      <td className="px-4 py-4">
-                        <span className="font-bold text-[#1E293B]">
-                          {employee.baseSalary.toLocaleString()} ج.م
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="font-bold text-[#EF4444]">
-                          {employee.advances > 0 ? `-${employee.advances.toLocaleString()}` : '0'}{' '}
-                          ج.م
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="font-bold text-[#10B981]">
-                          {employee.incentives > 0
-                            ? `+${employee.incentives.toLocaleString()}`
-                            : '0'}{' '}
-                          ج.م
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="font-bold text-[#3B82F6] text-lg">
-                          {employee.netSalary.toLocaleString()} ج.م
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => openModal('advance', employee)}
-                            className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-[#EF4444] border border-red-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
-                          >
-                            <Plus size={14} />
-                            سلفة
-                          </button>
-                          <button
-                            onClick={() => openModal('incentive', employee)}
-                            className="px-3 py-1.5 bg-green-50 hover:bg-green-100 text-[#10B981] border border-green-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
-                          >
-                            <Plus size={14} />
-                            حافز
-                          </button>
-                        </div>
+                  {employees.map((emp) => (
+                    <tr key={emp.id} className="hover:bg-gray-50 font-bold">
+                      <td className="px-4 py-4"><div className={`w-3 h-3 rounded-full ${emp.attendance === 'present' ? 'bg-green-500' : 'bg-red-500'}`} /></td>
+                      <td className="px-4 py-4">{emp.name}</td>
+                      <td className="px-4 py-4 text-center">{emp.baseSalary.toLocaleString()} ج.م</td>
+                      <td className="px-4 py-4 text-center text-red-500">-{emp.advances}</td>
+                      <td className="px-4 py-4 text-center text-green-500">+{emp.incentives}</td>
+                      <td className="px-4 py-4 text-center text-blue-600 font-bold">{emp.netSalary?.toLocaleString()} ج.م</td>
+                      <td className="px-4 py-4 flex justify-center gap-2">
+                        <button onClick={() => openModal('advance', emp)} className="bg-red-50 text-red-600 px-3 py-1 rounded-lg border border-red-200 text-xs hover:bg-red-100 font-bold">+ سلفة</button>
+                        <button onClick={() => openModal('incentive', emp)} className="bg-green-50 text-green-600 px-3 py-1 rounded-lg border border-green-200 text-xs hover:bg-green-100 font-bold">+ حافز</button>
                       </td>
                     </tr>
                   ))}
@@ -357,156 +217,62 @@ export function EmployeeExpenseManagement() {
               </table>
             </div>
           ) : (
-            // Expenses List
-            <div className="space-y-4">
-              <button
-                onClick={() => openModal('expense')}
-                className="w-full bg-[#3B82F6] hover:bg-[#2563EB] text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg"
-              >
-                <Plus size={20} />
-                إضافة مصروف جديد
-              </button>
-
-              <div className="space-y-3">
-                {expenses.map((expense) => (
-                  <div
-                    key={expense.id}
-                    className="bg-gray-50 border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-3 flex-1">
-                        <div className="w-12 h-12 bg-white border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                          {getCategoryIcon(expense.category)}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <h3 className="font-bold text-gray-800">{expense.type}</h3>
-                            <span className="text-xl font-bold text-[#EF4444]">
-                              {expense.amount.toLocaleString()} ج.م
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
-                            <div className="flex items-center gap-1">
-                              <Calendar size={14} />
-                              <span>{expense.date}</span>
-                            </div>
-                          </div>
-                          <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-2">
-                            <span className="font-semibold text-gray-700">ملاحظات: </span>
-                            {expense.notes}
-                          </div>
-                        </div>
-                      </div>
+            <div className="space-y-4 font-sans">
+               <button onClick={() => openModal('expense')} className="w-full bg-[#3B82F6] text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2"><Plus /> إضافة مصروف جديد</button>
+               {expenses.map((exp) => (
+                 <div key={exp.id} className="bg-gray-50 p-4 rounded-xl border flex justify-between items-center shadow-sm font-bold font-sans">
+                    <div className="flex items-center gap-3">
+                      {getCategoryIcon(exp.category)}
+                      <div>{exp.type} <p className="text-xs text-gray-400 font-normal">{exp.date}</p></div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                    <div className="text-red-500">{exp.amount.toLocaleString()} ج.م</div>
+                 </div>
+               ))}
             </div>
           )}
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Unified Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fadeIn">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-[#1E293B]">
-                {modalType === 'advance' && 'إضافة سلفة'}
-                {modalType === 'incentive' && 'إضافة حافز'}
-                {modalType === 'deduction' && 'إضافة خصم'}
-                {modalType === 'expense' && 'إضافة مصروف جديد'}
-              </h2>
-              <button
-                onClick={closeModal}
-                className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center transition-colors"
-              >
-                <X size={18} className="text-gray-600" />
-              </button>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4 backdrop-blur-sm text-right font-sans">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden font-sans font-bold">
+            <div className="p-6 border-b bg-gray-50 flex justify-between items-center">
+               <span>{modalType === 'addEmployee' ? 'إضافة موظف جديد' : 'تسجيل مبلغ'}</span>
+               <button onClick={closeModal}><X /></button>
             </div>
-
-            {/* Modal Body */}
             <div className="p-6 space-y-4">
-              {selectedEmployee && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                  <div className="text-sm text-blue-700 font-semibold">{selectedEmployee.name}</div>
-                  <div className="text-xs text-blue-600">{selectedEmployee.position}</div>
-                </div>
-              )}
-
-              {modalType === 'expense' && (
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    نوع المصروف
-                  </label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-                  >
-                    <option value="">اختر نوع المصروف</option>
-                    <option value="rent">إيجار</option>
-                    <option value="electricity">كهرباء</option>
-                    <option value="maintenance">صيانة</option>
-                    <option value="other">أخرى</option>
-                  </select>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">المبلغ</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    className="w-full px-4 py-2.5 pl-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-                    placeholder="0"
-                    dir="ltr"
-                  />
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">
-                    ج.م
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">التاريخ</label>
-                <input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">ملاحظات</label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] resize-none"
-                  placeholder="أدخل أي ملاحظات إضافية..."
-                ></textarea>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center gap-3 p-6 border-t border-gray-200">
-              <button
-                onClick={closeModal}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-xl transition-colors"
-              >
-                إلغاء
-              </button>
-              <button
-                onClick={handleSubmit}
-                className="flex-1 bg-[#10B981] hover:bg-[#059669] text-white font-bold py-3 px-4 rounded-xl transition-colors shadow-lg"
-              >
-                حفظ
-              </button>
+               {modalType === 'addEmployee' ? (
+                 <>
+                   <label>الاسم الكامل:</label>
+                   <input type="text" className="w-full p-3 border rounded-xl" value={formData.name} onChange={(e)=>setFormData({...formData, name:e.target.value})} />
+                   <label>المسمى الوظيفي:</label>
+                   <input type="text" className="w-full p-3 border rounded-xl" value={formData.position} onChange={(e)=>setFormData({...formData, position:e.target.value})} />
+                   <label>الراتب الأساسي:</label>
+                   <input type="number" className="w-full p-3 border rounded-xl font-bold" value={formData.baseSalary} onChange={(e)=>setFormData({...formData, baseSalary:e.target.value})} />
+                 </>
+               ) : (
+                 <>
+                   {selectedEmployee && <div className="p-3 bg-blue-50 text-blue-700 rounded-lg mb-4 italic">{selectedEmployee.name}</div>}
+                   {modalType === 'expense' && (
+                      <select className="w-full p-3 border rounded-xl mb-4" value={formData.category} onChange={(e)=>setFormData({...formData, category:e.target.value})}>
+                        <option value="">نوع المصروف</option>
+                        <option value="rent">إيجار</option>
+                        <option value="electricity">كهرباء</option>
+                        <option value="maintenance">صيانة</option>
+                        <option value="other">أخرى</option>
+                      </select>
+                   )}
+                   <label>المبلغ:</label>
+                   <input type="number" className="w-full p-3 border rounded-xl font-bold text-left" dir="ltr" value={formData.amount} onChange={(e)=>setFormData({...formData, amount:e.target.value})} />
+                   <label>ملاحظات:</label>
+                   <textarea className="w-full p-3 border rounded-xl" rows={3} value={formData.notes} onChange={(e)=>setFormData({...formData, notes:e.target.value})} />
+                 </>
+               )}
+               <div className="flex gap-2 pt-4 font-bold font-sans">
+                  <button onClick={closeModal} className="flex-1 bg-gray-100 py-3 rounded-xl">إلغاء</button>
+                  <button onClick={handleSubmit} className="flex-1 bg-[#10B981] text-white py-3 rounded-xl shadow-lg hover:bg-[#059669]">تأكيد وحفظ</button>
+               </div>
             </div>
           </div>
         </div>

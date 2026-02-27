@@ -42,9 +42,49 @@ export function SalesInvoiceModal({ onClose }: SalesInvoiceModalProps) {
 
   const total = items.reduce((acc, item) => acc + item.quantity * item.price, 0);
 
+  // --- دالة الربط مع الباك إند (Django) ---
+  const handleSaveAndPrint = async () => {
+    if (items.length === 0) {
+      alert("سلة البيع فارغة!");
+      return;
+    }
+
+    const saleData = {
+      // تجهيز البيانات لتطابق الـ InvoiceViewSet والـ Treasury
+      items: items.map(item => ({
+        product_id: item.id, // تأكد إن الـ id مطابق للـ id في الداتابيز
+        quantity: item.quantity,
+        unit_price: item.price
+      })),
+      total_amount: total,
+      payment_method: 'cash',
+      status: 'paid'
+    };
+
+    try {
+      // إرسال الطلب لـ Django (بورت 8000)
+      const response = await fetch('http://127.0.0.1:8000/api/invoices/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saleData),
+      });
+
+      if (response.ok) {
+        alert('✅ تم تسجيل الفاتورة بنجاح وتحديث الخزينة والمخزون!');
+        onClose(); // إغلاق النافذة بعد النجاح
+      } else {
+        const errorData = await response.json();
+        alert('❌ خطأ من السيرفر: ' + JSON.stringify(errorData));
+      }
+    } catch (error) {
+      console.error('Connection Error:', error);
+      alert('فشل الاتصال بالسيرفر! تأكد من تشغيل Django على بورت 8000');
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-fadeIn">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
         
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
@@ -54,85 +94,43 @@ export function SalesInvoiceModal({ onClose }: SalesInvoiceModalProps) {
             </div>
             <h2 className="text-2xl font-bold">فاتورة بيع</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center justify-center"
-          >
+          <button onClick={onClose} className="w-10 h-10 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center justify-center">
             <X />
           </button>
         </div>
 
         {/* Body */}
         <div className="p-6 space-y-4">
-          {/* Items List */}
           <div className="space-y-3">
             {items.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200 hover:shadow-sm transition"
-              >
-                {/* Item Info */}
+              <div key={item.id} className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200">
                 <div className="flex-1 flex items-center gap-4">
-                  <input
-                    type="text"
-                    value={item.name}
-                    onChange={(e) => updateItem(item.id, 'name', e.target.value)}
-                    className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  />
-                  <input
-                    type="number"
-                    value={item.quantity}
-                    onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
-                    className="w-20 px-3 py-2 border rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-green-400"
-                  />
-                  <input
-                    type="number"
-                    value={item.price}
-                    onChange={(e) => updateItem(item.id, 'price', e.target.value)}
-                    className="w-24 px-3 py-2 border rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                  />
-                  <span className="w-24 text-right font-bold text-gray-700">
-                    {(item.quantity * item.price).toLocaleString()} ج.م
-                  </span>
+                  <input type="text" value={item.name} onChange={(e) => updateItem(item.id, 'name', e.target.value)} className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400" />
+                  <input type="number" value={item.quantity} onChange={(e) => updateItem(item.id, 'quantity', e.target.value)} className="w-20 px-3 py-2 border rounded-lg text-center" />
+                  <input type="number" value={item.price} onChange={(e) => updateItem(item.id, 'price', e.target.value)} className="w-24 px-3 py-2 border rounded-lg text-right" />
+                  <span className="w-24 text-right font-bold text-gray-700">{(item.quantity * item.price).toLocaleString()} ج.م</span>
                 </div>
-                <button
-                  onClick={() => removeItem(item.id)}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg bg-red-100 hover:bg-red-200 transition"
-                >
-                  <Trash2 className="text-red-600" />
-                </button>
+                <button onClick={() => removeItem(item.id)} className="w-10 h-10 flex items-center justify-center rounded-lg bg-red-100 text-red-600 mr-2"><Trash2 /></button>
               </div>
             ))}
           </div>
 
-          {/* Add Item Button */}
-          <button
-            onClick={addItem}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition"
-          >
-            <Plus />
-            إضافة صنف
-          </button>
+          <button onClick={addItem} className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition"><Plus /> إضافة صنف</button>
 
-          {/* Total */}
           <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-100 to-green-200 rounded-xl text-xl font-bold">
             <span>الإجمالي الكلي:</span>
-            <span>
-              <DollarSign className="inline-block mr-1" />
-              {total.toLocaleString()} ج.م
-            </span>
+            <span><DollarSign className="inline-block mr-1" /> {total.toLocaleString()} ج.م</span>
           </div>
         </div>
 
         {/* Footer */}
         <div className="p-6 border-t flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 bg-gray-200 py-3 rounded-xl font-bold hover:bg-gray-300 transition"
+          <button onClick={onClose} className="flex-1 bg-gray-200 py-3 rounded-xl font-bold hover:bg-gray-300">إلغاء</button>
+          {/* تم ربط الزرار بالدالة الجديدة handleSaveAndPrint */}
+          <button 
+            onClick={handleSaveAndPrint}
+            className="flex-[2] bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 transition flex items-center justify-center gap-2"
           >
-            إلغاء
-          </button>
-          <button className="flex-[2] bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 transition flex items-center justify-center gap-2">
             حفظ وطباعة الفاتورة
           </button>
         </div>
