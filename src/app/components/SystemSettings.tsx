@@ -99,9 +99,9 @@ export function SystemSettings() {
   const [originalData, setOriginalData] = useState<any>(null);
   const [isUpdating, setIsUpdating] = useState(false); 
   const [securityStatus, setSecurityStatus] = useState({
-    encryption: true,
-    backup: false,
-    auth: true
+    encryption: true, // لأن Django بيشفر الباسوردات تلقائياً
+    backup: false,   // هتتغير لـ true لما تدوسي على "إنشاء نسخة" وتنجح
+    auth: true         // لأننا بنستخدم نظام صلاحيات Django
   });
 
   // التعديل هنا: الدالة بقت تفرق بين التلقائي واليدوي
@@ -186,6 +186,11 @@ export function SystemSettings() {
     const file = event.target.files?.[0];
     if (!file || !configId) return;
 
+    if (file.size > 2 * 1024 * 1024) {
+      alert("حجم الصورة كبير جداً! الحد الأقصى المسموح به هو 2 ميجابايت.");
+      return;
+    }
+
     const formData = new FormData();
     formData.append('logo', file);
 
@@ -214,7 +219,24 @@ export function SystemSettings() {
   };
 
   const handleProfileChange = (field: string, value: string) => {
-    setBusinessProfile((prev) => ({ ...prev, [field]: value }));
+    let cleanValue = value;
+
+    // 1. لو بنعدل اسم المؤسسة: ممنوع كتابة أرقام نهائياً
+    if (field === 'companyName') {
+      cleanValue = value.replace(/[0-9]/g, ''); // بيمسح أي رقم بمجرد كتابته
+    }
+
+    // 2. لو بنعدل رقم الهاتف: ممنوع كتابة حروف (يسمح بالأرقام وعلامة + فقط)
+    if (field === 'phone') {
+      cleanValue = value.replace(/[^\d+ ]/g, ''); // بيمسح أي حرف فوراً
+    }
+
+    // 3. لو بنعدل السجل الضريبي: أرقام وشرط فقط
+    if (field === 'taxNumber') {
+      cleanValue = value.replace(/[^\d-]/g, '');
+    }
+
+    setBusinessProfile((prev) => ({ ...prev, [field]: cleanValue }));
   };
 
   const handleCancel = () => {
@@ -335,6 +357,7 @@ export function SystemSettings() {
               <div className="relative">
                 <input
                   type="text"
+                  required
                   value={businessProfile.companyName}
                   onChange={(e) => handleProfileChange('companyName', e.target.value)}
                   className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] text-right"
