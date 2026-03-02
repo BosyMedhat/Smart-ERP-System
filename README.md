@@ -1,7 +1,12 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Smart-ERP-System
 Intelligent ERP System Enhanced with Anomaly Detection and Voice Interaction 
 =======
+=======
+# Smart-ERP-System
+Intelligent ERP System Enhanced with Anomaly Detection and Voice Interaction 
+>>>>>>> origin/Features_Amira
 
   # Arabic POS Desktop Interface
 
@@ -13,4 +18,7 @@ Intelligent ERP System Enhanced with Anomaly Detection and Voice Interaction
 
   Run `npm run dev` to start the development server.
   
+<<<<<<< HEAD
 >>>>>>> 6a21f5e1000f992d98e4528188c8accc03d082cf
+=======
+>>>>>>> origin/Features_Amira

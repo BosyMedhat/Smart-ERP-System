@@ -1,39 +1,41 @@
 from django.contrib import admin
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter # 1. استيراد الـ Router
-from inventory.views import ProductViewSet
+from rest_framework.routers import DefaultRouter
+
+# 1. استيراد موديول العملاء
 from customers.views import CustomerViewSet
 
-# 2. إنشاء كائن الـ router  
-# da ele py5le django ypne wagha rosmya 3ashan  agrap menha el urls peshola 
+# 2. استيراد موديول المخازن والموظفين ✅
+from inventory.views import (
+    ProductViewSet, 
+    InvoiceViewSet, 
+    WorkShiftViewSet, 
+    InstallmentViewSet,
+    SupplierViewSet, 
+    PurchaseViewSet, 
+    ExpenseViewSet, 
+    TreasuryViewSet, 
+    StockMovementViewSet,
+    EmployeeViewSet # تم إضافة استيراد الموظفين هنا ✅
+)
+
+# إنشاء الـ Router الرئيسي للمشروع
 router = DefaultRouter()
 
-# 3. تسجيل الـ ViewSets في الـ router
-#  hena pakol ay 7ad ytlop rapt el product ep3to le ProductViewSet
+# تسجيل المسارات (Endpoints) للـ API
 router.register(r'products', ProductViewSet)
-
 router.register(r'customers', CustomerViewSet)
+router.register(r'invoices', InvoiceViewSet)
+router.register(r'shifts', WorkShiftViewSet)
+router.register(r'installments', InstallmentViewSet) 
+router.register(r'suppliers', SupplierViewSet)
+router.register(r'purchases', PurchaseViewSet)
+router.register(r'expenses', ExpenseViewSet)
+router.register(r'treasury', TreasuryViewSet)
+router.register(r'stock-movements', StockMovementViewSet)
+router.register(r'employees', EmployeeViewSet) # تم إضافة مسار الموظفين هنا ✅
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    #  hena ana damagat kol el urls ele fe el rotuter gwa el api/ 3ashan t3raf tektep api/kza kaz
-    # بدل ما تكتب رابط يدوي لكل عملية (رابط للمسح، رابط للإضافة، رابط للتعديل)، الـ 
-    # DefaultRouter بيعمل كل ده في سطر واحد
-    path('api/', include(router.urls)),
+    path('api/', include(router.urls)), # كدة الرابط هيبقى http://127.0.0.1:8000/api/employees/
 ]
-
-
-
-# "خريطة الطرق". بيحدد الـ Links اللي بنستخدمها في المتصفح أو البوستمان.
-
-
-# #ملخص الرحلة (عشان المناقشة):
-# لما الدكتور يسألك "الـ API ده شغال إزاي؟"، ردك المختصر والسريع يكون:
-
-# الطلب (Request): جيه للرابط المعرف في الـ urls.py.
-
-# التوجيه: الـ URL وجه الطلب للـ view.
-
-# التحويل: الـ view جاب البيانات من الـ model ومررها للـ serializer.
-
-# الرد (Response): الـ serializer حولها لـ JSON وبعتها للمتصفح.
