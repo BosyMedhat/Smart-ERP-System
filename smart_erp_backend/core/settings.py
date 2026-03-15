@@ -44,7 +44,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',  # 3ashan el react y3ref yklm django we chrom mayn3msh
     'inventory',
-    'customers',
+    # 'customers',
+    'customers.apps.CustomersConfig',
     
 ]
 

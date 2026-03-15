@@ -3,7 +3,8 @@ from django.contrib import admin
 from .models import (
     Product, StockMovement, Customer, WorkShift, 
     Invoice, Installment, Supplier, Purchase, Expense, Treasury,
-    Employee  # تم إضافة الموظفين هنا ✅
+    Employee,  # تم إضافة الموظفين هنا ✅
+    UserProfile
 )
 
 admin.site.register(Product)
@@ -17,3 +18,4 @@ admin.site.register(Expense)
 admin.site.register(Treasury)
 admin.site.register(StockMovement)
 admin.site.register(Employee) # تم إضافة سطر التسجيل هنا ✅
+admin.site.register(UserProfile)
