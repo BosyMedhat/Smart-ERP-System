@@ -304,7 +304,7 @@ import logo from '../../assets/logo.png';
 import { User, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 
 interface LoginScreenProps {
-  onLogin: () => void;
+  onLogin: (userData: any) => void; 
   onGoToSignUp: () => void;
 }
 
@@ -425,12 +425,19 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
     return true;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const isUsernameValid = validateUsername();
     const isPasswordValid = validatePassword();
+    
     if (isUsernameValid && isPasswordValid) {
-      onLogin();
+      // تجهيز بيانات وهمية للاختبار بناءً على اسم المستخدم
+      const mockUserData = {
+        username: username,
+        is_staff: username === 'mostaf' // لو دخل بـ mostaf هيبقى أدمن، غير كدة كاشير
+      };
+      
+      onLogin(mockUserData); // نبعت البيانات هنا
     }
   };
 

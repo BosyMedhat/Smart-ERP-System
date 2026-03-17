@@ -50,7 +50,7 @@ const mockProducts: Product[] = [
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [activeScreen, setActiveScreen] = useState<Screen>('pos');
+  const [activeScreen, setActiveScreen] = useState<Screen>('home');
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('الكل');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -63,10 +63,25 @@ export default function App() {
 if (!isLoggedIn) {
   if (authScreen === 'login') {
     return (
-      <LoginScreen
-        onLogin={() => setIsLoggedIn(true)}
-        onGoToSignUp={() => setAuthScreen('signup')}
-      />
+<LoginScreen
+  onLogin={(userData: any) => {
+    // 1. حفظ بيانات المستخدم كامله في المتصفح عشان الـ Sidebar يقدر يقرأها
+    localStorage.setItem('user', JSON.stringify(userData));
+    
+    // 2. تفعيل حالة تسجيل الدخول
+    setIsLoggedIn(true);
+    
+    // 3. التوجيه بناءً على الصلاحية (طلب الليدر)
+    if (userData.is_staff === false) {
+      // لو كاشير يفتح على المبيعات فوراً
+      setActiveScreen('pos');
+    } else {
+      // لو أدمن يفتح على لوحة التحكم
+      setActiveScreen('home');
+    }
+  }}
+  onGoToSignUp={() => setAuthScreen('signup')}
+/>
     );
   }
 
@@ -123,6 +138,10 @@ if (!isLoggedIn) {
 
   const categories = ['الكل', ...Array.from(new Set(mockProducts.map((p) => p.category)))];
 
+  // التحقق من الصلاحيات قبل الريندر
+  const userData = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAdmin = userData.is_staff === true || userData.username === 'mostaf';
+
   return (
     <div dir="rtl" className="h-screen flex bg-gray-50" style={{ fontFamily: 'Cairo, sans-serif' }}>
       {/* Right Sidebar */}
@@ -160,39 +179,51 @@ if (!isLoggedIn) {
       )}
 
       {activeScreen === 'inventory' && (
-        <div className="flex-1">
-          <InventoryScreen />
-        </div>
+        isAdmin ? (
+          <div className="flex-1">
+            <InventoryScreen />
+          </div>
+        ) : (setActiveScreen('pos'), null)
       )}
 
       {activeScreen === 'ai' && (
-        <div className="flex-1">
-          <AICenter />
-        </div>
+        isAdmin ? (
+          <div className="flex-1">
+            <AICenter />
+          </div>
+        ) : (setActiveScreen('pos'), null)
       )}
 
       {activeScreen === 'automation' && (
-        <div className="flex-1">
-          <AutomationEngine />
-        </div>
+        isAdmin ? (
+          <div className="flex-1">
+            <AutomationEngine />
+          </div>
+        ) : (setActiveScreen('pos'), null)
       )}
 
       {activeScreen === 'employees' && (
-        <div className="flex-1">
-          <EmployeeExpenseManagement />
-        </div>
+        isAdmin ? (
+          <div className="flex-1">
+            <EmployeeExpenseManagement />
+          </div>
+        ) : (setActiveScreen('pos'), null)
       )}
 
       {activeScreen === 'settings' && (
-        <div className="flex-1">
-          <SystemSettings />
-        </div>
+        isAdmin ? (
+          <div className="flex-1">
+            <SystemSettings />
+          </div>
+        ) : (setActiveScreen('pos'), null)
       )}
 
       {activeScreen === 'users' && (
-        <div className="flex-1">
-          <UserManagement />
-        </div>
+        isAdmin ? (
+          <div className="flex-1">
+            <UserManagement />
+          </div>
+        ) : (setActiveScreen('pos'), null)
       )}
 
       {/* {activeScreen === 'login' && (
