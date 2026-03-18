@@ -1,0 +1,75 @@
+
+services:
+  # 1. قاعدة البيانات (Postgres)
+  db:
+    image: postgres:15
+    container_name: erp_db
+    environment:
+      - POSTGRES_DB=smart_erp
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=admin
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - erp_network
+
+  # 2. واجهة إدارة قاعدة البيانات (pgAdmin)
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: erp_pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+    networks:
+      - erp_network
+
+  # 3. السيرفر (Django Backend)
+  backend:
+    build: ./backend
+    container_name: erp_backend
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "python manage.py makemigrations &&
+             python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    environment:
+      - DATABASE_URL=postgres://postgres:admin@db:5432/smart_erp
+    depends_on:
+      - db
+    networks:
+      - erp_network
+
+  # 4. الفرونت إيند (Vite/React Frontend)
+  frontend:
+    build: ./frontend
+    container_name: erp_frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    command: npm run dev -- --host 0.0.0.0
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      # الربط الجوهري: هنا نخبر الفرونت بعنوان الباك إيند
+      - VITE_API_URL=http://localhost:8000/api
+    depends_on:
+      - backend
+    networks:
+      - erp_network
+
+networks:
+  erp_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
