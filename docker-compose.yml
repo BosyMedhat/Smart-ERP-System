@@ -1,0 +1,40 @@
+
+            # ele e7na feh da shapah el estshay el mofrlk en padl matenzel kol el pramag 3la el gehaz pta3k 
+            # la2 ana a7thm hena ka contairs 
+
+
+version: '3.8'
+
+services:
+  # Service 1
+    # ta7t service de kool el contairs aw kol el service ele ana mesta5demha fe el prnamg pta3e
+  db:
+    image: postgres:15
+    container_name: erp_postgres_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=smart_erp
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=adminpass
+    ports:
+      - "5432:5432"
+  # Service 2 
+  # 2. المساعد الذكي (Ollama)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: erp_ai_brain
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: always
+# hena da el hard disk el 5argy pta3e ele ptshel el data sawa2 el fe el database aw el ollama 
+volumes:
+  postgres_data:  # لضمان بقاء بيانات العملاء والمبيعات
+  ollama_data:    # لضمان بقاء موديلات الذكاء الاصطناعي
+
+
+
+  #  pa3d madeft el contairs hena we zapat el donya we 3mlt docker compose up 3ashane el contairs ele mesh mawgod ynzel 
+  # 73mel docker ps (process status) da el pytpa3 kol el contars ele ana mesh8lha 

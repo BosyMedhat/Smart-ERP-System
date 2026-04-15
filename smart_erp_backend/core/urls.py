@@ -38,4 +38,5 @@ router.register(r'employees', EmployeeViewSet) # تم إضافة مسار الم
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)), # كدة الرابط هيبقى http://127.0.0.1:8000/api/employees/
+    path('api/ai/', include('ai_assistant.urls')),
 ]

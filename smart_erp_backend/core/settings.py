@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'corsheaders',  # 3ashan el react y3ref yklm django we chrom mayn3msh
     'inventory',
     'customers',
+    'ai_assistant',
     
 ]
 
@@ -82,26 +83,26 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 
 # Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': 'smart_erp_db',
-#         'USER': 'admin',
-#         'PASSWORD': 'password123',
-#         'HOST': 'localhost',
-#         'PORT': '5432',
-#     }
-# }
-
+# https://docs.djangoproject.com/en/6.0/ref/settings/   #databases
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'smart_erp',
+        'USER': 'admin',
+        'PASSWORD': 'adminpass',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
+
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
 
 
 

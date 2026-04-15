@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { Mic, AlertTriangle, TrendingUp, CheckCircle, Bell, Code } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
+// de el masora ele pta5od el kalam we teo7 peha le django 
+import axios from 'axios';
 
+
+// Interfaces
 interface AnomalyLog {
   id: string;
   employee: string;
@@ -20,47 +25,12 @@ interface VoiceQueryResult {
   stockQty: number;
 }
 
+// Mock Data
 const mockAnomalies: AnomalyLog[] = [
-  {
-    id: '1',
-    employee: 'أحمد محمود',
-    operationType: 'خصم استثنائي',
-    value: 8500,
-    reason: 'قيمة الخصم تجاوزت 60% من إجمالي الفاتورة',
-    severity: 'high',
-    timestamp: '2026-02-04 14:23',
-    contextInfo: 'قام هذا المستخدم بـ 3 عمليات مشابهة هذا الشهر',
-  },
-  {
-    id: '2',
-    employee: 'فاطمة أحمد',
-    operationType: 'تعديل سعر منتج',
-    value: 12000,
-    reason: 'تم تخفيض السعر بنسبة 45% عن السعر القياسي',
-    severity: 'medium',
-    timestamp: '2026-02-04 11:45',
-    contextInfo: 'أول عملية من هذا النوع لهذا المستخدم',
-  },
-  {
-    id: '3',
-    employee: 'محمد علي',
-    operationType: 'حذف فاتورة',
-    value: 3200,
-    reason: 'حذف فاتورة بعد 3 ساعات من إصدارها',
-    severity: 'high',
-    timestamp: '2026-02-04 09:15',
-    contextInfo: 'قام هذا المستخدم بحذف 7 فواتير في آخر أسبوع',
-  },
-  {
-    id: '4',
-    employee: 'سارة حسن',
-    operationType: 'عملية بيع خارج الدوام',
-    value: 1500,
-    reason: 'تمت العملية الساعة 23:45 (خارج ساعات العمل)',
-    severity: 'low',
-    timestamp: '2026-02-03 23:45',
-    contextInfo: 'حدث مماثل حصل مرة واحدة في الشهر الماضي',
-  },
+  { id: '1', employee: 'أحمد محمود', operationType: 'خصم استثنائي', value: 8500, reason: 'قيمة الخصم تجاوزت 60% من إجمالي الفاتورة', severity: 'high', timestamp: '2026-02-04 14:23', contextInfo: 'قام هذا المستخدم بـ 3 عمليات مشابهة هذا الشهر' },
+  { id: '2', employee: 'فاطمة أحمد', operationType: 'تعديل سعر منتج', value: 12000, reason: 'تم تخفيض السعر بنسبة 45% عن السعر القياسي', severity: 'medium', timestamp: '2026-02-04 11:45', contextInfo: 'أول عملية من هذا النوع لهذا المستخدم' },
+  { id: '3', employee: 'محمد علي', operationType: 'حذف فاتورة', value: 3200, reason: 'حذف فاتورة بعد 3 ساعات من إصدارها', severity: 'high', timestamp: '2026-02-04 09:15', contextInfo: 'قام هذا المستخدم بحذف 7 فواتير في آخر أسبوع' },
+  { id: '4', employee: 'سارة حسن', operationType: 'عملية بيع خارج الدوام', value: 1500, reason: 'تمت العملية الساعة 23:45 (خارج ساعات العمل)', severity: 'low', timestamp: '2026-02-03 23:45', contextInfo: 'حدث مماثل حصل مرة واحدة في الشهر الماضي' },
 ];
 
 const mockQueryResults: VoiceQueryResult[] = [
@@ -79,51 +49,63 @@ const forecastData = [
 ];
 
 export function AICenter() {
-  const [isListening, setIsListening] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [showSQL, setShowSQL] = useState(false);
+  const [aiResponse, setAiResponse] = useState<string>(''); // رد الذكاء الاصطناعي الحقيقي
+  const [isLoading, setIsLoading] = useState(false);
 
-  const toggleListening = () => {
-    setIsListening(!isListening);
-    if (!isListening) {
-      setTimeout(() => {
+  // pa5od 3 7agat men el maktpa ta7wel el kalam ele ento kolto (transcript) + (listening) 3ahan lampt el microphone + ((resetTranscript) 3ashan aktep 3la nadafa tany mara)
+  const { transcript, listening, resetTranscript } = useSpeechRecognition();
+
+  const handleVoiceCommand = async () => {
+  if (listening) {
+    // لو بنسمع ودست تاني، وقف الاستماع وابعت النص
+    SpeechRecognition.stopListening();
+    console.log("تم إيقاف الاستماع، النص المكتشف:", transcript); // للتأكد في الـ Console
+    
+    if (transcript) {
+      setIsLoading(true);
+      try {
+        const response = await axios.post('http://127.0.0.1:8000/api/ai/ask/', {
+          query: transcript,
+          context_data: mockAnomalies 
+        });
+        setAiResponse(response.data.response);
         setShowResults(true);
-      }, 2000);
-    } else {
-      setShowResults(false);
+      } catch (error) {
+        console.error("خطأ في الاتصال بالباك إند:", error);
+      } finally {
+        setIsLoading(false);
+      }
     }
-  };
+  } else {
+    // لو مش بنسمع، ابدأ اسمع من جديد
+    resetTranscript();
+    setAiResponse('');
+    SpeechRecognition.startListening({ language: 'ar-EG', continuous: true });
+  }
+};
 
   const getSeverityBadge = (severity: string) => {
-    switch (severity) {
-      case 'high':
-        return (
-          <span className="px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm font-semibold border border-red-500/30">
-            خطر عالي
-          </span>
-        );
-      case 'medium':
-        return (
-          <span className="px-3 py-1 bg-orange-500/20 text-orange-400 rounded-full text-sm font-semibold border border-orange-500/30">
-            خطر متوسط
-          </span>
-        );
-      case 'low':
-        return (
-          <span className="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm font-semibold border border-yellow-500/30">
-            خطر منخفض
-          </span>
-        );
-      default:
-        return null;
-    }
+    const styles = {
+      high: "bg-red-500/20 text-red-400 border-red-500/30",
+      medium: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+      low: "bg-yellow-500/20 text-yellow-400 border-yellow-400/30"
+    };
+    const labels = { high: "خطر عالي", medium: "خطر متوسط", low: "خطر منخفض" };
+    
+    return (
+      <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${styles[severity as keyof typeof styles]}`}>
+        {labels[severity as keyof typeof labels]}
+      </span>
+    );
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0F172A] p-6 space-y-6">
-      {/* Voice-to-SQL Interface */}
-      <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 backdrop-blur-sm p-8">
-        <div className="flex items-center gap-3 mb-6">
+    <div className="h-full overflow-y-auto bg-[#0F172A] p-6 space-y-6 text-right" dir="rtl">
+      {/* Voice Interface */}
+      <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 p-8 shadow-xl">
+        <div className="flex items-center gap-3 mb-6 justify-start">
           <div className="w-10 h-10 bg-gradient-to-br from-[#60A5FA] to-[#6366F1] rounded-lg flex items-center justify-center">
             <Mic size={20} className="text-white" />
           </div>
@@ -131,148 +113,52 @@ export function AICenter() {
         </div>
 
         <div className="flex flex-col items-center gap-6">
-          {/* Microphone Button */}
           <button
-            onClick={toggleListening}
-            className={`relative w-32 h-32 rounded-full flex items-center justify-center transition-all ${
-              isListening
-                ? 'bg-gradient-to-br from-[#60A5FA] to-[#6366F1] shadow-lg shadow-blue-500/50 animate-pulse'
-                : 'bg-slate-700/50 hover:bg-slate-700'
+            onClick={handleVoiceCommand}
+            className={`relative w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 ${
+              listening ? 'bg-red-500 shadow-lg shadow-red-500/50 animate-pulse' : 'bg-slate-700/50 hover:bg-slate-700'
             }`}
           >
             <Mic size={48} className="text-white" />
-            {isListening && (
-              <>
-                <div className="absolute inset-0 rounded-full border-4 border-blue-400/30 animate-ping"></div>
-                <div className="absolute inset-0 rounded-full border-4 border-blue-400/20 animate-ping" style={{ animationDelay: '0.3s' }}></div>
-              </>
-            )}
+            {listening && <div className="absolute inset-0 rounded-full border-4 border-red-400/30 animate-ping"></div>}
           </button>
 
-          {/* Voice Input Display */}
-          {isListening && (
-            <div className="w-full bg-slate-900/50 border border-slate-700 rounded-xl p-6 animate-fadeIn">
-              <div className="text-slate-400 text-sm mb-2">تم اكتشاف الصوت:</div>
-              <div className="text-white text-lg font-semibold">
-                "أظهر لي تقرير المنتجات التي لم تُبع هذا الأسبوع"
-              </div>
+          {(listening || transcript) && (
+            <div className="w-full bg-slate-950/50 border border-slate-700 rounded-xl p-4 text-center">
+              <p className="text-slate-400 text-sm mb-1">النص المكتشف:</p>
+              <p className="text-white text-lg font-medium">"{transcript || 'جاري الاستماع...'}"</p>
             </div>
           )}
 
-          {/* SQL Query Box */}
-          {showResults && (
-            <div className="w-full space-y-4">
-              <button
-                onClick={() => setShowSQL(!showSQL)}
-                className="flex items-center gap-2 text-[#60A5FA] hover:text-[#6366F1] transition-colors"
-              >
-                <Code size={16} />
-                <span className="text-sm">SQL Query (For Nerds)</span>
-              </button>
-
-              {showSQL && (
-                <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 font-mono text-sm text-green-400">
-                  <code>
-                    SELECT product_name, category, last_sale_date, stock_qty<br />
-                    FROM products<br />
-                    WHERE last_sale_date &lt; DATE_SUB(NOW(), INTERVAL 7 DAY)<br />
-                    ORDER BY last_sale_date ASC;
-                  </code>
-                </div>
-              )}
-
-              {/* Dynamic Results Table */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-xl overflow-hidden">
-                <div className="bg-slate-800/50 px-4 py-3 border-b border-slate-700">
-                  <h3 className="text-white font-semibold">نتائج الاستعلام الديناميكي</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-slate-800/30">
-                      <tr>
-                        <th className="px-4 py-3 text-right text-slate-400 font-semibold text-sm">اسم المنتج</th>
-                        <th className="px-4 py-3 text-right text-slate-400 font-semibold text-sm">التصنيف</th>
-                        <th className="px-4 py-3 text-right text-slate-400 font-semibold text-sm">آخر عملية بيع</th>
-                        <th className="px-4 py-3 text-right text-slate-400 font-semibold text-sm">الكمية المتبقية</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-700/50">
-                      {mockQueryResults.map((result, idx) => (
-                        <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
-                          <td className="px-4 py-3 text-white">{result.productName}</td>
-                          <td className="px-4 py-3 text-slate-300">{result.category}</td>
-                          <td className="px-4 py-3 text-slate-300">{result.lastSaleDate}</td>
-                          <td className="px-4 py-3 text-slate-300">{result.stockQty}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
+          {isLoading && <div className="text-blue-400 animate-bounce">جاري تحليل البيانات بواسطة Llama 3...</div>}
         </div>
       </div>
 
-      {/* Anomaly Detection Logs */}
-      <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 backdrop-blur-sm p-8">
+      {/* Anomaly Logs Table */}
+      <div className="bg-slate-900/50 rounded-2xl border border-slate-700/50 p-6">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-orange-500 rounded-lg flex items-center justify-center">
-            <AlertTriangle size={20} className="text-white" />
-          </div>
-          <h2 className="text-2xl font-bold text-white">سجل العمليات المشبوهة (Anomaly Logs)</h2>
+           <AlertTriangle className="text-orange-500" />
+           <h2 className="text-xl font-bold text-white">سجل العمليات المشبوهة (Anomaly Logs)</h2>
         </div>
-
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-800/50 border-b border-slate-700">
+          <table className="w-full text-right">
+            <thead className="text-slate-400 border-b border-slate-700">
               <tr>
-                <th className="px-4 py-3 text-right text-slate-300 font-semibold">الموظف</th>
-                <th className="px-4 py-3 text-right text-slate-300 font-semibold">نوع العملية</th>
-                <th className="px-4 py-3 text-right text-slate-300 font-semibold">القيمة</th>
-                <th className="px-4 py-3 text-right text-slate-300 font-semibold">سبب الشك</th>
-                <th className="px-4 py-3 text-right text-slate-300 font-semibold">مستوى الخطورة</th>
-                <th className="px-4 py-3 text-center text-slate-300 font-semibold">الإجراءات</th>
+                <th className="pb-3 px-2">الموظف</th>
+                <th className="pb-3 px-2">نوع العملية</th>
+                <th className="pb-3 px-2">القيمة</th>
+                <th className="pb-3 px-2">السبب</th>
+                <th className="pb-3 px-2">الخطورة</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/50">
-              {mockAnomalies.map((anomaly) => (
-                <tr key={anomaly.id} className="hover:bg-slate-800/30 transition-colors group">
-                  <td className="px-4 py-4">
-                    <div className="text-white font-semibold">{anomaly.employee}</div>
-                    <div className="text-xs text-slate-400 mt-1">{anomaly.timestamp}</div>
-                  </td>
-                  <td className="px-4 py-4 text-slate-300">{anomaly.operationType}</td>
-                  <td className="px-4 py-4">
-                    <span className="text-[#60A5FA] font-bold">{anomaly.value.toLocaleString()} ج.م</span>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="text-slate-300 mb-1">{anomaly.reason}</div>
-                    <div className="relative group/tooltip">
-                      <div className="text-xs text-slate-500 cursor-help inline-flex items-center gap-1">
-                        <AlertTriangle size={12} />
-                        السياق التاريخي
-                      </div>
-                      <div className="absolute bottom-full right-0 mb-2 hidden group-hover/tooltip:block z-10">
-                        <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-300 whitespace-nowrap shadow-xl">
-                          {anomaly.contextInfo}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4">{getSeverityBadge(anomaly.severity)}</td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center justify-center gap-2">
-                      <button className="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1">
-                        <CheckCircle size={14} />
-                        تأكيد
-                      </button>
-                      <button className="px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1">
-                        <Bell size={14} />
-                        إبلاغ
-                      </button>
-                    </div>
-                  </td>
+            <tbody className="divide-y divide-slate-800">
+              {mockAnomalies.map((log) => (
+                <tr key={log.id} className="hover:bg-slate-800/50">
+                  <td className="py-4 px-2 text-white">{log.employee}</td>
+                  <td className="py-4 px-2 text-slate-300">{log.operationType}</td>
+                  <td className="py-4 px-2 text-blue-400 font-bold">{log.value.toLocaleString()} ج.م</td>
+                  <td className="py-4 px-2 text-slate-400 text-sm">{log.reason}</td>
+                  <td className="py-4 px-2">{getSeverityBadge(log.severity)}</td>
                 </tr>
               ))}
             </tbody>
@@ -280,100 +166,32 @@ export function AICenter() {
         </div>
       </div>
 
-      {/* Predictive Analytics */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Chart */}
-        <div className="col-span-2 bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 backdrop-blur-sm p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-gradient-to-br from-[#60A5FA] to-[#6366F1] rounded-lg flex items-center justify-center">
-              <TrendingUp size={20} className="text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-white">توقعات الطلب المستقبلي</h2>
-          </div>
-
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={forecastData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="month" stroke="#94A3B8" style={{ fontSize: '12px' }} />
-              <YAxis stroke="#94A3B8" style={{ fontSize: '12px' }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1E293B',
-                  border: '1px solid #475569',
-                  borderRadius: '8px',
-                  color: '#fff',
-                }}
-              />
-              <Legend
-                wrapperStyle={{ color: '#94A3B8' }}
-                formatter={(value) => (
-                  <span className="text-slate-300">
-                    {value === 'actual' ? 'المبيعات السابقة' : 'التوقعات القادمة'}
-                  </span>
-                )}
-              />
-              <Line
-                type="monotone"
-                dataKey="actual"
-                stroke="#94A3B8"
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                dot={{ fill: '#94A3B8', r: 4 }}
-                name="actual"
-              />
-              <Line
-                type="monotone"
-                dataKey="forecast"
-                stroke="#60A5FA"
-                strokeWidth={3}
-                dot={{ fill: '#60A5FA', r: 5 }}
-                name="forecast"
-                filter="drop-shadow(0 0 8px rgba(96, 165, 250, 0.6))"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+      {/* Smart Analysis Output */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 bg-slate-900/50 rounded-2xl border border-slate-700/50 p-6">
+           <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+             <TrendingUp size={18} className="text-blue-400" /> تحليل المبيعات والتوقعات
+           </h3>
+           <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={forecastData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="month" stroke="#94A3B8" />
+                <YAxis stroke="#94A3B8" />
+                <Tooltip contentStyle={{backgroundColor: '#1e293b'}} />
+                <Line type="monotone" dataKey="actual" stroke="#94A3B8" />
+                <Line type="monotone" dataKey="forecast" stroke="#60A5FA" strokeWidth={3} />
+              </LineChart>
+           </ResponsiveContainer>
         </div>
 
-        {/* Smart Advice */}
-        <div className="col-span-1 bg-gradient-to-br from-indigo-900/30 to-purple-900/30 rounded-2xl border border-indigo-500/30 backdrop-blur-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 bg-gradient-to-br from-[#6366F1] to-purple-500 rounded-lg flex items-center justify-center">
-              <TrendingUp size={16} className="text-white" />
-            </div>
-            <h3 className="text-lg font-bold text-white">نصيحة ذكية</h3>
-          </div>
-
-          <div className="space-y-4">
-            <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
-              <div className="text-sm text-slate-300 leading-relaxed">
-                بناءً على تحليل الذكاء الاصطناعي، ننصح بطلب{' '}
-                <span className="text-[#60A5FA] font-bold">500 قطعة إضافية</span> من{' '}
-                <span className="text-white font-semibold">'السكر'</span> قبل بداية رمضان.
-              </div>
-            </div>
-
-            <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle size={16} className="text-yellow-400" />
-                <span className="text-yellow-400 font-semibold text-sm">تنبيه مخزون</span>
-              </div>
-              <div className="text-sm text-slate-300">
-                من المتوقع نفاد مخزون{' '}
-                <span className="text-white font-semibold">'لابتوب HP'</span> خلال{' '}
-                <span className="text-orange-400 font-bold">15 يوم</span>
-              </div>
-            </div>
-
-            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle size={16} className="text-green-400" />
-                <span className="text-green-400 font-semibold text-sm">فرصة نمو</span>
-              </div>
-              <div className="text-sm text-slate-300">
-                زيادة متوقعة <span className="text-green-400 font-bold">+25%</span> في مبيعات{' '}
-                <span className="text-white font-semibold">'الإلكترونيات'</span> الشهر القادم
-              </div>
-            </div>
+        <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 rounded-2xl border border-indigo-500/30 p-6">
+          <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+            <CheckCircle size={18} className="text-green-400" /> تحليل المساعد الذكي
+          </h3>
+          <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800 min-h-[150px]">
+            <p className="text-slate-200 text-sm leading-relaxed">
+              {aiResponse || "اضغط على الميكروفون واسأل المساعد عن أي عملية أو تقرير للمبيعات..."}
+            </p>
           </div>
         </div>
       </div>
