@@ -1,5 +1,6 @@
 // import { useState } from 'react';
-// import logo from '../../assets/logo.png';
+// import logo from '../../assets/logo.jpeg';
+
 // import { User, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 
 // interface LoginScreenProps {
@@ -28,6 +29,7 @@
 //   const [newPasswordError, setNewPasswordError] = useState('');
 //   const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
+//   // Username validation
 //   const validateUsername = () => {
 //     if (username.length < 3) {
 //       setUsernameError('اسم المستخدم يجب أن يكون 3 أحرف على الأقل');
@@ -41,15 +43,29 @@
 //     return true;
 //   };
 
+//   // Password validation (login password)
 //   const validatePassword = () => {
 //     if (!password) {
 //       setPasswordError('كلمة المرور لا يمكن أن تكون فارغة');
+//       return false;
+//     }
+//     if (password.length < 6) {
+//       setPasswordError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+//       return false;
+//     }
+//     if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+//       setPasswordError('كلمة المرور يجب أن تحتوي على حروف وأرقام');
+//       return false;
+//     }
+//     if (/[^A-Za-z0-9]/.test(password)) {
+//       setPasswordError('كلمة المرور لا يجب أن تحتوي على رموز أو علامات خاصة');
 //       return false;
 //     }
 //     setPasswordError('');
 //     return true;
 //   };
 
+//   // Email validation
 //   const validateEmail = () => {
 //     if (!email) {
 //       setEmailError('البريد الإلكتروني لا يمكن أن يكون فارغاً');
@@ -64,6 +80,7 @@
 //     return true;
 //   };
 
+//   // Code validation
 //   const validateCode = () => {
 //     if (!code) {
 //       setCodeError('الرمز لا يمكن أن يكون فارغاً');
@@ -73,9 +90,22 @@
 //     return true;
 //   };
 
+//   // New password validation
 //   const validateNewPassword = () => {
 //     if (!newPassword) {
 //       setNewPasswordError('كلمة المرور الجديدة لا يمكن أن تكون فارغة');
+//       return false;
+//     }
+//     if (newPassword.length < 6) {
+//       setNewPasswordError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+//       return false;
+//     }
+//     if (!/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+//       setNewPasswordError('كلمة المرور يجب أن تحتوي على حروف وأرقام');
+//       return false;
+//     }
+//     if (/[^A-Za-z0-9]/.test(newPassword)) {
+//       setNewPasswordError('كلمة المرور لا يجب أن تحتوي على رموز أو علامات خاصة');
 //       return false;
 //     }
 //     setNewPasswordError('');
@@ -95,29 +125,78 @@
 //     return true;
 //   };
 
-//   const handleSubmit = (e: React.FormEvent) => {
-//     e.preventDefault();
-//     const isUsernameValid = validateUsername();
-//     const isPasswordValid = validatePassword();
-//     if (isUsernameValid && isPasswordValid) {
+//   // const handleSubmit = (e: React.FormEvent) => {
+//   //   e.preventDefault();
+//   //   const isUsernameValid = validateUsername();
+//   //   const isPasswordValid = validatePassword();
+//   //   if (isUsernameValid && isPasswordValid) {
+//   //     onLogin();
+//   //   }
+//   // };
+
+
+
+// // استبدلي دالة handleSubmit القديمة بهذه الدالة
+// const handleSubmit = async (e: React.FormEvent) => {
+//   e.preventDefault();
+
+//   // 1. التأكد من صحة المدخلات محلياً قبل الإرسال
+//   const isUsernameValid = validateUsername();
+//   const isPasswordValid = validatePassword();
+
+//   if (!isUsernameValid || !isPasswordValid) return;
+
+//   try {
+//     // 2. إرسال طلب تسجيل الدخول للباك اند
+//     const response = await fetch('http://127.0.0.1:8000/api/login/', {
+//       method: 'POST',
+//       headers: { 'Content-Type': 'application/json' },
+//       body: JSON.stringify({ username, password }),
+//     });
+
+//     if (response.ok) {
+//       const userData = await response.json();
+
+//       // 3. تخزين بيانات المستخدم (اليوزر + البروفايل + الصلاحيات)
+//       // دي أهم خطوة عشان السيستم "يعرف" هو مين ومسموح له بإيه
+//       localStorage.setItem('user', JSON.stringify(userData));
+
+//       // 4. الانتقال للشاشة الرئيسية
 //       onLogin();
+//     } else {
+//       // التعامل مع حالة فشل الدخول (اسم مستخدم أو باسورد غلط)
+//       setPasswordError('اسم المستخدم أو كلمة المرور غير صحيحة');
 //     }
-//   };
+//   } catch (error) {
+//     console.error("Error logging in:", error);
+//     setPasswordError('فشل الاتصال بالسيرفر، تأكدي من تشغيل Django');
+//   }
+// };
+
 
 //   return (
 //     <div className="min-h-screen w-full bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#334155] flex items-center justify-center p-4">
 //       <div className="relative w-full max-w-md">
 //         <div className="bg-white rounded-2xl shadow-2xl p-8">
 
+
+
+
+
 //           {/* Brand Section */}
 //           {step === 'login' && (
-//             <div className="flex items-center justify-center mb-4 gap-2">
-//               <div className="w-24 h-24">
-//                 <img src={logo} alt="Smart ERP Logo" className="w-full h-full object-contain" />
-//               </div>
+
+//             <div className="flex flex-col items-center justify-center mb-8 text-center">
+// <div className="w-24 h-24 bg-[#374756] rounded-[30px] overflow-hidden shadow-xl mb-4 flex items-center justify-center">
+//   <img
+//     src={logo}
+//     alt="Smart ERP Logo"
+//     className="w-full h-full object-cover scale-145"
+//   />
+// </div>
+
 //               <div>
-//                 <h1 className="text-2xl font-bold text-[#1E293B]">SMART ERP</h1>
-//                 <p className="text-gray-600 text-sm">نظام إدارة الأعمال المتكامل</p>
+//                 <h1 className="text-gray-600 text-sm">نظام إدارة الأعمال المتكامل</h1>
 //               </div>
 //             </div>
 //           )}
@@ -196,7 +275,7 @@
 
 //               {/* Sign Up */}
 //               <div className="flex justify-center items-center gap-1 text-sm text-gray-600">
-//                 <span>ليس لديك حساب؟</span>
+
 //                 <button
 //                   type="button"
 //                   className="text-[#3B82F6] font-bold hover:underline"
@@ -204,6 +283,7 @@
 //                 >
 //                   تسجيل جديد
 //                 </button>
+//             <span>ليس لديك حساب؟</span>
 //               </div>
 
 //             </form>
@@ -299,8 +379,11 @@
 
 
 
+
+
 import { useState } from 'react';
-import logo from '../../assets/logo.png';
+import logo from '../../assets/logo.jpeg';
+
 import { User, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 
 interface LoginScreenProps {
@@ -353,14 +436,14 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
       setPasswordError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       return false;
     }
-    if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-      setPasswordError('كلمة المرور يجب أن تحتوي على حروف وأرقام');
-      return false;
-    }
-    if (/[^A-Za-z0-9]/.test(password)) {
-      setPasswordError('كلمة المرور لا يجب أن تحتوي على رموز أو علامات خاصة');
-      return false;
-    }
+    // if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    //   setPasswordError('كلمة المرور يجب أن تحتوي على حروف وأرقام');
+    //   return false;
+    // }
+    // if (/[^A-Za-z0-9]/.test(password)) {
+    //   setPasswordError('كلمة المرور لا يجب أن تحتوي على رموز أو علامات خاصة');
+    //   return false;
+    // }
     setPasswordError('');
     return true;
   };
@@ -425,29 +508,119 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
     return true;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // const handleSubmit = (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   const isUsernameValid = validateUsername();
+  //   const isPasswordValid = validatePassword();
+  //   if (isUsernameValid && isPasswordValid) {
+  //     onLogin();
+  //   }
+  // };
+
+
+
+  // استبدلي دالة handleSubmit القديمة بهذه الدالة
+  // const handleSubmit = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+
+  //   // 1. التأكد من صحة المدخلات محلياً قبل الإرسال
+  //   const isUsernameValid = validateUsername();
+  //   const isPasswordValid = validatePassword();
+
+  //   if (!isUsernameValid || !isPasswordValid) return;
+
+  //   try {
+  //     // 2. إرسال طلب تسجيل الدخول للباك اند
+  //     const response = await fetch('http://127.0.0.1:8000/api/login/', {
+  //       method: 'POST',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify({ username, password }),
+  //     });
+
+  //     if (response.ok) {
+  //       const userData = await response.json();
+
+  //       // 3. تخزين بيانات المستخدم (اليوزر + البروفايل + الصلاحيات)
+  //       // دي أهم خطوة عشان السيستم "يعرف" هو مين ومسموح له بإيه
+  //       localStorage.setItem('user', JSON.stringify(userData));
+
+  //       // 4. الانتقال للشاشة الرئيسية
+  //       onLogin();
+  //     } else {
+  //       // التعامل مع حالة فشل الدخول (اسم مستخدم أو باسورد غلط)
+  //       setPasswordError('اسم المستخدم أو كلمة المرور غير صحيحة');
+  //     }
+  //   } catch (error) {
+  //     console.error("Error logging in:", error);
+  //     setPasswordError('فشل الاتصال بالسيرفر، تأكدي من تشغيل Django');
+  //   }
+  // };
+  // استبدلي دالة handleSubmit في الكود الخاص بكِ بهذا الكود المحدث
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 1. التأكد من صحة المدخلات محلياً (Validation)
     const isUsernameValid = validateUsername();
     const isPasswordValid = validatePassword();
-    if (isUsernameValid && isPasswordValid) {
-      onLogin();
+
+    if (!isUsernameValid || !isPasswordValid) return;
+
+    try {
+      // 2. إرسال طلب تسجيل الدخول للباك اند (Django)
+      const response = await fetch('http://127.0.0.1:8000/api/accounts/login/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // 3. تخزين بيانات المستخدم "اللحظية" من الداتابيز
+        // البيانات دي جاية من الـ login_view اللي عملناه في Django
+        // وبتحتوي على (id, username, role, permissions)
+        localStorage.setItem('user', JSON.stringify(data));
+
+        // اختيارياً: تخزين الـ ID بشكل منفصل لسهولة الوصول إليه في الـ Sidebar
+        localStorage.setItem('userId', data.id);
+
+        // 4. التوجيه التلقائي بناءً على الدور (Logic الخاص بالتاسك)
+        // لو كاشير يفتح الـ POS، لو مدير يفتح الـ Dashboard
+        onLogin();
+      } else {
+        // التعامل مع رسائل الخطأ القادمة من السيرفر
+        setPasswordError(data.error || 'اسم المستخدم أو كلمة المرور غير صحيحة');
+      }
+    } catch (error) {
+      console.error("Error logging in:", error);
+      setPasswordError('فشل الاتصال بالسيرفر، تأكدي من تشغيل Django API');
     }
   };
+
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#334155] flex items-center justify-center p-4">
       <div className="relative w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-2xl p-8">
 
+
+
+
+
           {/* Brand Section */}
           {step === 'login' && (
-            <div className="flex items-center justify-center mb-4 gap-2">
-              <div className="w-24 h-24">
-                <img src={logo} alt="Smart ERP Logo" className="w-full h-full object-contain" />
+
+            <div className="flex flex-col items-center justify-center mb-8 text-center">
+              <div className="w-24 h-24 bg-[#374756] rounded-[30px] overflow-hidden shadow-xl mb-4 flex items-center justify-center">
+                <img
+                  src={logo}
+                  alt="Smart ERP Logo"
+                  className="w-full h-full object-cover scale-145"
+                />
               </div>
+
               <div>
-                <h1 className="text-2xl font-bold text-[#1E293B]">SMART ERP</h1>
-                <p className="text-gray-600 text-sm">نظام إدارة الأعمال المتكامل</p>
+                <h1 className="text-gray-600 text-sm">نظام إدارة الأعمال المتكامل</h1>
               </div>
             </div>
           )}
@@ -534,7 +707,7 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
                 >
                   تسجيل جديد
                 </button>
-            <span>ليس لديك حساب؟</span>
+                <span>ليس لديك حساب؟</span>
               </div>
 
             </form>
@@ -627,8 +800,3 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
     </div>
   );
 }
-
-
-
-
-

@@ -1,4 +1,3 @@
-
 // mohmat el malaf da hwa eny maktpesh el link el 5as pe el server akter men mra 
 // a7to hena pas 3ashan lma age a3mel publish fa a8er el link men hena pas 
 
@@ -15,6 +14,17 @@ const apiClient = axios.create({
     headers: {
         'Content-Type': 'application/json', 
     }
+});
+
+// إضافة الـ Token تلقائياً في كل طلب إذا كان موجوداً لتأمين الـ API
+apiClient.interceptors.request.use((config) => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (user.token) {
+        config.headers.Authorization = `Token ${user.token}`;
+    }
+    return config;
+}, (error) => {
+    return Promise.reject(error);
 });
 
 // ya3ne pakol le el react ay malaf 3aez yklm el backend  y3mel import le apiClient

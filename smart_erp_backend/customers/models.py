@@ -1,5 +1,6 @@
 from django.db import models
 
+# هنسيب موديل العملاء فقط في هذا الملف لمنع التضارب (Clash)
 class Customer(models.Model):
     name = models.CharField(max_length=255, verbose_name="اسم العميل")
     phone = models.CharField(max_length=20, verbose_name="رقم التليفون")

@@ -12,10 +12,14 @@ export function InventoryScreen() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
 
-  // دالة جلب البيانات لتحديث الجدول تلقائياً
+  // دالة جلب البيانات لتحديث الجدول تلقائياً مع دعم الفلترة من السيرفر
   const fetchMyData = async () => {
     try {
-      const data = await getProducts();
+      const data = await getProducts({
+        search: searchQuery,
+        category: selectedCategory,
+        status: selectedStatus
+      });
       setProducts(data || []);
     } catch (error) {
       console.error("خطأ في جلب البيانات:", error);
@@ -24,20 +28,12 @@ export function InventoryScreen() {
 
   useEffect(() => {
     fetchMyData();
-  }, []);
+  }, [searchQuery, selectedCategory, selectedStatus]);
 
-  const categories = ['الكل', ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))];
+  const categories = ['الكل', 'Gaming', 'Mobiles', 'Accessories', 'Audio'];
   const suppliers = ['الكل', ...Array.from(new Set(products.map((p) => p.supplier_name).filter(Boolean)))];
 
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch = searchQuery === '' || 
-                         (product.name && product.name.includes(searchQuery)) || 
-                         (product.sku && product.sku.includes(searchQuery));
-    const matchesCategory = selectedCategory === 'الكل' || product.category === selectedCategory;
-    const matchesSupplier = selectedSupplier === 'الكل' || product.supplier_name === selectedSupplier;
-    const matchesStatus = selectedStatus === 'الكل' || product.status === selectedStatus;
-    return matchesSearch && matchesCategory && matchesSupplier && matchesStatus;
-  });
+  const filteredProducts = products; // الفلترة الآن تتم في السيرفر
 
   const handleEditProduct = (product: any) => {
     // تحويل البيانات من snake_case (Django) لـ camelCase (Modal) عشان تظهر في الفورم
@@ -113,24 +109,37 @@ export function InventoryScreen() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredProducts.map((product) => (
-                <tr key={product.id} className="hover:bg-blue-50/50 transition-colors">
+                <tr key={product.id} className="hover:bg-blue-50/50 transition-colors border-b border-gray-100">
                   <td className="px-4 py-3 font-mono text-gray-500">{product.sku}</td>
-                  <td className="px-4 py-3 font-bold text-gray-700">{product.name}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      {product.image && (
+                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0">
+                          <img 
+                            src={`http://127.0.0.1:8000${product.image}`} 
+                            alt={product.name}
+                            className="w-full h-full object-cover"
+                            onError={(e: any) => e.target.src = 'https://via.placeholder.com/40'}
+                          />
+                        </div>
+                      )}
+                      <span className="font-bold text-gray-700">{product.name}</span>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-gray-600">
                     <div className="flex items-center gap-1">
                       <Users size={14} className="text-blue-400" />
                       {product.supplier_name || 'غير محدد'}
                     </div>
                   </td>
-                  <td className={`px-4 py-3 font-bold ${Number(product.current_stock) <= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  <td className={`px-4 py-3 font-bold ${Number(product.current_stock) <= Number(product.min_stock_level) ? 'text-red-600' : 'text-green-600'}`}>
                     {Number(product.current_stock).toFixed(0)} {product.unit}
                   </td>
-                  {/* تصليح الحقول لتطابق الـ API واختفاء الـ NaN */}
-                  <td className="px-4 py-3 text-gray-600">{Number(product.cost_price || 0).toFixed(2)} ج.م</td>
-                  <td className="px-4 py-3 font-bold text-blue-700">{Number(product.retail_price || 0).toFixed(2)} ج.م</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black ${Number(product.current_stock) > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {Number(product.current_stock) > 0 ? 'متوفر' : 'نفذت الكمية'}
+                  <td className="px-4 py-3 text-gray-600 font-medium">{Number(product.cost_price || 0).toLocaleString()} ج.م</td>
+                  <td className="px-4 py-3 font-bold text-blue-700">{Number(product.retail_price || 0).toLocaleString()} ج.م</td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black ${product.status === 'متوفر' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {product.status}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">

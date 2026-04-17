@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { X, Save } from 'lucide-react';
+import { X, Save, Image as ImageIcon } from 'lucide-react';
+import { createProduct, updateProduct } from '../../api/inventoryApi';
 
 // تعريف الـ Interface محلياً لضمان عدم وجود أخطاء في الـ Import
 export interface InventoryProduct {
@@ -15,6 +16,7 @@ export interface InventoryProduct {
   supplier: string;
   unit: string;
   minReorderLevel: number;
+  image?: any;
   status: 'available' | 'low' | 'out';
 }
 
@@ -38,13 +40,31 @@ export function ProductModal({ product, onSave, onClose }: ProductModalProps) {
     unit: 'قطعة',
     minReorderLevel: 5,
     status: 'available',
+    image: null
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
     if (product) {
       setFormData(product);
+      if (product.image && typeof product.image === 'string') {
+        setImagePreview(`http://127.0.0.1:8000${product.image}`);
+      }
     }
   }, [product]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleChange = (field: string, value: string | number) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -53,49 +73,35 @@ export function ProductModal({ product, onSave, onClose }: ProductModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // تجهيز البيانات لتطابق الـ Backend في Django
-    const productData = {
-      sku: formData.barcode,
-      name: formData.name,
-      category: formData.category,
-      current_stock: Number(formData.currentStock),
-      cost_price: Number(formData.costPrice),
-      retail_price: Number(formData.retailPrice),
-      wholesale_price: Number(formData.wholesalePrice),
-      half_wholesale_price: Number(formData.halfWholesalePrice),
-      unit: formData.unit,
-      min_stock_level: Number(formData.minReorderLevel),
-      supplier_name: formData.supplier
-    };
+    const fd = new FormData();
+    fd.append('sku', formData.barcode || '');
+    fd.append('name', formData.name || '');
+    fd.append('category', formData.category || 'إلكترونيات');
+    fd.append('current_stock', String(formData.currentStock || 0));
+    fd.append('cost_price', String(formData.costPrice || 0));
+    fd.append('retail_price', String(formData.retailPrice || 0));
+    fd.append('wholesale_price', String(formData.wholesalePrice || 0));
+    fd.append('unit', formData.unit || 'قطعة');
+    fd.append('min_stock_level', String(formData.minReorderLevel || 5));
+    
+    if (imageFile) {
+        fd.append('image', imageFile);
+    }
 
     try {
-      // إرسال البيانات للـ API الذي يعمل على منفذ 8000
-      const url = product && product.id 
-        ? `http://127.0.0.1:8000/api/products/${product.id}/` 
-        : 'http://127.0.0.1:8000/api/products/';
-      
-      const method = product && product.id ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(productData),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        onSave(result); // تحديث القائمة في الشاشة الرئيسية
-        onClose();
-        alert('تم حفظ المنتج في قاعدة البيانات بنجاح!');
+      let result;
+      if (product && product.id) {
+        result = await updateProduct(product.id.toString(), fd);
       } else {
-        const errorData = await response.json();
-        alert('خطأ من السيرفر: ' + JSON.stringify(errorData));
+        result = await createProduct(fd);
       }
+
+      onSave(result);
+      onClose();
+      alert('تم حفظ المنتج بنجاح!');
     } catch (error) {
-      console.error('Connection Error:', error);
-      alert('تأكد من تشغيل سيرفر Django (المنفذ 8000)');
+      console.error('Save Error:', error);
+      alert('حدث خطأ أثناء الحفظ. تأكد من صحة البيانات.');
     }
   };
 
@@ -131,6 +137,33 @@ export function ProductModal({ product, onSave, onClose }: ProductModalProps) {
             <div>
               <label className="block text-sm font-semibold mb-2">سعر القطاعي *</label>
               <input type="number" value={formData.retailPrice} onChange={(e) => handleChange('retailPrice', e.target.value)} className="w-full px-4 py-2 border-2 border-green-400 rounded-lg bg-green-50" required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-semibold mb-2">التصنيف</label>
+              <select value={formData.category} onChange={(e) => handleChange('category', e.target.value)} className="w-full px-4 py-2 border rounded-lg">
+                <option value="Gaming">Gaming</option>
+                <option value="Mobiles">Mobiles</option>
+                <option value="Accessories">Accessories</option>
+                <option value="Audio">Audio</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold mb-2">صورة المنتج</label>
+              <div className="flex items-center gap-4">
+                <label className="flex-1 cursor-pointer bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-2 hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 text-gray-500">
+                  <ImageIcon size={20} />
+                  <span className="text-xs">اختر صورة</span>
+                  <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                </label>
+                {imagePreview && (
+                  <div className="w-12 h-12 rounded-lg border overflow-hidden">
+                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

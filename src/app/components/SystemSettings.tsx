@@ -1,341 +1,324 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Settings,
-  Package,
-  ShoppingCart,
-  Users,
-  Brain,
-  Zap,
-  DollarSign,
-  Upload,
-  Database,
-  Download,
-  RefreshCw,
-  Building2,
-  Phone,
-  MapPin,
-  FileText,
-  CheckCircle,
+  Settings, Building2, Wallet, ShieldCheck, Palette, PackageSearch, Save, RefreshCcw, Phone, MapPin, Hash, DollarSign
 } from 'lucide-react';
+import axios from 'axios';
 
-interface Module {
-  id: string;
-  name: string;
-  description: string;
-  icon: typeof Package;
-  enabled: boolean;
-  color: string;
+interface SystemSettingsData {
+  company_name: string;
+  company_address: string;
+  company_phone: string;
+  tax_number: string;
+  vat_percentage: number;
+  currency: string;
+  payroll_tax_rate: number;
+  max_advance_limit: number;
+  allow_negative_stock: boolean;
+  auto_update_retail_price: boolean;
+  low_stock_threshold: number;
+  work_start_time: string;
+  work_end_time: string;
+  max_cashier_discount: number;
+  token_expiry_days: number;
+  primary_color: string;
+  print_logo_on_invoice: boolean;
 }
 
 export function SystemSettings() {
-  const [modules, setModules] = useState<Module[]>([
-    {
-      id: 'inventory',
-      name: 'المخازن',
-      description: 'تتبع الكميات، الباركود، الموردين',
-      icon: Package,
-      enabled: true,
-      color: '#F59E0B',
-    },
-    {
-      id: 'sales',
-      name: 'المبيعات',
-      description: 'نقطة البيع، الفواتير، الديون',
-      icon: ShoppingCart,
-      enabled: true,
-      color: '#3B82F6',
-    },
-    {
-      id: 'employees',
-      name: 'الموظفين',
-      description: 'الرواتب، السلف، الحضور',
-      icon: Users,
-      enabled: true,
-      color: '#10B981',
-    },
-    {
-      id: 'ai',
-      name: 'المساعد الذكي',
-      description: 'الأوامر الصوتية، كشف الشذوذ',
-      icon: Brain,
-      enabled: true,
-      color: '#8B5CF6',
-    },
-    {
-      id: 'automation',
-      name: 'الأتمتة',
-      description: 'الربط مع n8n، رسائل الواتساب',
-      icon: Zap,
-      enabled: false,
-      color: '#F85554',
-    },
-    {
-      id: 'accounting',
-      name: 'الحسابات',
-      description: 'المصروفات، صافي الربح',
-      icon: DollarSign,
-      enabled: true,
-      color: '#06B6D4',
-    },
-  ]);
+  const [activeTab, setActiveTab] = useState('company');
+  const [settings, setSettings] = useState<SystemSettingsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [businessProfile, setBusinessProfile] = useState({
-    companyName: 'شركة التجارة الذكية',
-    phone: '+20 123 456 7890',
-    address: 'القاهرة، مصر الجديدة، شارع التحرير 123',
-    taxNumber: '123-456-789',
-  });
+  useEffect(() => {
+    fetchSettings();
+  }, []);
 
-  const toggleModule = (id: string) => {
-    setModules((prev) =>
-      prev.map((module) => (module.id === id ? { ...module, enabled: !module.enabled } : module))
-    );
+  const fetchSettings = async () => {
+    try {
+      const resp = await axios.get('http://127.0.0.1:8000/api/settings/');
+      setSettings(resp.data);
+      setLoading(false);
+    } catch (e) {
+      console.error("Error fetching settings", e);
+      setLoading(false);
+    }
   };
 
-  const handleProfileChange = (field: string, value: string) => {
-    setBusinessProfile((prev) => ({ ...prev, [field]: value }));
+  const handleSave = async () => {
+    if (!settings) return;
+    setSaving(true);
+    try {
+      await axios.patch('http://127.0.0.1:8000/api/settings/1/', settings);
+      alert("✅ تم حفظ الإعدادات بنجاح وتعميمها على كافة الموديولات!");
+    } catch (e) {
+      console.error("Error saving settings", e);
+      alert("❌ فشل في حفظ الإعدادات، تأكد من الاتصال بالسيرفر.");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const handleChange = (field: keyof SystemSettingsData, value: any) => {
+    if (settings) {
+      setSettings({ ...settings, [field]: value });
+    }
+  };
+
+  if (loading) return (
+    <div className="h-full flex items-center justify-center bg-[#0F172A]">
+      <div className="text-blue-400 font-bold animate-pulse text-xl">جاري تحميل إعدادات النظام...</div>
+    </div>
+  );
+
+  const tabs = [
+    { id: 'company', label: 'بيانات المؤسسة', icon: <Building2 size={18} /> },
+    { id: 'financial', label: 'المالية والضرائب', icon: <Wallet size={18} /> },
+    { id: 'inventory', label: 'المخازن والمشتريات', icon: <PackageSearch size={18} /> },
+    { id: 'security', label: 'الأمان والرقابة', icon: <ShieldCheck size={18} /> },
+    { id: 'ui', label: 'تخصيص الواجهة', icon: <Palette size={18} /> },
+  ];
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50 p-6 space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-[#1E293B] mb-2">إعدادات النظام والتحكم النمطي</h1>
-        <p className="text-gray-600">تخصيص الموديولات وإدارة البيانات المحلية</p>
-      </div>
-
-      {/* Modular Toggle Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <Settings size={24} className="text-[#3B82F6]" />
-          <h2 className="text-2xl font-bold text-[#1E293B]">تخصيص الموديولات (Modular System)</h2>
+    <div className="h-full overflow-y-auto bg-[#0F172A] p-6 text-right" dir="rtl">
+      <div className="max-w-5xl mx-auto space-y-6">
+        
+        {/* Header Section */}
+        <div className="flex items-center justify-between bg-gradient-to-br from-slate-800/80 to-slate-900/80 p-8 rounded-3xl border border-slate-700/50 shadow-2xl">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-blue-600/20 text-blue-400 rounded-2xl flex items-center justify-center border border-blue-500/30">
+              <Settings size={32} />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-1">إعدادات النظام (The Brain)</h1>
+              <p className="text-slate-400">التحكم المركزي في سلوك كافة الإدارات</p>
+            </div>
+          </div>
+          <button 
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-2xl font-bold transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 shadow-lg shadow-blue-500/20"
+          >
+            {saving ? <RefreshCcw className="animate-spin" size={20} /> : <Save size={20} />}
+            حفظ كافة التغييرات
+          </button>
         </div>
-        <p className="text-gray-600 mb-6">
-          قم بتفعيل أو إيقاف الموديولات حسب احتياجات مؤسستك
-        </p>
 
-        <div className="grid grid-cols-3 gap-6">
-          {modules.map((module) => {
-            const Icon = module.icon;
-            return (
-              <div
-                key={module.id}
-                className={`relative bg-gradient-to-br from-white to-gray-50 rounded-xl border-2 p-6 transition-all ${
-                  module.enabled
-                    ? 'border-[#3B82F6] shadow-lg shadow-blue-500/20'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                {/* Module Icon */}
-                <div
-                  className="w-16 h-16 rounded-xl flex items-center justify-center mb-4 shadow-lg"
-                  style={{ backgroundColor: module.color }}
-                >
-                  <Icon size={32} className="text-white" />
+        {/* Navigation Tabs */}
+        <div className="flex gap-3 p-2 bg-slate-900/80 border border-slate-800 rounded-2xl sticky top-0 z-10 backdrop-blur-md">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-bold transition-all duration-300 ${
+                activeTab === tab.id 
+                  ? 'bg-blue-600 text-white shadow-xl scale-100' 
+                  : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/50'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content Area */}
+        <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-10 min-h-[500px] shadow-inner mb-10">
+          
+          {/* 1. Company Tab */}
+          {activeTab === 'company' && settings && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-3">
+                    <label className="text-slate-300 font-bold flex items-center gap-2"><Building2 size={18} className="text-blue-400" /> اسم المنشأة</label>
+                    <input type="text" value={settings.company_name} onChange={e => handleChange('company_name', e.target.value)} className="w-full h-12 bg-slate-800/50 border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-blue-500 px-4" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-slate-300 font-bold flex items-center gap-2"><Hash size={18} className="text-blue-400" /> الرقم الضريبي (VAT ID)</label>
+                    <input type="text" value={settings.tax_number || ''} onChange={e => handleChange('tax_number', e.target.value)} className="w-full h-12 bg-slate-800/50 border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-blue-500 px-4" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-slate-300 font-bold flex items-center gap-2"><Phone size={18} className="text-blue-400" /> رقم الهاتف</label>
+                    <input type="text" value={settings.company_phone || ''} onChange={e => handleChange('company_phone', e.target.value)} className="w-full h-12 bg-slate-800/50 border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-blue-500 px-4 text-left" dir="ltr" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-slate-300 font-bold flex items-center gap-2"><MapPin size={18} className="text-blue-400" /> العنوان</label>
+                    <input type="text" value={settings.company_address || ''} onChange={e => handleChange('company_address', e.target.value)} className="w-full h-12 bg-slate-800/50 border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-blue-500 px-4" />
+                  </div>
+               </div>
+               
+               <div className="space-y-3 p-6 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+                  <label className="text-slate-300 font-bold block mb-4">شعار المؤسسة (Company Logo)</label>
+                  <div className="flex items-center gap-8">
+                     <div className="w-32 h-32 bg-slate-900 border-2 border-dashed border-slate-700 rounded-2xl flex items-center justify-center overflow-hidden">
+                        <span className="text-slate-600 text-xs text-center px-2">معاينة الشعار<br/>(قريباً)</span>
+                     </div>
+                     <div className="space-y-2">
+                        <button className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-lg text-sm transition-colors">اختيار ملف...</button>
+                        <p className="text-slate-500 text-xs">PNG, JPG بحد أقصى 2 ميجابايت</p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {/* 2. Financial Tab */}
+          {activeTab === 'financial' && settings && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="p-8 bg-slate-800/30 rounded-3xl border border-slate-700 space-y-6">
+                <h3 className="text-blue-400 font-bold border-b border-slate-700/50 pb-4 text-xl flex items-center gap-2">📊 ضرائب المبيعات والعملة</h3>
+                <div className="space-y-3">
+                  <label className="text-slate-300 font-bold block">نسبة الضريبة القياسية (VAT %)</label>
+                  <div className="relative">
+                    <input type="number" step="0.01" value={settings.vat_percentage} onChange={e => handleChange('vat_percentage', e.target.value)} className="w-full h-12 bg-slate-900 border-slate-700 text-white rounded-xl px-4 text-left" dir="ltr" />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">%</span>
+                  </div>
                 </div>
-
-                {/* Module Name */}
-                <h3 className="text-xl font-bold text-[#1E293B] mb-2">{module.name}</h3>
-
-                {/* Module Description */}
-                <p className="text-sm text-gray-600 mb-4 leading-relaxed">{module.description}</p>
-
-                {/* Toggle Switch */}
-                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                  <span className="text-sm font-semibold text-gray-700">
-                    {module.enabled ? 'مفعّل' : 'معطّل'}
-                  </span>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={module.enabled}
-                      onChange={() => toggleModule(module.id)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-14 h-7 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-[#3B82F6] shadow-inner"></div>
-                  </label>
+                <div className="space-y-3">
+                  <label className="text-slate-300 font-bold block">العملة الأساسية</label>
+                  <input type="text" value={settings.currency} onChange={e => handleChange('currency', e.target.value)} className="w-full h-12 bg-slate-900 border-slate-700 text-white rounded-xl px-4" />
                 </div>
+              </div>
+              <div className="p-8 bg-slate-800/30 rounded-3xl border border-slate-700 space-y-6">
+                <h3 className="text-green-400 font-bold border-b border-slate-700/50 pb-4 text-xl flex items-center gap-2">💴 ضرائب الرواتب والماليات</h3>
+                <div className="space-y-3">
+                  <label className="text-slate-300 font-bold block">ضريبة الدخل على الرواتب (%)</label>
+                  <div className="relative">
+                    <input type="number" step="0.01" value={settings.payroll_tax_rate} onChange={e => handleChange('payroll_tax_rate', e.target.value)} className="w-full h-12 bg-slate-900 border-slate-700 text-white rounded-xl px-4 text-left" dir="ltr" />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">%</span>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="text-slate-300 font-bold block">الحد الأقصى للسلف الشهرية</label>
+                  <div className="relative">
+                    <input type="number" value={settings.max_advance_limit} onChange={e => handleChange('max_advance_limit', e.target.value)} className="w-full h-12 bg-slate-900 border-slate-700 text-white rounded-xl px-4 text-left" dir="ltr" />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">{settings.currency}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
-                {/* Enabled Badge */}
-                {module.enabled && (
-                  <div className="absolute top-4 left-4">
-                    <div className="w-8 h-8 bg-[#10B981] rounded-full flex items-center justify-center shadow-lg">
-                      <CheckCircle size={18} className="text-white" />
+          {/* 3. Inventory Tab */}
+          {activeTab === 'inventory' && settings && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+               <div className="p-8 bg-slate-800/40 rounded-3xl border border-blue-500/20 flex items-center justify-between hover:border-blue-500/40 transition-all shadow-lg">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-xl flex items-center justify-center">
+                      <PackageSearch size={24} />
+                    </div>
+                    <div>
+                      <h4 className="text-white font-bold text-xl">السماح بالبيع بالسالب (Negative Stock)</h4>
+                      <p className="text-slate-500 text-sm">تمكين البيع حتى لو كان رصيد الصنف صفر (للمؤسسات الخدمية أو الإنتاجية)</p>
                     </div>
                   </div>
-                )}
+                  <div className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked={settings.allow_negative_stock} onChange={e => handleChange('allow_negative_stock', e.target.checked)} className="sr-only peer" />
+                    <div className="w-16 h-8 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-1 after:start-[6px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all"></div>
+                  </div>
+               </div>
+
+               <div className="p-8 bg-slate-800/30 rounded-3xl border border-slate-700 space-y-4">
+                  <label className="text-slate-300 font-bold block text-lg">حد التنبيه للنواقص (Low Stock Alert)</label>
+                  <div className="flex items-center gap-4">
+                     <input type="range" min="0" max="100" value={settings.low_stock_threshold} onChange={e => handleChange('low_stock_threshold', e.target.value)} className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                     <span className="w-16 h-12 bg-slate-900 border border-slate-700 rounded-xl flex items-center justify-center text-blue-400 font-bold">{settings.low_stock_threshold}</span>
+                  </div>
+                  <p className="text-slate-500 text-sm">سيتم تلوين المنتجات باللون البرمجي في المخازن إذا قل رصيدها عن هذا الرقم.</p>
+               </div>
+
+               <div className="flex items-center justify-between p-8 bg-slate-800/40 rounded-3xl border border-slate-700">
+                  <div>
+                    <h4 className="text-white font-bold">التحديث التلقائي لأسعار البيع</h4>
+                    <p className="text-slate-500 text-sm">تعديل سعر البيع تلقائياً عند تسجيل مشتريات بسعر تكلفة جديد.</p>
+                  </div>
+                  <input type="checkbox" checked={settings.auto_update_retail_price} onChange={e => handleChange('auto_update_retail_price', e.target.checked)} className="w-6 h-6 rounded bg-slate-900 border-slate-700 text-blue-500" />
+               </div>
+            </div>
+          )}
+
+          {/* 4. Security Tab */}
+          {activeTab === 'security' && settings && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+               <div className="p-8 bg-slate-800/30 rounded-3xl border border-orange-500/20 space-y-8">
+                <h3 className="text-orange-400 font-bold border-b border-orange-500/20 pb-4 text-xl flex items-center gap-2">⏱️ مواعيد العمل والرقابة</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <label className="text-slate-400 text-sm">بداية الدوام</label>
+                    <input type="time" value={settings.work_start_time} onChange={e => handleChange('work_start_time', e.target.value)} className="w-full h-12 bg-slate-900 border-slate-700 text-white rounded-xl px-4" />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-slate-400 text-sm">نهاية الدوام</label>
+                    <input type="time" value={settings.work_end_time} onChange={e => handleChange('work_end_time', e.target.value)} className="w-full h-12 bg-slate-900 border-slate-700 text-white rounded-xl px-4" />
+                  </div>
+                </div>
+                <div className="space-y-3 pt-4">
+                  <label className="text-slate-300 font-bold block">سقف خصم الكاشير المسموح (%)</label>
+                  <div className="relative">
+                    <input type="number" value={settings.max_cashier_discount} onChange={e => handleChange('max_cashier_discount', e.target.value)} className="w-full h-12 bg-slate-900 border-slate-700 text-white rounded-xl px-4 text-left" dir="ltr" />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">%</span>
+                  </div>
+                </div>
               </div>
-            );
-          })}
+              <div className="p-8 bg-slate-800/30 rounded-3xl border border-red-500/20 space-y-8">
+                <h3 className="text-red-400 font-bold border-b border-red-500/20 pb-4 text-xl flex items-center gap-2">🛡️ الإدارة والجلسات</h3>
+                <div className="space-y-3">
+                  <label className="text-slate-300 font-bold block">مدة صلاحية الجلسة (TOKEN)</label>
+                  <div className="flex items-center gap-4">
+                    <input type="number" value={settings.token_expiry_days} onChange={e => handleChange('token_expiry_days', e.target.value)} className="w-24 h-12 bg-slate-900 border-slate-700 text-white rounded-xl px-4 text-center" />
+                    <span className="text-slate-400">أيام</span>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="text-slate-300 font-bold block text-sm text-red-300">سقف السلف المسموح للموظف شهرياً</label>
+                  <div className="relative">
+                    <input type="number" value={settings.max_advance_limit} onChange={e => handleChange('max_advance_limit', e.target.value)} className="w-full h-12 bg-slate-900 border-slate-700 text-white rounded-xl px-4 text-left" dir="ltr" />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">{settings.currency}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 5. UI Tab */}
+          {activeTab === 'ui' && settings && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+               <div className="p-10 bg-slate-800/50 rounded-3xl border border-blue-500/20 flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="space-y-4">
+                    <h4 className="text-2xl font-bold text-white">هوية النظام البصرية</h4>
+                    <p className="text-slate-400 max-w-md">اختر اللون الأساسي الذي تفضله للسيستم. سيتم تطبيق هذا اللون على كافة الأزرار والروابط والعناصر النشطة فور الحفظ.</p>
+                    <div className="flex items-center gap-4 mt-4 p-4 bg-slate-900 rounded-2xl border border-slate-800 w-fit">
+                       <div className="w-16 h-16 rounded-2xl shadow-2xl border border-white/20" style={{ backgroundColor: settings.primary_color }}></div>
+                       <div className="space-y-1">
+                          <span className="text-slate-500 text-xs block">Hex Code</span>
+                          <span className="text-blue-400 font-mono text-xl font-bold">{settings.primary_color}</span>
+                       </div>
+                    </div>
+                  </div>
+                  <div className="relative group">
+                    <div className="absolute -inset-4 bg-blue-500/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <input type="color" value={settings.primary_color} onChange={e => handleChange('primary_color', e.target.value)} className="w-40 h-40 rounded-full cursor-pointer bg-transparent border-0 relative z-10 p-0" />
+                  </div>
+               </div>
+               
+               <div className="p-8 bg-slate-800/40 rounded-3xl border border-slate-700 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-green-500/10 text-green-400 rounded-xl flex items-center justify-center">
+                      <Save size={24} />
+                    </div>
+                    <div>
+                      <h4 className="text-white font-bold text-lg">إظهار اللوجو في الفاتورة المطبوعة</h4>
+                      <p className="text-slate-500 text-sm">تمكين طباعة شعار الشركة في ترويسة الفاتورة الحرارية (POS Receipt).</p>
+                    </div>
+                  </div>
+                  <div className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked={settings.print_logo_on_invoice} onChange={e => handleChange('print_logo_on_invoice', e.target.checked)} className="sr-only peer" />
+                    <div className="w-16 h-8 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:bg-green-600 after:content-[''] after:absolute after:top-1 after:start-[6px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all"></div>
+                  </div>
+               </div>
+            </div>
+          )}
         </div>
-      </div>
-
-      {/* Business Profile Section */}
-      <div className="grid grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <Building2 size={24} className="text-[#F59E0B]" />
-            <h2 className="text-2xl font-bold text-[#1E293B]">الملف التجاري</h2>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">اسم المؤسسة</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={businessProfile.companyName}
-                  onChange={(e) => handleProfileChange('companyName', e.target.value)}
-                  className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-                />
-                <Building2 size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">رقم الهاتف</label>
-              <div className="relative">
-                <input
-                  type="tel"
-                  value={businessProfile.phone}
-                  onChange={(e) => handleProfileChange('phone', e.target.value)}
-                  className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-                  dir="ltr"
-                />
-                <Phone size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">العنوان</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={businessProfile.address}
-                  onChange={(e) => handleProfileChange('address', e.target.value)}
-                  className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-                />
-                <MapPin size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">الرقم الضريبي</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={businessProfile.taxNumber}
-                  onChange={(e) => handleProfileChange('taxNumber', e.target.value)}
-                  className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-                  dir="ltr"
-                />
-                <FileText size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Logo Upload */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <Upload size={24} className="text-[#10B981]" />
-            <h2 className="text-2xl font-bold text-[#1E293B]">شعار المؤسسة</h2>
-          </div>
-
-          <div className="flex flex-col items-center justify-center py-8">
-            <div className="w-40 h-40 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#1E293B] flex items-center justify-center mb-6 shadow-2xl">
-              <span className="text-white text-5xl font-bold">ERP</span>
-            </div>
-
-            <button className="px-6 py-3 bg-[#3B82F6] hover:bg-[#2563EB] text-white font-bold rounded-xl flex items-center gap-2 transition-colors shadow-lg">
-              <Upload size={20} />
-              رفع شعار جديد
-            </button>
-            <p className="text-xs text-gray-500 mt-3">PNG, JPG (الحد الأقصى: 2MB)</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Local System & Security */}
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl border border-slate-700 p-6 text-white">
-        <div className="flex items-center gap-3 mb-6">
-          <Database size={24} className="text-[#10B981]" />
-          <h2 className="text-2xl font-bold">إدارة البيانات المحلية (Offline Management)</h2>
-        </div>
-
-        <div className="grid grid-cols-3 gap-6">
-          {/* Backup Card */}
-          <div className="bg-slate-700/50 rounded-xl border border-slate-600 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-[#10B981] rounded-lg flex items-center justify-center">
-                <Database size={24} className="text-white" />
-              </div>
-              <div>
-                <h3 className="font-bold text-white">النسخ الاحتياطي</h3>
-                <p className="text-xs text-slate-400">آخر نسخة: منذ ساعتين</p>
-              </div>
-            </div>
-            <button className="w-full bg-[#10B981] hover:bg-[#059669] text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
-              <Download size={18} />
-              إنشاء نسخة الآن
-            </button>
-          </div>
-
-          {/* System Update Card */}
-          <div className="bg-slate-700/50 rounded-xl border border-slate-600 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-[#3B82F6] rounded-lg flex items-center justify-center">
-                <RefreshCw size={24} className="text-white" />
-              </div>
-              <div>
-                <h3 className="font-bold text-white">تحديث النظام</h3>
-                <p className="text-xs text-slate-400">الإصدار: v2.5.1</p>
-              </div>
-            </div>
-            <button className="w-full bg-[#3B82F6] hover:bg-[#2563EB] text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
-              <RefreshCw size={18} />
-              فحص التحديثات
-            </button>
-          </div>
-
-          {/* Security Status */}
-          <div className="bg-slate-700/50 rounded-xl border border-slate-600 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
-                <CheckCircle size={24} className="text-white" />
-              </div>
-              <div>
-                <h3 className="font-bold text-white">حالة الأمان</h3>
-                <p className="text-xs text-green-400">النظام آمن</p>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-400">التشفير</span>
-                <CheckCircle size={16} className="text-green-400" />
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-400">النسخ الاحتياطي</span>
-                <CheckCircle size={16} className="text-green-400" />
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-400">المصادقة</span>
-                <CheckCircle size={16} className="text-green-400" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Save Button */}
-      <div className="flex justify-end gap-4">
-        <button className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl transition-colors">
-          إلغاء التغييرات
-        </button>
-        <button className="px-8 py-3 bg-[#10B981] hover:bg-[#059669] text-white font-bold rounded-xl flex items-center gap-2 transition-colors shadow-lg">
-          <CheckCircle size={20} />
-          حفظ جميع الإعدادات
-        </button>
       </div>
     </div>
   );

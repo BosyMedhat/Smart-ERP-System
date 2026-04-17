@@ -14,7 +14,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=smart_erp
+      - POSTGRES_DB=erp_db
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=adminpass
     ports:

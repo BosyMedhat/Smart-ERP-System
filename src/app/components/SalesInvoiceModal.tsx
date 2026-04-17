@@ -17,6 +17,18 @@ export function SalesInvoiceModal({ onClose }: SalesInvoiceModalProps) {
     { id: 1, name: 'صنف A', quantity: 2, price: 1250 },
     { id: 2, name: 'صنف B', quantity: 1, price: 850 },
   ]);
+  const [vatPercentage, setVatPercentage] = useState(14);
+
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/api/settings/')
+      .then(res => res.json())
+      .then(data => setVatPercentage(parseFloat(data.vat_percentage)))
+      .catch(err => console.error("Error fetching settings:", err));
+  }, []);
+
+  const subtotal = items.reduce((acc, item) => acc + item.quantity * item.price, 0);
+  const tax = subtotal * (vatPercentage / 100);
+  const total = subtotal + tax;
 
   const addItem = () => {
     const newItem: Item = {
@@ -40,7 +52,6 @@ export function SalesInvoiceModal({ onClose }: SalesInvoiceModalProps) {
     );
   };
 
-  const total = items.reduce((acc, item) => acc + item.quantity * item.price, 0);
 
   // --- دالة الربط مع الباك إند (Django) ---
   const handleSaveAndPrint = async () => {
@@ -117,9 +128,19 @@ export function SalesInvoiceModal({ onClose }: SalesInvoiceModalProps) {
 
           <button onClick={addItem} className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition"><Plus /> إضافة صنف</button>
 
-          <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-100 to-green-200 rounded-xl text-xl font-bold">
-            <span>الإجمالي الكلي:</span>
-            <span><DollarSign className="inline-block mr-1" /> {total.toLocaleString()} ج.م</span>
+          <div className="space-y-2 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+            <div className="flex justify-between text-slate-600">
+              <span>الإجمالي الفرعي:</span>
+              <span>{subtotal.toLocaleString()} ج.م</span>
+            </div>
+            <div className="flex justify-between text-slate-600">
+              <span>الضريبة ({vatPercentage}%):</span>
+              <span>{tax.toLocaleString()} ج.م</span>
+            </div>
+            <div className="flex justify-between items-center text-xl font-bold text-green-700 border-t border-slate-200 pt-2">
+              <span>الصافي النهائي:</span>
+              <span><DollarSign className="inline-block mr-1" /> {total.toLocaleString()} ج.م</span>
+            </div>
           </div>
         </div>
 

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Mic, AlertTriangle, TrendingUp, CheckCircle, Bell, Code } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Mic, AlertTriangle, TrendingUp, CheckCircle, Bell, Code, Brain } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 // de el masora ele pta5od el kalam we teo7 peha le django 
@@ -39,52 +39,115 @@ const mockQueryResults: VoiceQueryResult[] = [
   { productName: 'نظارة شمسية', category: 'إكسسوارات', lastSaleDate: '2026-01-27', stockQty: 15 },
 ];
 
-const forecastData = [
+const mockForecastData = [
   { month: 'يناير', actual: 120000, forecast: null },
   { month: 'فبراير', actual: 135000, forecast: null },
   { month: 'مارس', actual: 145000, forecast: null },
   { month: 'أبريل', actual: null, forecast: 165000 },
-  { month: 'مايو', actual: null, forecast: 180000 },
-  { month: 'يونيو', actual: null, forecast: 195000 },
 ];
 
 export function AICenter() {
   const [showResults, setShowResults] = useState(false);
   const [showSQL, setShowSQL] = useState(false);
   const [aiResponse, setAiResponse] = useState<string>(''); // رد الذكاء الاصطناعي الحقيقي
+  const [lastQuery, setLastQuery] = useState<string>(''); // الاستعلام الذي تم إرساله
   const [isLoading, setIsLoading] = useState(false);
+  const [chartData, setChartData] = useState<any[]>(mockForecastData);
+  const [anomalies, setAnomalies] = useState<AnomalyLog[]>([]);
+
+  // دالة جلب البيانات من السيرفر
+  const fetchAnomalies = async () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      let token = '';
+      if (userStr && userStr !== 'undefined' && userStr !== 'null') {
+         const userData = JSON.parse(userStr);
+         token = userData?.token || '';
+      }
+
+      const response = await axios.get('http://127.0.0.1:8000/api/anomalies/', {
+        headers: { 'Authorization': `Token ${token}` }
+      });
+
+      // تحويل البيانات من snake_case لـ camelCase لتناسب الـ Interface
+      const formattedData = response.data.map((item: any) => ({
+        id: item.id.toString(),
+        employee: item.employee_name,
+        operationType: item.operation_type,
+        value: Number(item.new_value || 0),
+        reason: item.reason,
+        severity: item.severity,
+        timestamp: item.timestamp,
+        contextInfo: "" // يمكن إضافته لاحقاً من الباك إند
+      }));
+      setAnomalies(formattedData);
+    } catch (error) {
+      console.error("Error fetching anomalies:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchAnomalies();
+  }, []);
 
   // pa5od 3 7agat men el maktpa ta7wel el kalam ele ento kolto (transcript) + (listening) 3ahan lampt el microphone + ((resetTranscript) 3ashan aktep 3la nadafa tany mara)
   const { transcript, listening, resetTranscript } = useSpeechRecognition();
 
   const handleVoiceCommand = async () => {
-  if (listening) {
-    // لو بنسمع ودست تاني، وقف الاستماع وابعت النص
-    SpeechRecognition.stopListening();
-    console.log("تم إيقاف الاستماع، النص المكتشف:", transcript); // للتأكد في الـ Console
-    
-    if (transcript) {
-      setIsLoading(true);
-      try {
-        const response = await axios.post('http://127.0.0.1:8000/api/ai/ask/', {
-          query: transcript,
-          context_data: mockAnomalies 
-        });
-        setAiResponse(response.data.response);
-        setShowResults(true);
-      } catch (error) {
-        console.error("خطأ في الاتصال بالباك إند:", error);
-      } finally {
-        setIsLoading(false);
+    if (listening) {
+      // لو بنسمع ودست تاني، وقف الاستماع وابعت النص
+      SpeechRecognition.stopListening();
+      console.log("تم إيقاف الاستماع، النص المكتشف:", transcript); // للتأكد في الـ Console
+      
+      const currentQuery = transcript.trim();
+      if (currentQuery) {
+        setLastQuery(currentQuery); 
+        setIsLoading(true);
+        setAiResponse('');
+
+        try {
+          let token = '';
+          try {
+            const userStr = localStorage.getItem('user');
+            if (userStr && userStr !== 'undefined' && userStr !== 'null') {
+              const userData = JSON.parse(userStr);
+              token = userData?.token || ''; 
+            }
+          } catch (e) {
+            console.warn("Error parsing user from localStorage", e);
+          }
+
+          const response = await axios.post('http://127.0.0.1:8000/api/ai/ask/', {
+            query: currentQuery,
+            context_data: anomalies 
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Token ${token}` 
+            }
+          });
+          
+          if (response.data.chart_data) {
+             setChartData(response.data.chart_data);
+          }
+          setAiResponse(response.data.response);
+          setShowResults(true);
+        } catch (error) {
+          console.error("خطأ في الاتصال بالباك إند:", error);
+          setAiResponse("عذراً، لم أتمكن من معالجة الطلب حالياً. تأكد من تشغيل Ollاما والـ Backend.");
+        } finally {
+          setIsLoading(false);
+          resetTranscript();
+        }
       }
+    } else {
+      // لو مش بنسمع، ابدأ اسمع من جديد
+      resetTranscript();
+      setAiResponse('');
+      setLastQuery('');
+      SpeechRecognition.startListening({ language: 'ar-EG', continuous: true });
     }
-  } else {
-    // لو مش بنسمع، ابدأ اسمع من جديد
-    resetTranscript();
-    setAiResponse('');
-    SpeechRecognition.startListening({ language: 'ar-EG', continuous: true });
-  }
-};
+  };
 
   const getSeverityBadge = (severity: string) => {
     const styles = {
@@ -109,7 +172,7 @@ export function AICenter() {
           <div className="w-10 h-10 bg-gradient-to-br from-[#60A5FA] to-[#6366F1] rounded-lg flex items-center justify-center">
             <Mic size={20} className="text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-white">المساعد الصوتي الذكي</h2>
+          <h2 className="text-2xl font-bold text-white">المساعد الصوتي الذكي (AI)</h2>
         </div>
 
         <div className="flex flex-col items-center gap-6">
@@ -130,7 +193,7 @@ export function AICenter() {
             </div>
           )}
 
-          {isLoading && <div className="text-blue-400 animate-bounce">جاري تحليل البيانات بواسطة Llama 3...</div>}
+          {isLoading && <div className="text-blue-400 font-bold animate-pulse mt-2">جاري معالجة طلبك بواسطة الذكاء الاصطناعي...</div>}
         </div>
       </div>
 
@@ -152,7 +215,7 @@ export function AICenter() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
-              {mockAnomalies.map((log) => (
+              {anomalies.map((log) => (
                 <tr key={log.id} className="hover:bg-slate-800/50">
                   <td className="py-4 px-2 text-white">{log.employee}</td>
                   <td className="py-4 px-2 text-slate-300">{log.operationType}</td>
@@ -161,6 +224,11 @@ export function AICenter() {
                   <td className="py-4 px-2">{getSeverityBadge(log.severity)}</td>
                 </tr>
               ))}
+              {anomalies.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-10 text-center text-slate-500">لا توجد عمليات مشبوهة مسجلة حالياً.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -173,7 +241,7 @@ export function AICenter() {
              <TrendingUp size={18} className="text-blue-400" /> تحليل المبيعات والتوقعات
            </h3>
            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={forecastData}>
+              <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="month" stroke="#94A3B8" />
                 <YAxis stroke="#94A3B8" />
@@ -184,14 +252,45 @@ export function AICenter() {
            </ResponsiveContainer>
         </div>
 
-        <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 rounded-2xl border border-indigo-500/30 p-6">
-          <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-            <CheckCircle size={18} className="text-green-400" /> تحليل المساعد الذكي
+        <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 rounded-2xl border border-indigo-500/30 p-6 flex flex-col h-[350px]">
+          <h3 className="text-white font-bold mb-4 flex items-center gap-2 shrink-0">
+            <CheckCircle size={18} className="text-green-400" /> جلسة المساعد الذكي
           </h3>
-          <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800 min-h-[150px]">
-            <p className="text-slate-200 text-sm leading-relaxed">
-              {aiResponse || "اضغط على الميكروفون واسأل المساعد عن أي عملية أو تقرير للمبيعات..."}
-            </p>
+          <div className="flex-1 bg-slate-950/50 p-4 rounded-xl border border-slate-800 overflow-y-auto flex flex-col gap-4">
+            
+            {!lastQuery && !aiResponse && !isLoading && (
+              <div className="text-center text-slate-400 text-sm mt-8 opacity-70">
+                <Brain className="mx-auto mb-2 text-slate-600" size={32} />
+                <p>اضغط على الميكروفون وتحدث، ثم اضغط لإيقاف التسجيل وبدء التحليل.</p>
+              </div>
+            )}
+
+            {lastQuery && (
+              <div className="flex justify-start">
+                <div className="bg-[#3B82F6] text-white px-4 py-2 rounded-2xl rounded-tr-sm max-w-[90%] shadow-md">
+                  <p className="text-sm font-medium">{lastQuery}</p>
+                </div>
+              </div>
+            )}
+
+            {isLoading && (
+              <div className="flex justify-end">
+                 <div className="bg-slate-800 text-slate-300 px-4 py-3 rounded-2xl rounded-tl-sm max-w-[80%] shadow-md flex items-center gap-2">
+                    <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                 </div>
+              </div>
+            )}
+
+            {aiResponse && !isLoading && (
+              <div className="flex justify-end">
+                <div className="bg-slate-800 text-slate-200 px-4 py-3 rounded-2xl rounded-tl-sm max-w-[90%] border border-slate-700 shadow-xl">
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{aiResponse}</p>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       </div>

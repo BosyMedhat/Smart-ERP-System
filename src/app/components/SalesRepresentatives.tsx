@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { UserCheck, Phone, TrendingUp, DollarSign, Target } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Phone, TrendingUp, DollarSign, Target } from 'lucide-react';
+import { getRepresentatives } from '../../api/delegateApi';
 
 interface Representative {
   id: string;
@@ -22,44 +23,24 @@ interface Commission {
 }
 
 export function SalesRepresentatives() {
-  const [representatives] = useState<Representative[]>([
-    {
-      id: '1',
-      name: 'أحمد محمود',
-      phone: '+20 123 456 7890',
-      totalSales: 85000,
-      targetSales: 100000,
-      commission: 2550,
-      commissionRate: 3,
-    },
-    {
-      id: '2',
-      name: 'سارة حسن',
-      phone: '+20 111 222 3333',
-      totalSales: 120000,
-      targetSales: 100000,
-      commission: 3600,
-      commissionRate: 3,
-    },
-    {
-      id: '3',
-      name: 'محمد علي',
-      phone: '+20 155 666 7777',
-      totalSales: 65000,
-      targetSales: 80000,
-      commission: 1950,
-      commissionRate: 3,
-    },
-    {
-      id: '4',
-      name: 'فاطمة أحمد',
-      phone: '+20 144 555 8888',
-      totalSales: 95000,
-      targetSales: 90000,
-      commission: 2850,
-      commissionRate: 3,
-    },
-  ]);
+  const [representatives, setRepresentatives] = useState<Representative[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchReps = async () => {
+    try {
+      setIsLoading(true);
+      const data = await getRepresentatives();
+      setRepresentatives(data);
+    } catch (error) {
+      console.error("Failed to fetch reps:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useState(() => {
+    fetchReps();
+  });
 
   const [commissions] = useState<Commission[]>([
     {
