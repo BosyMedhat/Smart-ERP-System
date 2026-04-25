@@ -22,11 +22,6 @@ admin.site.register(Purchase)
 admin.site.register(Expense)
 admin.site.register(Treasury)
 admin.site.register(StockMovement)
-<<<<<<< HEAD
-admin.site.register(Employee) # تم إضافة سطر التسجيل هنا ✅
-admin.site.register(UserProfile)
-=======
 admin.site.register(Employee) # تم إضافة سطر التسجيل هنا 
 admin.site.register(UserProfile)  # RBAC
 admin.site.register(StoreSettings)  # إعدادات المتجر
->>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e
