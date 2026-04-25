@@ -1,5 +1,7 @@
-import { Plus, Minus, Printer, Clock, CreditCard, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Minus, Printer, Clock, CreditCard, X, Loader2 } from 'lucide-react';
 import { CartItem } from '../App';
+import apiClient from '../../api/axiosConfig';
 
 interface CartProps {
   cartItems: CartItem[];
@@ -9,14 +11,17 @@ interface CartProps {
   onDiscountChange: (discount: number) => void;
   onUpdateQuantity: (id: string, delta: number) => void;
   onClearCart: () => void;
+  onSaleComplete?: () => void;
 }
 
-const customers = [
-  { id: '', name: 'عميل نقدي' },
-  { id: '1', name: 'أحمد محمد - شركة النور' },
-  { id: '2', name: 'فاطمة علي - مؤسسة الأمل' },
-  { id: '3', name: 'محمود حسن - متجر السلام' },
-];
+interface Customer {
+  id: number;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  balance: string;
+}
 
 export function Cart({
   cartItems,
@@ -26,10 +31,70 @@ export function Cart({
   onDiscountChange,
   onUpdateQuantity,
   onClearCart,
+  onSaleComplete,
 }: CartProps) {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [paymentType, setPaymentType] = useState<'cash' | 'credit'>('cash');
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const response = await apiClient.get('/customers/');
+        setCustomers(response.data);
+      } catch (err) {
+        setError('تعذر تحميل بيانات العملاء');
+        console.error('Error fetching customers:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCustomers();
+  }, []);
+
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const tax = subtotal * 0.14;
   const total = subtotal + tax - discount;
+  const finalAmount = total > 0 ? total : 0;
+
+  const handleCheckout = async () => {
+    if (cartItems.length === 0) {
+      alert('السلة فارغة!');
+      return;
+    }
+
+    setCheckoutLoading(true);
+    try {
+      const res = await apiClient.post('/sales/', {
+        customer: selectedCustomer ? parseInt(selectedCustomer) : null,
+        total_amount: subtotal,
+        discount: discount,
+        payment_type: paymentType,
+        items: cartItems.map(item => ({
+          product: parseInt(item.id),
+          product_name: item.name,
+          quantity: item.quantity,
+          unit_price: item.price,
+        }))
+      });
+      alert(`✅ تم البيع!\nرقم الفاتورة: ${res.data.invoice_number}\nالإجمالي: ${res.data.final_amount} ج.م`);
+      onClearCart();
+      if (onSaleComplete) onSaleComplete();
+    } catch (err: any) {
+      console.error('Checkout error:', err);
+      if (err.response?.status === 400) {
+        const errors = err.response?.data;
+        const errorMsg = errors ? JSON.stringify(errors, null, 2) : 'خطأ في البيانات';
+        alert('❌ خطأ في البيانات:\n' + errorMsg);
+      } else {
+        alert('❌ فشل في إتمام البيع، يرجى المحاولة مرة أخرى');
+      }
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
 
   return (
     <div className="h-full bg-white rounded-xl shadow-sm flex flex-col">
@@ -38,13 +103,21 @@ export function Cart({
         <label className="block text-sm font-semibold text-gray-700 mb-2">
           اختيار العميل
         </label>
+        {loading && (
+          <div className="text-center py-2 text-gray-500 text-sm">جاري تحميل العملاء...</div>
+        )}
+        {error && (
+          <div className="text-center py-2 text-red-500 text-sm">{error}</div>
+        )}
         <select
           value={selectedCustomer}
           onChange={(e) => onCustomerChange(e.target.value)}
           className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+          disabled={loading}
         >
+          <option value="">عميل نقدي</option>
           {customers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
+            <option key={customer.id} value={String(customer.id)}>
               {customer.name}
             </option>
           ))}
@@ -141,14 +214,48 @@ export function Cart({
           </div>
         </div>
 
+        {/* Payment Type Selection */}
+        <div className="mb-4">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            طريقة الدفع
+          </label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPaymentType('cash')}
+              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                paymentType === 'cash'
+                  ? 'bg-[#10B981] text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              كاش
+            </button>
+            <button
+              onClick={() => setPaymentType('credit')}
+              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                paymentType === 'credit'
+                  ? 'bg-[#3B82F6] text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              آجل
+            </button>
+          </div>
+        </div>
+
         {/* Action Buttons */}
         <div className="space-y-2">
           <button
+            onClick={handleCheckout}
+            disabled={cartItems.length === 0 || checkoutLoading}
             className="w-full bg-[#10B981] hover:bg-[#059669] text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={cartItems.length === 0}
           >
-            <Printer size={20} />
-            إتمام البيع وطباعة
+            {checkoutLoading ? (
+              <Loader2 size={20} className="animate-spin" />
+            ) : (
+              <Printer size={20} />
+            )}
+            {checkoutLoading ? 'جاري المعالجة...' : 'إتمام البيع وطباعة'}
           </button>
           <div className="grid grid-cols-3 gap-2">
             <button

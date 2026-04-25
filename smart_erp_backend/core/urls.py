@@ -2,10 +2,10 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-# 1. استيراد موديول العملاء
-from customers.views import CustomerViewSet
+# 1. استيراد موديول العملاء والـ login
+from customers.views import CustomerViewSet, login_view, UserViewSet
 
-# 2. استيراد موديول المخازن والموظفين ✅
+# 2. استيراد موديول المخازن والموظفين 
 from inventory.views import (
     ProductViewSet, 
     InvoiceViewSet, 
@@ -16,7 +16,10 @@ from inventory.views import (
     ExpenseViewSet, 
     TreasuryViewSet, 
     StockMovementViewSet,
-    EmployeeViewSet # تم إضافة استيراد الموظفين هنا ✅
+    EmployeeViewSet, # تم إضافة استيراد الموظفين هنا 
+    StoreSettingsViewSet, # إعدادات المتجر
+    SaleViewSet,  # فواتير المبيعات الجديدة
+    DashboardView  # Dashboard API
 )
 
 # إنشاء الـ Router الرئيسي للمشروع
@@ -33,9 +36,16 @@ router.register(r'purchases', PurchaseViewSet)
 router.register(r'expenses', ExpenseViewSet)
 router.register(r'treasury', TreasuryViewSet)
 router.register(r'stock-movements', StockMovementViewSet)
-router.register(r'employees', EmployeeViewSet) # تم إضافة مسار الموظفين هنا ✅
+router.register(r'employees', EmployeeViewSet) # تم إضافة مسار الموظفين هنا 
+router.register(r'users', UserViewSet) # تم إضافة مسار المستخدمين هنا 
+router.register(r'settings', StoreSettingsViewSet) # إعدادات المتجر
+router.register(r'sales', SaleViewSet)  # فواتير المبيعات الجديدة
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/login/', login_view, name='login'),
     path('api/', include(router.urls)), # كدة الرابط هيبقى http://127.0.0.1:8000/api/employees/
+    path('api/ai/', include('ai_assistant.urls')),
+    path('api/dashboard/', DashboardView.as_view()),
+    path('api/reports/', include('reports.urls')),
 ]

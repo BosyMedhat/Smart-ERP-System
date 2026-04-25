@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart ERP - C4 Model Architecture</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Cairo', sans-serif; }
+        .node { transition: all 0.3s ease; }
+        .node:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+        .connection { stroke-dasharray: 5,5; animation: dash 20s linear infinite; }
+        @keyframes dash { to { stroke-dashoffset: -100; } }
+        .level { display: none; }
+        .level.active { display: block; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen text-white">
+    <div class="container mx-auto px-6 py-8">
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <div class="inline-flex items-center gap-3 bg-slate-800/50 px-6 py-3 rounded-full border border-slate-700 mb-4">
+                <i data-lucide="layers" class="text-indigo-400"></i>
+                <span class="text-slate-300">C4 Model Architecture</span>
+            </div>
+            <h1 class="text-4xl font-bold mb-2">Smart ERP System</h1>
+            <p class="text-slate-400">مخطط هندسة النظام على 4 مستويات</p>
+        </header>
+
+        <!-- Level Navigation -->
+        <div class="flex justify-center gap-2 mb-8">
+            <button onclick="showLevel(1)" class="level-btn px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 transition-all font-semibold" data-level="1">
+                <i data-lucide="users" class="inline-block ml-2"></i>
+                L1: Context
+            </button>
+            <button onclick="showLevel(2)" class="level-btn px-6 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 transition-all font-semibold" data-level="2">
+                <i data-lucide="server" class="inline-block ml-2"></i>
+                L2: Containers
+            </button>
+            <button onclick="showLevel(3)" class="level-btn px-6 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 transition-all font-semibold" data-level="3">
+                <i data-lucide="component" class="inline-block ml-2"></i>
+                L3: Components
+            </button>
+            <button onclick="showLevel(4)" class="level-btn px-6 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 transition-all font-semibold" data-level="4">
+                <i data-lucide="code" class="inline-block ml-2"></i>
+                L4: Code
+            </button>
+        </div>
+
+        <!-- Level 1: System Context -->
+        <div id="level1" class="level active">
+            <div class="max-w-4xl mx-auto">
+                <h2 class="text-2xl font-bold mb-6 text-center text-indigo-400">L1: System Context Diagram</h2>
+                
+                <div class="relative bg-slate-800/50 rounded-3xl p-8 border border-slate-700">
+                    <!-- Users -->
+                    <div class="grid grid-cols-3 gap-4 mb-8">
+                        <div class="node bg-blue-600/20 border-2 border-blue-500/50 rounded-2xl p-6 text-center">
+                            <i data-lucide="shield" class="w-12 h-12 mx-auto mb-3 text-blue-400"></i>
+                            <h3 class="font-bold text-lg">المدير</h3>
+                            <p class="text-sm text-slate-400 mt-2">إدارة النظام والتقارير</p>
+                        </div>
+                        <div class="node bg-emerald-600/20 border-2 border-emerald-500/50 rounded-2xl p-6 text-center">
+                            <i data-lucide="user" class="w-12 h-12 mx-auto mb-3 text-emerald-400"></i>
+                            <h3 class="font-bold text-lg">الكاشير</h3>
+                            <p class="text-sm text-slate-400 mt-2">نقطة البيع والمبيعات</p>
+                        </div>
+                        <div class="node bg-violet-600/20 border-2 border-violet-500/50 rounded-2xl p-6 text-center">
+                            <i data-lucide="box" class="w-12 h-12 mx-auto mb-3 text-violet-400"></i>
+                            <h3 class="font-bold text-lg">المخازن</h3>
+                            <p class="text-sm text-slate-400 mt-2">إدارة المخزون</p>
+                        </div>
+                    </div>
+
+                    <!-- Connections -->
+                    <div class="flex justify-center mb-8">
+                        <svg width="300" height="40">
+                            <line x1="150" y1="0" x2="150" y2="40" stroke="#6366f1" stroke-width="2" class="connection"/>
+                            <polygon points="150,40 145,30 155,30" fill="#6366f1"/>
+                        </svg>
+                    </div>
+
+                    <!-- Smart ERP System -->
+                    <div class="node bg-indigo-600/30 border-2 border-indigo-500 rounded-3xl p-8 text-center mx-auto max-w-lg">
+                        <div class="w-20 h-20 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <i data-lucide="brain" class="w-10 h-10 text-white"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold mb-2">Smart ERP System</h3>
+                        <p class="text-slate-300">نظام إدارة المبيعات والمخازن مع الذكاء الاصطناعي</p>
+                        <div class="flex justify-center gap-2 mt-4">
+                            <span class="px-3 py-1 bg-indigo-500/30 rounded-full text-sm">React + TS</span>
+                            <span class="px-3 py-1 bg-indigo-500/30 rounded-full text-sm">Django + DRF</span>
+                            <span class="px-3 py-1 bg-indigo-500/30 rounded-full text-sm">PostgreSQL</span>
+                        </div>
+                    </div>
+
+                    <!-- External Systems -->
+                    <div class="flex justify-center gap-6 mt-8">
+                        <div class="node bg-amber-600/20 border-2 border-amber-500/50 rounded-xl p-4 text-center">
+                            <i data-lucide="bot" class="w-8 h-8 mx-auto mb-2 text-amber-400"></i>
+                            <h4 class="font-semibold">Ollama AI</h4>
+                            <p class="text-xs text-slate-400">LLama3 Local</p>
+                        </div>
+                        <div class="node bg-rose-600/20 border-2 border-rose-500/50 rounded-xl p-4 text-center">
+                            <i data-lucide="database" class="w-8 h-8 mx-auto mb-2 text-rose-400"></i>
+                            <h4 class="font-semibold">PostgreSQL</h4>
+                            <p class="text-xs text-slate-400">Database</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Level 2: Container Diagram -->
+        <div id="level2" class="level">
+            <div class="max-w-5xl mx-auto">
+                <h2 class="text-2xl font-bold mb-6 text-center text-indigo-400">L2: Container Diagram</h2>
+                
+                <div class="bg-slate-800/50 rounded-3xl p-8 border border-slate-700">
+                    <!-- Frontend -->
+                    <div class="node bg-blue-600/20 border-2 border-blue-500/50 rounded-2xl p-6 mb-6">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="w-14 h-14 bg-blue-500 rounded-xl flex items-center justify-center">
+                                <i data-lucide="monitor" class="w-8 h-8 text-white"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold">Web Application (React + Vite)</h3>
+                                <p class="text-slate-400">SPA with TypeScript & TailwindCSS</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-4 gap-3 text-sm">
+                            <div class="bg-slate-700/50 rounded-lg p-2 text-center">POS Screen</div>
+                            <div class="bg-slate-700/50 rounded-lg p-2 text-center">AI Center</div>
+                            <div class="bg-slate-700/50 rounded-lg p-2 text-center">Inventory</div>
+                            <div class="bg-slate-700/50 rounded-lg p-2 text-center">Dashboard</div>
+                        </div>
+                    </div>
+
+                    <!-- API -->
+                    <div class="flex justify-center mb-6">
+                        <svg width="100" height="40">
+                            <line x1="50" y1="0" x2="50" y2="40" stroke="#6366f1" stroke-width="2"/>
+                            <polygon points="50,40 45,30 55,30" fill="#6366f1"/>
+                        </svg>
+                    </div>
+
+                    <!-- Backend -->
+                    <div class="node bg-emerald-600/20 border-2 border-emerald-500/50 rounded-2xl p-6 mb-6">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="w-14 h-14 bg-emerald-500 rounded-xl flex items-center justify-center">
+                                <i data-lucide="server" class="w-8 h-8 text-white"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold">API Application (Django + DRF)</h3>
+                                <p class="text-slate-400">RESTful API with JWT Auth</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-4 gap-3 text-sm">
+                            <div class="bg-slate-700/50 rounded-lg p-2 text-center">AI Assistant</div>
+                            <div class="bg-slate-700/50 rounded-lg p-2 text-center">Inventory API</div>
+                            <div class="bg-slate-700/50 rounded-lg p-2 text-center">Customers API</div>
+                            <div class="bg-slate-700/50 rounded-lg p-2 text-center">Analytics API</div>
+                        </div>
+                    </div>
+
+                    <!-- Data Store -->
+                    <div class="grid grid-cols-3 gap-4 mt-6">
+                        <div class="node bg-rose-600/20 border-2 border-rose-500/50 rounded-xl p-4 text-center">
+                            <i data-lucide="database" class="w-10 h-10 mx-auto mb-2 text-rose-400"></i>
+                            <h4 class="font-semibold">PostgreSQL</h4>
+                            <p class="text-xs text-slate-400">Main Database</p>
+                        </div>
+                        <div class="node bg-amber-600/20 border-2 border-amber-500/50 rounded-xl p-4 text-center">
+                            <i data-lucide="bot" class="w-10 h-10 mx-auto mb-2 text-amber-400"></i>
+                            <h4 class="font-semibold">Ollama Container</h4>
+                            <p class="text-xs text-slate-400">Local LLM (Llama3)</p>
+                        </div>
+                        <div class="node bg-orange-600/20 border-2 border-orange-500/50 rounded-xl p-4 text-center">
+                            <i data-lucide="hard-drive" class="w-10 h-10 mx-auto mb-2 text-orange-400"></i>
+                            <h4 class="font-semibold">Media Storage</h4>
+                            <p class="text-xs text-slate-400">Product Images</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Level 3: Component Diagram -->
+        <div id="level3" class="level">
+            <div class="max-w-5xl mx-auto">
+                <h2 class="text-2xl font-bold mb-6 text-center text-indigo-400">L3: AI Module Component Diagram</h2>
+                
+                <div class="bg-slate-800/50 rounded-3xl p-8 border border-slate-700">
+                    <!-- AI Assistant Module -->
+                    <div class="node bg-violet-600/20 border-2 border-violet-500/50 rounded-2xl p-6">
+                        <div class="flex items-center gap-4 mb-6">
+                            <div class="w-14 h-14 bg-violet-500 rounded-xl flex items-center justify-center">
+                                <i data-lucide="brain" class="w-8 h-8 text-white"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold">AI Assistant Module</h3>
+                                <p class="text-slate-400">Smart Analytics & Voice Assistant</p>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-slate-700/50 rounded-xl p-4">
+                                <h4 class="font-semibold text-blue-400 mb-2 flex items-center gap-2">
+                                    <i data-lucide="mic"></i> Voice Interface
+                                </h4>
+                                <ul class="text-sm text-slate-300 space-y-1">
+                                    <li>• Speech Recognition</li>
+                                    <li>• Voice Command Handler</li>
+                                    <li>• Audio Processing</li>
+                                </ul>
+                            </div>
+                            <div class="bg-slate-700/50 rounded-xl p-4">
+                                <h4 class="font-semibold text-emerald-400 mb-2 flex items-center gap-2">
+                                    <i data-lucide="bar-chart-3"></i> Analytics Engine
+                                </h4>
+                                <ul class="text-sm text-slate-300 space-y-1">
+                                    <li>• SmartAnalyticsView</li>
+                                    <li>• Sales Forecasting</li>
+                                    <li>• Anomaly Detection</li>
+                                </ul>
+                            </div>
+                            <div class="bg-slate-700/50 rounded-xl p-4">
+                                <h4 class="font-semibold text-amber-400 mb-2 flex items-center gap-2">
+                                    <i data-lucide="message-square"></i> LLM Integration
+                                </h4>
+                                <ul class="text-sm text-slate-300 space-y-1">
+                                    <li>• OllamaLLM Client</li>
+                                    <li>• Prompt Engineering</li>
+                                    <li>• Context Builder</li>
+                                </ul>
+                            </div>
+                            <div class="bg-slate-700/50 rounded-xl p-4">
+                                <h4 class="font-semibold text-rose-400 mb-2 flex items-center gap-2">
+                                    <i data-lucide="database"></i> Data Layer
+                                </h4>
+                                <ul class="text-sm text-slate-300 space-y-1">
+                                    <li>• Sale Model Queries</li>
+                                    <li>• Product Analysis</li>
+                                    <li>• Statistics Calculator</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Level 4: Code/Class Diagram -->
+        <div id="level4" class="level">
+            <div class="max-w-5xl mx-auto">
+                <h2 class="text-2xl font-bold mb-6 text-center text-indigo-400">L4: Code Level (Key Classes)</h2>
+                
+                <div class="grid grid-cols-2 gap-6">
+                    <!-- Backend Classes -->
+                    <div class="bg-slate-800/50 rounded-2xl p-6 border border-slate-700">
+                        <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="file-code" class="text-emerald-400"></i>
+                            Backend (Python/Django)
+                        </h3>
+                        
+                        <div class="space-y-3">
+                            <div class="bg-slate-700/50 rounded-lg p-4 font-mono text-sm">
+                                <div class="text-violet-400 font-semibold">class SmartAnalyticsView(APIView)</div>
+                                <div class="text-slate-400 mt-1 ml-4">├─ get(request)</div>
+                                <div class="text-slate-400 ml-4">├─ sales_30_days()</div>
+                                <div class="text-slate-400 ml-4">├─ detect_anomalies()</div>
+                                <div class="text-slate-400 ml-4">└─ calculate_forecast()</div>
+                            </div>
+                            
+                            <div class="bg-slate-700/50 rounded-lg p-4 font-mono text-sm">
+                                <div class="text-violet-400 font-semibold">def ask_ai(request)</div>
+                                <div class="text-slate-400 mt-1 ml-4">├─ @api_view(['POST'])</div>
+                                <div class="text-slate-400 ml-4">├─ OllamaLLM(model="llama3")</div>
+                                <div class="text-slate-400 ml-4">├─ timeout=120</div>
+                                <div class="text-slate-400 ml-4">└─ system_context()</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Frontend Classes -->
+                    <div class="bg-slate-800/50 rounded-2xl p-6 border border-slate-700">
+                        <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="file-type-2" class="text-blue-400"></i>
+                            Frontend (React/TS)
+                        </h3>
+                        
+                        <div class="space-y-3">
+                            <div class="bg-slate-700/50 rounded-lg p-4 font-mono text-sm">
+                                <div class="text-blue-400 font-semibold">interface AnalyticsData</div>
+                                <div class="text-slate-400 mt-1 ml-4">├─ summary: Summary</div>
+                                <div class="text-slate-400 ml-4">├─ top_products: Product[]</div>
+                                <div class="text-slate-400 ml-4">├─ anomalies: Anomaly[]</div>
+                                <div class="text-slate-400 ml-4">└─ recommendations: Rec[]</div>
+                            </div>
+                            
+                            <div class="bg-slate-700/50 rounded-lg p-4 font-mono text-sm">
+                                <div class="text-blue-400 font-semibold">function AICenter()</div>
+                                <div class="text-slate-400 mt-1 ml-4">├─ fetchAnalytics()</div>
+                                <div class="text-slate-400 ml-4">├─ handleVoiceCommand()</div>
+                                <div class="text-slate-400 ml-4">├─ useSpeechRecognition()</div>
+                                <div class="text-slate-400 ml-4">└─ apiClient.post('/ai/ask/')</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Structure -->
+                <div class="mt-6 bg-slate-800/50 rounded-2xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4">File Structure</h3>
+                    <div class="grid grid-cols-2 gap-6 font-mono text-sm">
+                        <div>
+                            <div class="text-emerald-400 mb-2">smart_erp_backend/</div>
+                            <div class="text-slate-300 ml-4">└── ai_assistant/</div>
+                            <div class="text-slate-400 ml-8">├── views.py</div>
+                            <div class="text-slate-400 ml-8">├── urls.py</div>
+                            <div class="text-slate-400 ml-8">├── models.py</div>
+                            <div class="text-slate-400 ml-8">└── apps.py</div>
+                        </div>
+                        <div>
+                            <div class="text-blue-400 mb-2">src/</div>
+                            <div class="text-slate-300 ml-4">└── app/components/</div>
+                            <div class="text-slate-400 ml-8">├── AICenter.tsx</div>
+                            <div class="text-slate-400 ml-8">├── Sidebar.tsx</div>
+                            <div class="text-slate-400 ml-8">└── Dashboard.tsx</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center mt-12 pt-8 border-t border-slate-800">
+            <p class="text-slate-500 text-sm">Smart ERP System - C4 Model Documentation</p>
+            <p class="text-slate-600 text-xs mt-1">Generated for Graduation Project 2026</p>
+        </footer>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Level switching
+        function showLevel(level) {
+            // Hide all levels
+            document.querySelectorAll('.level').forEach(el => {
+                el.classList.remove('active');
+            });
+            
+            // Show selected level
+            document.getElementById('level' + level).classList.add('active');
+            
+            // Update buttons
+            document.querySelectorAll('.level-btn').forEach(btn => {
+                const btnLevel = parseInt(btn.dataset.level);
+                if (btnLevel === level) {
+                    btn.classList.remove('bg-slate-700');
+                    btn.classList.add('bg-indigo-600');
+                } else {
+                    btn.classList.remove('bg-indigo-600');
+                    btn.classList.add('bg-slate-700');
+                }
+            });
+
+            // Re-initialize icons for new content
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>
