@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, ShoppingCart, Plus, Trash2, DollarSign } from 'lucide-react';
+import apiClient from '../../api/axiosConfig';
 
 interface Item {
   id: number;
@@ -62,23 +63,18 @@ export function SalesInvoiceModal({ onClose }: SalesInvoiceModalProps) {
     };
 
     try {
-      // إرسال الطلب لـ Django (بورت 8000)
-      const response = await fetch('http://127.0.0.1:8000/api/invoices/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(saleData),
-      });
+      // إرسال الطلب باستخدام apiClient (مع Token تلقائياً)
+      await apiClient.post('/invoices/', saleData);
 
-      if (response.ok) {
-        alert('✅ تم تسجيل الفاتورة بنجاح وتحديث الخزينة والمخزون!');
-        onClose(); // إغلاق النافذة بعد النجاح
-      } else {
-        const errorData = await response.json();
-        alert('❌ خطأ من السيرفر: ' + JSON.stringify(errorData));
-      }
-    } catch (error) {
+      alert('✅ تم تسجيل الفاتورة بنجاح وتحديث الخزينة والمخزون!');
+      onClose(); // إغلاق النافذة بعد النجاح
+    } catch (error: any) {
       console.error('Connection Error:', error);
-      alert('فشل الاتصال بالسيرفر! تأكد من تشغيل Django على بورت 8000');
+      if (error.response?.data) {
+        alert('❌ خطأ من السيرفر: ' + JSON.stringify(error.response.data));
+      } else {
+        alert('فشل الاتصال بالسيرفر! تأكد من تشغيل Django على بورت 8000');
+      }
     }
   };
 

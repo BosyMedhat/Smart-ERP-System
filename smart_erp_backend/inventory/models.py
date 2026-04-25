@@ -115,7 +115,11 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
+<<<<<<< HEAD
 from django.dispatch import receiver
+=======
+from django.dispatch import receiver as signal_receiver
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e
 
 # 1. المنتجات
 class Product(models.Model):
@@ -142,16 +146,7 @@ class StockMovement(models.Model):
     reason = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-# 3. إدارة العملاء
-class Customer(models.Model):
-    name = models.CharField("اسم العميل", max_length=255)
-    phone = models.CharField("رقم الهاتف", max_length=20, unique=True, null=True, blank=True)
-    balance = models.DecimalField("المديونية", max_digits=10, decimal_places=2, default=0)
-
-    def __str__(self):
-        return self.name
-
-# 4. الورديات
+# 3. الورديات
 class WorkShift(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     start_time = models.DateTimeField(auto_now_add=True)
@@ -163,7 +158,7 @@ class WorkShift(models.Model):
 class Invoice(models.Model):
     TYPES = [('CASH', 'نقدي'), ('INSTALLMENT', 'تقسيط')]
     invoice_number = models.CharField(max_length=100, unique=True)
-    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
+    customer = models.ForeignKey('customers.Customer', on_delete=models.SET_NULL, null=True, blank=True)
     shift = models.ForeignKey(WorkShift, on_delete=models.CASCADE)
     total = models.DecimalField(max_digits=10, decimal_places=2)
     payment_type = models.CharField(max_length=20, choices=TYPES, default='CASH')
@@ -226,14 +221,22 @@ class Employee(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     @property
+<<<<<<< HEAD
     def netSalary(self):
         return self.baseSalary + self.incentives - self.advances
 
 # --- 12. الموديل المطور لتوسيع بيانات المستخدم (Profile) ---
+=======
+    def netSalary(self): # سيظهر في الريآكت كـ netSalary
+        return self.baseSalary + self.incentives - self.advances
+
+# 12. UserProfile — RBAC
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e
 class UserProfile(models.Model):
     ROLE_CHOICES = [
         ('مدير', 'مدير النظام'),
         ('كاشير', 'كاشير'),
+<<<<<<< HEAD
     ]
 
     user = models.OneToOneField(User, related_name='profile', on_delete=models.CASCADE)
@@ -249,13 +252,158 @@ class UserProfile(models.Model):
         return f"{self.user.username} - {self.role}"
 
 @receiver(post_save, sender=User)
+=======
+        ('محاسب', 'محاسب'),
+        ('أمين مخزن', 'أمين مخزن'),
+    ]
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='userprofile'
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default='كاشير'
+    )
+    permissions = models.JSONField(default=dict)
+
+    def __str__(self):
+        return f"{self.user.username} — {self.role}"
+
+@signal_receiver(post_save, sender=User)
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
         UserProfile.objects.get_or_create(user=instance)
 
+<<<<<<< HEAD
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):
     try:
         instance.profile.save()
     except UserProfile.DoesNotExist:
         UserProfile.objects.create(user=instance)
+=======
+
+# 13. StoreSettings — إعدادات المتجر
+class StoreSettings(models.Model):
+    store_name = models.CharField(max_length=200, default='Smart ERP', verbose_name='اسم المتجر')
+    store_logo = models.ImageField(upload_to='logos/', null=True, blank=True, verbose_name='شعار المتجر')
+    currency = models.CharField(max_length=10, default='EGP', verbose_name='العملة')
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=14.00, verbose_name='نسبة الضريبة')
+    primary_color = models.CharField(max_length=7, default='#3B82F6', verbose_name='اللون الأساسي')
+    system_name = models.CharField(max_length=100, default='Smart ERP', verbose_name='اسم النظام')
+    is_configured = models.BooleanField(default=False, verbose_name='تم الإعداد')
+
+    class Meta:
+        verbose_name = 'إعدادات المتجر'
+        verbose_name_plural = 'إعدادات المتجر'
+
+    def save(self, *args, **kwargs):
+        # Singleton — دائماً record واحد فقط
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+
+# ==================== SALE MODULE (NEW) ====================
+# 14. فواتير المبيعات (جدول منفصل لدورة البيع POS)
+class Sale(models.Model):
+    PAYMENT_TYPES = [
+        ('cash', 'كاش'),
+        ('credit', 'آجل'),
+    ]
+
+    invoice_number = models.CharField(
+        max_length=50, unique=True, editable=False,
+        verbose_name='رقم الفاتورة'
+    )
+    customer = models.ForeignKey(
+        'customers.Customer',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        verbose_name='العميل'
+    )
+    cashier = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True,
+        verbose_name='الكاشير'
+    )
+    total_amount = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        verbose_name='الإجمالي'
+    )
+    discount = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        verbose_name='الخصم'
+    )
+    tax_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        verbose_name='مبلغ الضريبة'
+    )
+    final_amount = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        verbose_name='المبلغ النهائي'
+    )
+    payment_type = models.CharField(
+        max_length=10,
+        choices=PAYMENT_TYPES,
+        default='cash',
+        verbose_name='نوع الدفع'
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
+    notes = models.TextField(blank=True, verbose_name='ملاحظات')
+
+    def save(self, *args, **kwargs):
+        if not self.invoice_number:
+            last = Sale.objects.order_by('-id').first()
+            num = (last.id + 1) if last else 1
+            self.invoice_number = f'INV-{num:05d}'
+        super().save(*args, **kwargs)
+
+    class Meta:
+        verbose_name = 'فاتورة مبيعات'
+        verbose_name_plural = 'فواتير المبيعات'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.invoice_number} - {self.final_amount} EGP"
+
+
+# 15. تفاصيل أصناف الفاتورة
+class SaleItem(models.Model):
+    sale = models.ForeignKey(
+        Sale, on_delete=models.CASCADE, related_name='items',
+        verbose_name='الفاتورة'
+    )
+    product = models.ForeignKey(
+        Product, on_delete=models.SET_NULL, null=True,
+        verbose_name='المنتج'
+    )
+    product_name = models.CharField(
+        max_length=255, default='', verbose_name='اسم المنتج (Snapshot)',
+        help_text='اسم المنتج وقت البيع (لا يتغير حتى لو تغير اسم المنتج لاحقاً)'
+    )
+    quantity = models.PositiveIntegerField(verbose_name='الكمية')
+    unit_price = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        verbose_name='سعر الوحدة'
+    )
+    subtotal = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        verbose_name='الإجمالي'
+    )
+
+    def save(self, *args, **kwargs):
+        self.subtotal = self.quantity * self.unit_price
+        # حفظ اسم المنتج عند الإنشاء
+        if self.product and not self.product_name:
+            self.product_name = self.product.name
+        super().save(*args, **kwargs)
+
+    class Meta:
+        verbose_name = 'صنف فاتورة'
+        verbose_name_plural = 'أصناف الفواتير'
+
+    def __str__(self):
+        return f"{self.product.name if self.product else 'Unknown'} x{self.quantity}"
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e

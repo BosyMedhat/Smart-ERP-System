@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # # from rest_framework import viewsets, status
 # # from rest_framework.response import Response
 # # from rest_framework.decorators import api_view, permission_classes
@@ -7,6 +8,62 @@
 # # from django.db import transaction
 # # from .models import Customer, UserProfile
 # # from .serializers import CustomerSerializer, UserSerializer
+=======
+from rest_framework import viewsets, status, serializers
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from django.contrib.auth import authenticate
+from rest_framework.authtoken.models import Token
+from django.contrib.auth.models import User
+from .models import Customer
+from inventory.models import UserProfile
+from .serializers import CustomerSerializer
+from inventory.permissions import (
+    CanManageProducts,
+    CanManageInvoices,
+    CanManageEmployees,
+    CanManageSuppliers,
+    CanViewReports,
+    CanManageTreasury,
+    CanManageUsers,
+    IsManagerOrHasPermission,
+    IsManager,
+)
+
+# User Serializer
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = ['role', 'permissions']
+
+class UserSerializer(serializers.ModelSerializer):
+    profile = UserProfileSerializer(
+        source='userprofile',
+        required=False
+    )
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email',
+                  'first_name', 'last_name', 'profile']
+
+    def update(self, instance, validated_data):
+        profile_data = validated_data.pop('userprofile', None)
+        # تحديث بيانات الـ User الأساسية
+        instance = super().update(instance, validated_data)
+        # تحديث الـ Profile
+        if profile_data:
+            profile, _ = UserProfile.objects.get_or_create(
+                user=instance
+            )
+            if 'role' in profile_data:
+                profile.role = profile_data['role']
+            if 'permissions' in profile_data:
+                profile.permissions = profile_data['permissions']
+            profile.save()
+        return instance
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e
 
 # # # 1. مدير العملاء
 # # class CustomerViewSet(viewsets.ModelViewSet):
@@ -295,6 +352,7 @@ from .serializers import CustomerSerializer, UserSerializer
 class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
+<<<<<<< HEAD
 
 # 2. مدير المستخدمين مع معالجة الصلاحيات
 class UserViewSet(viewsets.ModelViewSet):
@@ -369,12 +427,23 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 # 3. دالة تسجيل الدخول
+=======
+    permission_classes = [IsManagerOrHasPermission]
+
+# إدارة المستخدمين — للمدير فقط
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [CanManageUsers]
+
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_view(request):
     username = request.data.get('username')
     password = request.data.get('password')
     user = authenticate(username=username, password=password)
+<<<<<<< HEAD
 
     if user:
         try:
@@ -389,3 +458,25 @@ def login_view(request):
         except UserProfile.DoesNotExist:
             return Response({"error": "لا يوجد بروفايل"}, status=status.HTTP_400_BAD_REQUEST)
     return Response({"error": "بيانات الدخول خاطئة"}, status=status.HTTP_401_UNAUTHORIZED)
+=======
+    if user:
+        token, _ = Token.objects.get_or_create(user=user)
+        try:
+            profile = user.userprofile
+            role = profile.role
+            permissions = profile.permissions
+        except:
+            role = 'كاشير'
+            permissions = {}
+        return Response({
+            'token': token.key,
+            'id': user.id,
+            'username': user.username,
+            'role': role,
+            'permissions': permissions
+        })
+    return Response(
+        {'error': 'بيانات الدخول غير صحيحة'},
+        status=status.HTTP_401_UNAUTHORIZED
+    )
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e

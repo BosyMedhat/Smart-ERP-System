@@ -1,2 +1,33 @@
 /node_modules
+<<<<<<< HEAD
 
+=======
+node_modules
+
+# Environment variables - DO NOT COMMIT
+.env
+*.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e

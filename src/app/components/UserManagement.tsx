@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // import { useState } from 'react';
 // import { Users, Plus, X, CheckCircle, UserPlus, Shield } from 'lucide-react';
 
@@ -701,6 +702,11 @@ import { Users, Plus, X, CheckCircle, Shield, Trash2 } from 'lucide-react';
     
 //   };
 // }
+=======
+import { useState, useEffect } from 'react';
+import { Users, Plus, X, CheckCircle, UserPlus, Shield, LayoutDashboard } from 'lucide-react';
+import apiClient from '../../api/axiosConfig';
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e
 
 interface User {
   id: string;
@@ -720,6 +726,7 @@ interface User {
   };
 }
 
+<<<<<<< HEAD
 
 
 
@@ -873,6 +880,20 @@ interface User {
 // };
 
 
+=======
+// Sidebar items that can be controlled per user
+const sidebarItems = [
+  { key: 'dashboard', label: 'لوحة التحكم', screen: 'home', icon: '📊' },
+  { key: 'inventory', label: 'المخزون', screen: 'inventory', icon: '📦' },
+  { key: 'pos', label: 'نقطة البيع', screen: 'pos', icon: '🛒' },
+  { key: 'sales', label: 'المبيعات', screen: 'installments', icon: '💳' },
+  { key: 'employees', label: 'الموظفون', screen: 'employees', icon: '👥' },
+  { key: 'reports', label: 'التقارير', screen: 'reports', icon: '📄' },
+  { key: 'user_management', label: 'إدارة المستخدمين', screen: 'users', icon: '🔐' },
+  { key: 'ai', label: 'الذكاء الاصطناعي', screen: 'ai', icon: '🤖' },
+  { key: 'automation', label: 'الأتمتة', screen: 'automation', icon: '⚡' },
+];
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e
 
 const permissionCategories = {
   general: {
@@ -970,11 +991,17 @@ const permissionCategories = {
 
 export function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
+<<<<<<< HEAD
+=======
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [newUser, setNewUser] = useState({ name: '', role: '', password: '' });
 
+<<<<<<< HEAD
   
 
 
@@ -1062,9 +1089,48 @@ if (selectedUser) {
       alert("فشل في تحميل بيانات المستخدمين");
     } finally {
       setLoading(false);
+=======
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await apiClient.get('/users/');
+        const data = response.data;
+        const mapped = data.map((u: any) => ({
+          id: String(u.id),
+          name: u.username,
+          role: u.profile?.role || 'كاشير',
+          permissions: u.profile?.permissions || {
+            sales: [],
+            inventory: [],
+            reports: [],
+            settings: [],
+          },
+        }));
+        setUsers(mapped);
+      } catch (err) {
+        setError('تعذر تحميل المستخدمين');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  const togglePermission = (category: keyof User['permissions'], permissionId: string) => {
+    if (!selectedUser) return;
+
+    const updatedPermissions = { ...selectedUser.permissions };
+    if ((updatedPermissions[category] ?? []).includes(permissionId)) {
+      updatedPermissions[category] = (updatedPermissions[category] ?? []).filter(
+        (p) => p !== permissionId
+      );
+    } else {
+      updatedPermissions[category] = [...(updatedPermissions[category] ?? []), permissionId];
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e
     }
   };
 
+<<<<<<< HEAD
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -1114,6 +1180,47 @@ if (selectedUser) {
     } catch (error) {
       console.error("Error:", error);
       alert("فشل الاتصال بالسيرفر");
+=======
+  const hasPermission = (category: keyof User['permissions'], permissionId: string): boolean => {
+    if (!selectedUser) return false;
+    return (selectedUser.permissions?.[category] ?? []).includes(permissionId);
+  };
+
+  const toggleSidebarAccess = (screenKey: string) => {
+    if (!selectedUser) return;
+
+    const updatedPermissions = { ...selectedUser.permissions };
+    const sidebarPerms = updatedPermissions.settings ?? [];
+
+    if (sidebarPerms.includes(`access_${screenKey}`)) {
+      updatedPermissions.settings = sidebarPerms.filter((p: string) => p !== `access_${screenKey}`);
+    } else {
+      updatedPermissions.settings = [...sidebarPerms, `access_${screenKey}`];
+    }
+
+    const updatedUser = { ...selectedUser, permissions: updatedPermissions };
+    setSelectedUser(updatedUser);
+    setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+  };
+
+  const hasSidebarAccess = (screenKey: string): boolean => {
+    if (!selectedUser) return false;
+    return (selectedUser.permissions?.settings ?? []).includes(`access_${screenKey}`);
+  };
+
+  const savePermissions = async () => {
+    if (!selectedUser) return;
+    try {
+      await apiClient.patch(`/users/${selectedUser.id}/`, {
+        profile: {
+          role: selectedUser.role,
+          permissions: selectedUser.permissions,
+        }
+      });
+      alert('تم حفظ الصلاحيات بنجاح ✅');
+    } catch (err) {
+      alert('فشل حفظ الصلاحيات ❌');
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e
     }
   };
 
@@ -1255,6 +1362,7 @@ const handleDeleteUser = async (id: string) => {
             <Users size={24} className="text-[#3B82F6]" />
             <h2 className="text-xl font-bold">المستخدمين المضافين</h2>
           </div>
+<<<<<<< HEAD
           {/* <div className="space-y-3">
             {users.map(user => (
               <button key={user.id} onClick={() => setSelectedUser(user)} className={`w-full text-right p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${selectedUser?.id === user.id ? 'border-[#3B82F6] bg-blue-50' : 'border-gray-100 hover:bg-gray-50'}`}>
@@ -1264,10 +1372,51 @@ const handleDeleteUser = async (id: string) => {
                 <div className="flex-1">
                   <div className="font-bold">{user.name}</div>
                   <div className="text-sm text-gray-500">{user.role}</div>
+=======
+
+          {loading && (
+            <div className="text-center py-8 text-gray-500">
+              جاري التحميل...
+            </div>
+          )}
+          {error && (
+            <div className="text-center py-8 text-red-500">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {users.map((user) => (
+              <button
+                key={user.id}
+                onClick={() => setSelectedUser(user)}
+                className={`w-full text-right p-4 rounded-xl border-2 transition-all ${
+                  selectedUser?.id === user.id
+                    ? 'border-[#3B82F6] bg-blue-50 shadow-lg'
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-white ${
+                      selectedUser?.id === user.id ? 'bg-[#3B82F6]' : 'bg-gray-400'
+                    }`}
+                  >
+                    {user.name.charAt(0)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-bold text-gray-800">{user.name}</div>
+                    <div className="text-sm text-gray-600">{user.role}</div>
+                  </div>
+                  {selectedUser?.id === user.id && (
+                    <CheckCircle size={20} className="text-[#3B82F6]" />
+                  )}
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e
                 </div>
               </button>
               
             ))}
+<<<<<<< HEAD
           </div> */}
           <div className="space-y-2">
   {users.map((user) => (
@@ -1283,6 +1432,143 @@ const handleDeleteUser = async (id: string) => {
       {/* دائرة الحرف الأول */}
       <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center font-bold text-[#1E293B]">
         {user?.name?.charAt(0) || '?'}
+=======
+          </div>
+        </div>
+
+        {/* Permission Grid (Left Side) */}
+        <div className="col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          {selectedUser ? (
+            <>
+              {/* User Info Header */}
+              <div className="bg-gradient-to-r from-[#3B82F6] to-[#1E293B] rounded-xl p-6 mb-6 text-white">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-[#3B82F6] font-bold text-2xl">
+                    {selectedUser.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">{selectedUser.name}</h2>
+                    <p className="text-blue-200">{selectedUser.role}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sidebar Access Section */}
+              <div className="border border-gray-200 rounded-xl p-5 mb-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-purple-100">
+                    <LayoutDashboard size={18} className="text-purple-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-[#1E293B]">القائمة الجانبية (Sidebar)</h3>
+                </div>
+                <p className="text-sm text-gray-500 mb-4">الأيقونات التي يمكن للمستخدم رؤيتها:</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {sidebarItems.map((item) => (
+                    <label
+                      key={item.key}
+                      className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                        hasSidebarAccess(item.key)
+                          ? 'border-[#10B981] bg-green-50'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={hasSidebarAccess(item.key)}
+                        onChange={() => toggleSidebarAccess(item.key)}
+                        className="w-5 h-5 text-[#10B981] rounded focus:ring-2 focus:ring-[#10B981]"
+                      />
+                      <span className="text-lg">{item.icon}</span>
+                      <span className="text-sm font-semibold text-gray-800">{item.label}</span>
+                      {hasSidebarAccess(item.key) && <CheckCircle size={16} className="text-[#10B981] mr-auto" />}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Permission Categories */}
+              <div className="space-y-6">
+                {(Object.keys(permissionCategories) as Array<keyof typeof permissionCategories>).map(
+                  (categoryKey) => {
+                    const category = permissionCategories[categoryKey];
+                    return (
+                      <div key={categoryKey} className="border border-gray-200 rounded-xl p-5">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div
+                            className="w-8 h-8 rounded-lg flex items-center justify-center"
+                            style={{ backgroundColor: `${category.color}20` }}
+                          >
+                            <Shield size={18} style={{ color: category.color }} />
+                          </div>
+                          <h3 className="text-lg font-bold text-[#1E293B]">{category.title}</h3>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          {category.permissions.map((permission) => (
+                            <label
+                              key={permission.id}
+                              className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                                hasPermission(
+                                  categoryKey as keyof User['permissions'],
+                                  permission.id
+                                )
+                                  ? 'border-[#10B981] bg-green-50'
+                                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={hasPermission(
+                                  categoryKey as keyof User['permissions'],
+                                  permission.id
+                                )}
+                                onChange={() =>
+                                  togglePermission(
+                                    categoryKey as keyof User['permissions'],
+                                    permission.id
+                                  )
+                                }
+                                className="w-5 h-5 text-[#10B981] rounded focus:ring-2 focus:ring-[#10B981]"
+                              />
+                              <span className="text-sm font-semibold text-gray-800">
+                                {permission.label}
+                              </span>
+                              {hasPermission(
+                                categoryKey as keyof User['permissions'],
+                                permission.id
+                              ) && <CheckCircle size={16} className="text-[#10B981] mr-auto" />}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                )}
+              </div>
+
+              {/* Save Button */}
+              <div className="mt-6 flex justify-end gap-3">
+                <button className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl transition-colors">
+                  إعادة تعيين
+                </button>
+                <button
+                  onClick={savePermissions}
+                  className="px-8 py-3 bg-[#10B981] hover:bg-[#059669] text-white font-bold rounded-xl flex items-center gap-2 transition-colors shadow-lg">
+                  <CheckCircle size={20} />
+                  حفظ الصلاحيات
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-400">
+              <div className="text-center">
+                <Users size={64} className="mx-auto mb-4 opacity-50" />
+                <p className="text-lg">اختر مستخدماً لتعديل صلاحياته</p>
+              </div>
+            </div>
+          )}
+        </div>
+>>>>>>> aab4ff3556ce39128544e4a5d5d813a3dc80987e
       </div>
 
       {/* بيانات المستخدم */}
