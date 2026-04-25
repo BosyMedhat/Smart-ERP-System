@@ -1,4 +1,4 @@
-import { Search, Barcode, Mic } from 'lucide-react';
+import { Search, Barcode, Mic, RefreshCw } from 'lucide-react';
 import { Product } from '../App';
 
 interface ProductGridProps {
@@ -9,6 +9,8 @@ interface ProductGridProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onAddToCart: (product: Product) => void;
+  onRefresh?: () => void;
+  isLoading?: boolean;
 }
 
 export function ProductGrid({
@@ -19,30 +21,46 @@ export function ProductGrid({
   searchQuery,
   onSearchChange,
   onAddToCart,
+  onRefresh,
+  isLoading,
 }: ProductGridProps) {
   return (
     <>
-      {/* Search Bar */}
+      {/* Search Bar with Refresh Button */}
       <div className="bg-white rounded-xl p-4 shadow-sm">
-        <div className="relative">
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
-            <Search size={20} />
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
+              <Search size={20} />
+            </div>
+            <input
+              type="text"
+              placeholder="ابحث عن منتج أو امسح الباركود..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full pr-12 pl-24 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+            />
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 flex gap-2">
+              <button className="text-gray-400 hover:text-[#3B82F6] transition-colors">
+                <Barcode size={20} />
+              </button>
+              <button className="text-gray-400 hover:text-[#3B82F6] transition-colors">
+                <Mic size={20} />
+              </button>
+            </div>
           </div>
-          <input
-            type="text"
-            placeholder="ابحث عن منتج أو امسح الباركود..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pr-12 pl-24 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-          />
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 flex gap-2">
-            <button className="text-gray-400 hover:text-[#3B82F6] transition-colors">
-              <Barcode size={20} />
+          {/* Refresh Button */}
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-3 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition disabled:opacity-50"
+              title="تحديث قائمة المنتجات"
+            >
+              <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">تحديث</span>
             </button>
-            <button className="text-gray-400 hover:text-[#3B82F6] transition-colors">
-              <Mic size={20} />
-            </button>
-          </div>
+          )}
         </div>
       </div>
 

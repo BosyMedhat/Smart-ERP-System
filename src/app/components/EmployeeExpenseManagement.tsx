@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../../api/axiosConfig';
 import {
   Users, DollarSign, TrendingUp, Plus, X, Calendar, FileText, Zap,
   Home as HomeIcon, Lightbulb, Wrench, UserPlus
@@ -44,25 +44,28 @@ export function EmployeeExpenseManagement() {
     notes: '',
   });
 
-  // البيانات الافتراضية
-  const [employees, setEmployees] = useState<Employee[]>([
-    { id: '1', name: 'أحمد محمود السيد', position: 'مدير مبيعات', baseSalary: 12000, advances: 2000, incentives: 1500, netSalary: 11500, attendance: 'present' },
-    { id: '2', name: 'فاطمة حسن علي', position: 'محاسبة رئيسية', baseSalary: 10000, advances: 0, incentives: 800, netSalary: 10800, attendance: 'present' },
-    { id: '3', name: 'محمد عبد الله', position: 'موظف مخازن', baseSalary: 6000, advances: 1000, incentives: 0, netSalary: 5000, attendance: 'absent' },
-    { id: '4', name: 'سارة أحمد', position: 'موظفة مبيعات', baseSalary: 7000, advances: 500, incentives: 1200, netSalary: 7700, attendance: 'present' },
-  ]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [error, setError] = useState('');
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
 
   // دالة لجلب البيانات من السيرفر
   const fetchData = async () => {
     try {
-      const empRes = await axios.get('http://127.0.0.1:8000/api/employees/');
-      const expRes = await axios.get('http://127.0.0.1:8000/api/expenses/');
-      if (empRes.data.length > 0) setEmployees(empRes.data);
+      setError('');
+      const empRes = await apiClient.get('/employees/');
+      const expRes = await apiClient.get('/expenses/');
+      setEmployees(empRes.data);
       setExpenses(expRes.data);
-    } catch (error) {
-      console.error("سيرفر الدجانغو غير متصل، سيتم استخدام البيانات المؤقتة");
+    } catch (error: any) {
+      console.error('Error fetching data:', error);
+      if (error.response?.status === 401) {
+        setError('ليس لديك صلاحية لتنفيذ هذا الإجراء');
+      } else if (error.response?.status === 403) {
+        setError('غير مصرح لك بهذه العملية');
+      } else {
+        setError('حدث خطأ، يرجى المحاولة مرة أخرى');
+      }
     }
   };
 
@@ -94,7 +97,7 @@ export function EmployeeExpenseManagement() {
           incentives: 0,
           attendance: 'present'
         };
-        const res = await axios.post('http://127.0.0.1:8000/api/employees/', newEmpPayload);
+        const res = await apiClient.post('/employees/', newEmpPayload);
         setEmployees(prev => [...prev, res.data]);
       } 
       else if (selectedEmployee && (modalType === 'incentive' || modalType === 'advance')) {
@@ -103,7 +106,7 @@ export function EmployeeExpenseManagement() {
           incentives: modalType === 'incentive' ? Number(selectedEmployee.incentives) + amountVal : selectedEmployee.incentives,
           advances: modalType === 'advance' ? Number(selectedEmployee.advances) + amountVal : selectedEmployee.advances,
         };
-        await axios.patch(`http://127.0.0.1:8000/api/employees/${selectedEmployee.id}/`, payload);
+        await apiClient.patch(`/employees/${selectedEmployee.id}/`, payload);
         fetchData();
       } 
       else if (modalType === 'expense') {
@@ -114,13 +117,18 @@ export function EmployeeExpenseManagement() {
           notes: formData.notes,
           category: formData.category
         };
-        await axios.post('http://127.0.0.1:8000/api/expenses/', newExpPayload);
+        await apiClient.post('/expenses/', newExpPayload);
         fetchData();
       }
       closeModal();
-    } catch (error) {
-      alert("حدث خطأ أثناء الاتصال بالسيرفر، سيتم التحديث محلياً فقط");
-      // في حالة فشل السيرفر، نحدث الـ State محلياً عشان متوقفيش شغل
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        alert('ليس لديك صلاحية لتنفيذ هذا الإجراء');
+      } else if (error.response?.status === 403) {
+        alert('غير مصرح لك بهذه العملية');
+      } else {
+        alert('حدث خطأ، يرجى المحاولة مرة أخرى');
+      }
       closeModal();
     }
   };
@@ -140,6 +148,13 @@ export function EmployeeExpenseManagement() {
 
   return (
     <div className="h-full overflow-y-auto bg-gray-50 p-6 space-y-6 text-right" dir="rtl">
+      {/* Error Display */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 font-bold">
+          {error}
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="flex justify-between items-center">
         <div>

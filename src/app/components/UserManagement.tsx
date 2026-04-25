@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Users, Plus, X, CheckCircle, UserPlus, Shield } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Plus, X, CheckCircle, UserPlus, Shield, LayoutDashboard } from 'lucide-react';
+import apiClient from '../../api/axiosConfig';
 
 interface User {
   id: string;
@@ -12,6 +13,19 @@ interface User {
     settings: string[];
   };
 }
+
+// Sidebar items that can be controlled per user
+const sidebarItems = [
+  { key: 'dashboard', label: 'لوحة التحكم', screen: 'home', icon: '📊' },
+  { key: 'inventory', label: 'المخزون', screen: 'inventory', icon: '📦' },
+  { key: 'pos', label: 'نقطة البيع', screen: 'pos', icon: '🛒' },
+  { key: 'sales', label: 'المبيعات', screen: 'installments', icon: '💳' },
+  { key: 'employees', label: 'الموظفون', screen: 'employees', icon: '👥' },
+  { key: 'reports', label: 'التقارير', screen: 'reports', icon: '📄' },
+  { key: 'user_management', label: 'إدارة المستخدمين', screen: 'users', icon: '🔐' },
+  { key: 'ai', label: 'الذكاء الاصطناعي', screen: 'ai', icon: '🤖' },
+  { key: 'automation', label: 'الأتمتة', screen: 'automation', icon: '⚡' },
+];
 
 const permissionCategories = {
   sales: {
@@ -57,55 +71,48 @@ const permissionCategories = {
 };
 
 export function UserManagement() {
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: '1',
-      name: 'أحمد محمود',
-      role: 'كاشير',
-      permissions: {
-        sales: ['add_invoice', 'returns'],
-        inventory: [],
-        reports: ['daily_sales'],
-        settings: [],
-      },
-    },
-    {
-      id: '2',
-      name: 'فاطمة حسن',
-      role: 'محاسبة',
-      permissions: {
-        sales: ['add_invoice', 'edit_price', 'apply_discount', 'returns'],
-        inventory: ['add_product', 'inventory_count'],
-        reports: ['profit_report', 'daily_sales', 'inventory_report'],
-        settings: [],
-      },
-    },
-    {
-      id: '3',
-      name: 'محمد علي',
-      role: 'مدير مخازن',
-      permissions: {
-        sales: [],
-        inventory: ['add_product', 'inventory_count', 'view_cost_price', 'manage_suppliers'],
-        reports: ['inventory_report'],
-        settings: [],
-      },
-    },
-  ]);
-
-  const [selectedUser, setSelectedUser] = useState<User | null>(users[0]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await apiClient.get('/users/');
+        const data = response.data;
+        const mapped = data.map((u: any) => ({
+          id: String(u.id),
+          name: u.username,
+          role: u.profile?.role || 'كاشير',
+          permissions: u.profile?.permissions || {
+            sales: [],
+            inventory: [],
+            reports: [],
+            settings: [],
+          },
+        }));
+        setUsers(mapped);
+      } catch (err) {
+        setError('تعذر تحميل المستخدمين');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, []);
 
   const togglePermission = (category: keyof User['permissions'], permissionId: string) => {
     if (!selectedUser) return;
 
     const updatedPermissions = { ...selectedUser.permissions };
-    if (updatedPermissions[category].includes(permissionId)) {
-      updatedPermissions[category] = updatedPermissions[category].filter(
+    if ((updatedPermissions[category] ?? []).includes(permissionId)) {
+      updatedPermissions[category] = (updatedPermissions[category] ?? []).filter(
         (p) => p !== permissionId
       );
     } else {
-      updatedPermissions[category] = [...updatedPermissions[category], permissionId];
+      updatedPermissions[category] = [...(updatedPermissions[category] ?? []), permissionId];
     }
 
     const updatedUser = { ...selectedUser, permissions: updatedPermissions };
@@ -115,7 +122,44 @@ export function UserManagement() {
 
   const hasPermission = (category: keyof User['permissions'], permissionId: string): boolean => {
     if (!selectedUser) return false;
-    return selectedUser.permissions[category].includes(permissionId);
+    return (selectedUser.permissions?.[category] ?? []).includes(permissionId);
+  };
+
+  const toggleSidebarAccess = (screenKey: string) => {
+    if (!selectedUser) return;
+
+    const updatedPermissions = { ...selectedUser.permissions };
+    const sidebarPerms = updatedPermissions.settings ?? [];
+
+    if (sidebarPerms.includes(`access_${screenKey}`)) {
+      updatedPermissions.settings = sidebarPerms.filter((p: string) => p !== `access_${screenKey}`);
+    } else {
+      updatedPermissions.settings = [...sidebarPerms, `access_${screenKey}`];
+    }
+
+    const updatedUser = { ...selectedUser, permissions: updatedPermissions };
+    setSelectedUser(updatedUser);
+    setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+  };
+
+  const hasSidebarAccess = (screenKey: string): boolean => {
+    if (!selectedUser) return false;
+    return (selectedUser.permissions?.settings ?? []).includes(`access_${screenKey}`);
+  };
+
+  const savePermissions = async () => {
+    if (!selectedUser) return;
+    try {
+      await apiClient.patch(`/users/${selectedUser.id}/`, {
+        profile: {
+          role: selectedUser.role,
+          permissions: selectedUser.permissions,
+        }
+      });
+      alert('تم حفظ الصلاحيات بنجاح ✅');
+    } catch (err) {
+      alert('فشل حفظ الصلاحيات ❌');
+    }
   };
 
   return (
@@ -143,6 +187,17 @@ export function UserManagement() {
             <Users size={20} className="text-[#3B82F6]" />
             <h2 className="text-xl font-bold text-[#1E293B]">قائمة المستخدمين</h2>
           </div>
+
+          {loading && (
+            <div className="text-center py-8 text-gray-500">
+              جاري التحميل...
+            </div>
+          )}
+          {error && (
+            <div className="text-center py-8 text-red-500">
+              {error}
+            </div>
+          )}
 
           <div className="space-y-3">
             {users.map((user) => (
@@ -190,6 +245,39 @@ export function UserManagement() {
                     <h2 className="text-2xl font-bold">{selectedUser.name}</h2>
                     <p className="text-blue-200">{selectedUser.role}</p>
                   </div>
+                </div>
+              </div>
+
+              {/* Sidebar Access Section */}
+              <div className="border border-gray-200 rounded-xl p-5 mb-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-purple-100">
+                    <LayoutDashboard size={18} className="text-purple-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-[#1E293B]">القائمة الجانبية (Sidebar)</h3>
+                </div>
+                <p className="text-sm text-gray-500 mb-4">الأيقونات التي يمكن للمستخدم رؤيتها:</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {sidebarItems.map((item) => (
+                    <label
+                      key={item.key}
+                      className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                        hasSidebarAccess(item.key)
+                          ? 'border-[#10B981] bg-green-50'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={hasSidebarAccess(item.key)}
+                        onChange={() => toggleSidebarAccess(item.key)}
+                        className="w-5 h-5 text-[#10B981] rounded focus:ring-2 focus:ring-[#10B981]"
+                      />
+                      <span className="text-lg">{item.icon}</span>
+                      <span className="text-sm font-semibold text-gray-800">{item.label}</span>
+                      {hasSidebarAccess(item.key) && <CheckCircle size={16} className="text-[#10B981] mr-auto" />}
+                    </label>
+                  ))}
                 </div>
               </div>
 
@@ -258,7 +346,9 @@ export function UserManagement() {
                 <button className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl transition-colors">
                   إعادة تعيين
                 </button>
-                <button className="px-8 py-3 bg-[#10B981] hover:bg-[#059669] text-white font-bold rounded-xl flex items-center gap-2 transition-colors shadow-lg">
+                <button
+                  onClick={savePermissions}
+                  className="px-8 py-3 bg-[#10B981] hover:bg-[#059669] text-white font-bold rounded-xl flex items-center gap-2 transition-colors shadow-lg">
                   <CheckCircle size={20} />
                   حفظ الصلاحيات
                 </button>

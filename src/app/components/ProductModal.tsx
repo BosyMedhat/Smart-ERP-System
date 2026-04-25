@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
+import apiClient from '../../api/axiosConfig';
 
 // تعريف الـ Interface محلياً لضمان عدم وجود أخطاء في الـ Import
 export interface InventoryProduct {
@@ -69,33 +70,26 @@ export function ProductModal({ product, onSave, onClose }: ProductModalProps) {
     };
 
     try {
-      // إرسال البيانات للـ API الذي يعمل على منفذ 8000
-      const url = product && product.id 
-        ? `http://127.0.0.1:8000/api/products/${product.id}/` 
-        : 'http://127.0.0.1:8000/api/products/';
-      
-      const method = product && product.id ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(productData),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        onSave(result); // تحديث القائمة في الشاشة الرئيسية
-        onClose();
-        alert('تم حفظ المنتج في قاعدة البيانات بنجاح!');
+      // إرسال البيانات باستخدام apiClient (مع Token تلقائياً)
+      let response;
+      if (product && product.id) {
+        // تعديل منتج موجود
+        response = await apiClient.put(`/products/${product.id}/`, productData);
       } else {
-        const errorData = await response.json();
-        alert('خطأ من السيرفر: ' + JSON.stringify(errorData));
+        // إضافة منتج جديد
+        response = await apiClient.post('/products/', productData);
       }
-    } catch (error) {
+
+      onSave(response.data); // تحديث القائمة في الشاشة الرئيسية
+      onClose();
+      alert('تم حفظ المنتج في قاعدة البيانات بنجاح!');
+    } catch (error: any) {
       console.error('Connection Error:', error);
-      alert('تأكد من تشغيل سيرفر Django (المنفذ 8000)');
+      if (error.response?.data) {
+        alert('خطأ من السيرفر: ' + JSON.stringify(error.response.data));
+      } else {
+        alert('تأكد من تشغيل سيرفر Django (المنفذ 8000)');
+      }
     }
   };
 

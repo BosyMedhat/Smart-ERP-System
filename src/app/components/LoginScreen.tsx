@@ -302,9 +302,10 @@
 import { useState } from 'react';
 import logo from '../../assets/logo.png';
 import { User, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
+import apiClient from '../../api/axiosConfig';
 
 interface LoginScreenProps {
-  onLogin: () => void;
+  onLogin: (userData?: any) => void;
   onGoToSignUp: () => void;
 }
 
@@ -328,6 +329,7 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
   const [codeError, setCodeError] = useState('');
   const [newPasswordError, setNewPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   // Username validation
   const validateUsername = () => {
@@ -353,12 +355,8 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
       setPasswordError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       return false;
     }
-    if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-      setPasswordError('كلمة المرور يجب أن تحتوي على حروف وأرقام');
-      return false;
-    }
-    if (/[^A-Za-z0-9]/.test(password)) {
-      setPasswordError('كلمة المرور لا يجب أن تحتوي على رموز أو علامات خاصة');
+    if (password.length > 128) {
+      setPasswordError('كلمة المرور يجب أن لا تزيد عن 128 حرف');
       return false;
     }
     setPasswordError('');
@@ -425,12 +423,30 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
     return true;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const isUsernameValid = validateUsername();
     const isPasswordValid = validatePassword();
     if (isUsernameValid && isPasswordValid) {
-      onLogin();
+      setLoginError('');
+      try {
+        const response = await apiClient.post('/login/', { username, password });
+        const data = response.data;
+        if (data.token) {
+          localStorage.setItem('erp_user', JSON.stringify({
+            token: data.token,
+            id: data.id,
+            username: data.username,
+            role: data.role,
+            permissions: data.permissions,
+          }));
+          onLogin(data);
+        } else {
+          setLoginError(data.error || 'بيانات الدخول غير صحيحة');
+        }
+      } catch {
+        setLoginError('تعذر الاتصال بالخادم');
+      }
     }
   };
 
@@ -496,6 +512,12 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
                 </div>
                 {passwordError && <p className="text-red-500 text-sm mt-1">{passwordError}</p>}
               </div>
+
+              {loginError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-red-600 text-sm text-center">{loginError}</p>
+                </div>
+              )}
 
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 text-sm">

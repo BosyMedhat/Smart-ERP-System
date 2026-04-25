@@ -11,6 +11,7 @@ services:
   db:
     image: postgres:15
     container_name: erp_postgres_db
+    restart: always
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:

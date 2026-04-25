@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../../api/axiosConfig';
 import { CreditCard, Plus, X, Calendar, DollarSign, CheckCircle, AlertTriangle } from 'lucide-react';
 
 interface Installment {
@@ -19,6 +19,7 @@ export function InstallmentsManagement() {
   const [showNewInstallmentModal, setShowNewInstallmentModal] = useState(false);
   const [showCollectModal, setShowCollectModal] = useState(false);
   const [selectedInstallment, setSelectedInstallment] = useState<Installment | null>(null);
+  const [error, setError] = useState('');
 
   const [formData, setFormData] = useState({ 
     invoiceId: '', 
@@ -30,11 +31,19 @@ export function InstallmentsManagement() {
 
   const fetchInstallments = async () => {
     try {
-      const response = await axios.get('http://127.0.0.1:8000/api/installments/');
+      setError('');
+      const response = await apiClient.get('/installments/');
       setInstallments(response.data);
       setLoading(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching installments:", error);
+      if (error.response?.status === 401) {
+        setError('ليس لديك صلاحية لتنفيذ هذا الإجراء');
+      } else if (error.response?.status === 403) {
+        setError('غير مصرح لك بهذه العملية');
+      } else {
+        setError('حدث خطأ، يرجى المحاولة مرة أخرى');
+      }
       setLoading(false);
     }
   };
@@ -60,13 +69,20 @@ export function InstallmentsManagement() {
         installments_count: parseInt(formData.installmentsCount), // بنبعت عدد الأقساط
         is_paid: false
       };
-      await axios.post('http://127.0.0.1:8000/api/installments/', payload);
+      await apiClient.post('/installments/', payload);
       alert("تم حفظ القسط بنجاح! ✅");
       fetchInstallments();
       setShowNewInstallmentModal(false);
       setFormData({ invoiceId: '', totalAmount: '', installmentsCount: '1', nextDate: '' });
     } catch (error: any) {
-      alert("خطأ: " + JSON.stringify(error.response?.data));
+      console.error("Error saving installment:", error);
+      if (error.response?.status === 401) {
+        setError('ليس لديك صلاحية لتنفيذ هذا الإجراء');
+      } else if (error.response?.status === 403) {
+        setError('غير مصرح لك بهذه العملية');
+      } else {
+        setError('حدث خطأ، يرجى المحاولة مرة أخرى');
+      }
     }
   };
 
@@ -74,14 +90,23 @@ export function InstallmentsManagement() {
     if (!selectedInstallment || !collectAmount) return;
     try {
       const newRem = selectedInstallment.remaining_amount - Number(collectAmount);
-      await axios.patch(`http://127.0.0.1:8000/api/installments/${selectedInstallment.id}/`, {
+      await apiClient.patch(`/installments/${selectedInstallment.id}/`, {
         remaining_amount: Math.max(0, newRem),
         is_paid: newRem <= 0
       });
       fetchInstallments();
       setShowCollectModal(false);
       setCollectAmount('');
-    } catch (error) { alert("فشل تحديث القسط"); }
+    } catch (error: any) {
+      console.error("Error collecting installment:", error);
+      if (error.response?.status === 401) {
+        setError('ليس لديك صلاحية لتنفيذ هذا الإجراء');
+      } else if (error.response?.status === 403) {
+        setError('غير مصرح لك بهذه العملية');
+      } else {
+        setError('حدث خطأ، يرجى المحاولة مرة أخرى');
+      }
+    }
   };
 
   const getStatusBadge = (item: Installment) => {

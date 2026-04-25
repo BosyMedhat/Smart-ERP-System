@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import (
     Product, Invoice, WorkShift, Installment, 
     Supplier, Purchase, Expense, Treasury, 
-    StockMovement, Customer, Employee
+    StockMovement, Employee, Sale, SaleItem
 )
 
 # 1. الموظفين
@@ -26,12 +26,6 @@ class InstallmentSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
-        fields = '__all__'
-
-# 4. العملاء
-class CustomerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Customer
         fields = '__all__'
 
 # 5. الفواتير
@@ -75,3 +69,59 @@ class StockMovementSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockMovement
         fields = '__all__'
+
+# 12. فواتير المبيعات (Sale Module)
+class SaleItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+
+    class Meta:
+        model = SaleItem
+        fields = ['id', 'sale', 'product', 'product_name', 'quantity', 'unit_price', 'subtotal']
+        read_only_fields = ['subtotal']
+
+class SaleSerializer(serializers.ModelSerializer):
+    items = SaleItemSerializer(many=True, read_only=True)
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    cashier_name = serializers.CharField(source='cashier.username', read_only=True)
+
+    class Meta:
+        model = Sale
+        fields = [
+            'id', 'invoice_number', 'customer', 'customer_name',
+            'cashier', 'cashier_name', 'total_amount', 'discount', 'tax_amount',
+            'final_amount', 'payment_type', 'notes', 'created_at', 'items'
+        ]
+        read_only_fields = ['invoice_number', 'cashier', 'tax_amount', 'final_amount']
+
+class SaleItemWriteSerializer(serializers.ModelSerializer):
+    """Serializer للكتابة (إنشاء) SaleItem"""
+    product_name = serializers.CharField(required=False, allow_blank=True)
+
+    class Meta:
+        model = SaleItem
+        fields = ['product', 'product_name', 'quantity', 'unit_price']
+
+class SaleWriteSerializer(serializers.ModelSerializer):
+    """Serializer للكتابة (إنشاء) Sale مع nested items"""
+    items = SaleItemWriteSerializer(many=True)
+
+    class Meta:
+        model = Sale
+        fields = ['customer', 'total_amount', 'discount', 'payment_type', 'notes', 'items']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items')
+        # extras تُمرر من perform_create
+        cashier = validated_data.pop('cashier', None)
+        tax_amount = validated_data.pop('tax_amount', 0)
+        final_amount = validated_data.pop('final_amount', 0)
+        
+        sale = Sale.objects.create(
+            **validated_data,
+            cashier=cashier,
+            tax_amount=tax_amount,
+            final_amount=final_amount
+        )
+        for item_data in items_data:
+            SaleItem.objects.create(sale=sale, **item_data)
+        return sale

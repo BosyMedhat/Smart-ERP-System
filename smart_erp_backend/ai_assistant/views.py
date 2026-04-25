@@ -1,31 +1,223 @@
 from django.http import JsonResponse
 from langchain_ollama import OllamaLLM
 from rest_framework.decorators import api_view
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.utils import timezone
+from datetime import timedelta
+from django.db.models import Sum, Count, F
+from inventory.models import Sale, SaleItem, Product
+import statistics
+import json
+
 
 @api_view(['POST'])
 def ask_ai(request):
-    user_query = request.data.get('query', '')
-    context_data = request.data.get('context_data', [])
-
-    # تنسيق البيانات عشان يفهمها الموديل
-    context_str = "العمليات المشبوهة الحالية:\n"
-    for item in context_data:
-        context_str += f"- الموظف: {item['employee']}, العملية: {item['operationType']}, القيمة: {item['value']}\n"
-
-    prompt = f"""
-    أنت مساعد ذكي لنظام ERP. إليك البيانات:
-    {context_str}
-    المدير جمال يسألك: {user_query}
-    أجب بالعربي بلهجة احترافية.
     """
-
+    AI Assistant endpoint with Ollama llama3 integration.
+    Includes timeout, system context, and graceful error handling.
+    """
     try:
-        # التعديل الجوهري هنا: نستخدم localhost لأن البورت معمول له Mapping
-        llm = OllamaLLM(model="llama3", base_url="http://127.0.0.1:11434") 
-        
-        response = llm.invoke(prompt)
-        return JsonResponse({'status': 'success', 'response': response})
+        data = request.data
+        message = data.get('query', '')
+        context_data = data.get('context_data', [])
+
+        # Initialize Ollama LLM with extended timeout
+        llm = OllamaLLM(
+            model="llama3",
+            base_url="http://127.0.0.1:11434",
+            timeout=120,  # 2 minutes timeout
+            num_predict=500,
+        )
+
+        # Fetch real system context
+        today = timezone.now().date()
+        sales_today = Sale.objects.filter(
+            created_at__date=today
+        ).count()
+        products_count = Product.objects.count()
+
+        # Format anomaly context if provided
+        anomaly_context = ""
+        if context_data:
+            anomaly_context = "\nالعمليات المشبوهة المكتشفة:\n"
+            for item in context_data:
+                anomaly_context += f"- {item.get('employee', 'غير معروف')}: {item.get('operationType', 'عملية')} - {item.get('value', 0)} ج.م\n"
+
+        system_context = f"""أنت مساعد ذكي لنظام Smart ERP للمدير جمال.
+
+بيانات النظام الحالية:
+- مبيعات اليوم: {sales_today} عملية
+- إجمالي المنتجات: {products_count} منتج
+- التاريخ: {today}
+{anomaly_context}
+
+أجب باللغة العربية بشكل مختصر ومفيد واحترافي.
+إذا كان السؤال عن المخزون أو المبيعات، استخدم البيانات المتوفرة.
+إذا كان السؤال عاماً، أجب بشكل مفيد للمدير."""
+
+        full_prompt = f"{system_context}\n\nسؤال المدير: {message}\n\nالرد:"
+        response = llm.invoke(full_prompt)
+
+        return JsonResponse({
+            'status': 'success',
+            'response': response
+        })
+
     except Exception as e:
-        # السطر ده هيطبع لنا الخطأ بالظبط في الـ Terminal لو حصلت مشكلة
-        print(f"Ollama Error: {str(e)}") 
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        print(f"Ollama Error: {str(e)}")
+        return JsonResponse({
+            'status': 'error',
+            'response': f'المساعد يحتاج لحظة للتحميل، يرجى المحاولة مرة أخرى. ({str(e)[:50]})'
+        }, status=200)
+
+
+class SmartAnalyticsView(APIView):
+    """
+    Smart Analytics View providing AI-powered insights:
+    - Sales analytics (30 days)
+    - Top selling products
+    - Low stock alerts
+    - Anomaly detection (statistical)
+    - Sales forecast
+    - Smart recommendations
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        today = timezone.now().date()
+        month_ago = today - timedelta(days=30)
+
+        # Sales in last 30 days
+        sales_30 = Sale.objects.filter(
+            created_at__date__gte=month_ago
+        )
+        total_30 = sales_30.aggregate(
+            t=Sum('final_amount'))['t'] or 0
+        count_30 = sales_30.count()
+
+        # Top selling products
+        top_products = SaleItem.objects.filter(
+            sale__created_at__date__gte=month_ago
+        ).values('product_name').annotate(
+            total_qty=Sum('quantity'),
+            total_revenue=Sum('subtotal')
+        ).order_by('-total_qty')[:5]
+
+        # Low stock alerts
+        low_stock = Product.objects.filter(
+            current_stock__lte=F('min_stock_level')
+        ).values('name', 'current_stock', 'min_stock_level')[:10]
+
+        # Anomaly Detection using statistical method
+        all_amounts = list(
+            Sale.objects.values_list('final_amount', flat=True)
+        )
+        anomalies = []
+        if len(all_amounts) >= 3:
+            try:
+                avg = statistics.mean(float(x) for x in all_amounts)
+                std = statistics.stdev(float(x) for x in all_amounts)
+                threshold = avg + (2 * std)
+
+                suspicious = Sale.objects.filter(
+                    final_amount__gte=threshold
+                ).select_related('customer', 'cashier') \
+                 .order_by('-final_amount')[:5]
+
+                for s in suspicious:
+                    anomalies.append({
+                        'invoice': s.invoice_number,
+                        'amount': float(s.final_amount),
+                        'customer': s.customer.name
+                                 if s.customer else 'عميل نقدي',
+                        'cashier': (s.cashier.first_name or s.cashier.username)
+                                 if s.cashier else 'غير محدد',
+                        'date': s.created_at.strftime('%d/%m/%Y'),
+                        'reason': f'مبلغ يتجاوز المعدل الطبيعي '
+                                 f'(المتوسط: {avg:.0f} ج.م)',
+                        'severity': 'high' if s.final_amount > threshold * 1.5 else 'medium'
+                    })
+            except Exception as e:
+                print(f"Anomaly detection error: {e}")
+
+        # Weekly sales forecast
+        weekly_totals = []
+        for w in range(4):
+            start = today - timedelta(days=(w+1)*7)
+            end = today - timedelta(days=w*7)
+            wt = Sale.objects.filter(
+                created_at__date__gte=start,
+                created_at__date__lt=end
+            ).aggregate(t=Sum('final_amount'))['t'] or 0
+            weekly_totals.append(float(wt))
+
+        forecast = statistics.mean(weekly_totals) if weekly_totals else 0
+
+        # Smart recommendations
+        recommendations = []
+        low_stock_count = Product.objects.filter(
+            current_stock__lte=F('min_stock_level')
+        ).count()
+
+        if low_stock_count > 0:
+            recommendations.append({
+                'type': 'warning',
+                'title': 'مخزون منخفض',
+                'message': f'{low_stock_count} منتجات تحتاج إعادة طلب',
+                'icon': '⚠️'
+            })
+
+        if top_products:
+            best = list(top_products)[0]
+            recommendations.append({
+                'type': 'success',
+                'title': 'الأكثر مبيعاً',
+                'message': f'{best["product_name"]} — {best["total_qty"]} وحدة',
+                'icon': '🏆'
+            })
+
+        if forecast > 0:
+            recommendations.append({
+                'type': 'info',
+                'title': 'توقع الأسبوع القادم',
+                'message': f'المتوقع: {forecast:,.0f} ج.م',
+                'icon': '📈'
+            })
+
+        # Sales trend for chart (last 6 months)
+        sales_trend = []
+        for i in range(5, -1, -1):
+            month_start = today.replace(day=1) - timedelta(days=i*30)
+            month_end = today.replace(day=1) - timedelta(days=(i-1)*30) if i > 0 else today + timedelta(days=1)
+            month_total = Sale.objects.filter(
+                created_at__date__gte=month_start,
+                created_at__date__lt=month_end
+            ).aggregate(t=Sum('final_amount'))['t'] or 0
+            sales_trend.append({
+                'month': month_start.strftime('%b'),
+                'actual': float(month_total),
+                'forecast': None
+            })
+
+        # Add forecast for next month
+        sales_trend.append({
+            'month': 'توقع',
+            'actual': None,
+            'forecast': forecast * 4  # Monthly forecast
+        })
+
+        return Response({
+            'summary': {
+                'total_sales_30_days': float(total_30),
+                'operations_count_30_days': count_30,
+                'forecast_next_week': forecast,
+                'low_stock_count': low_stock_count,
+            },
+            'top_products': list(top_products),
+            'low_stock_alerts': list(low_stock),
+            'anomalies': anomalies,
+            'recommendations': recommendations,
+            'sales_trend': sales_trend,
+        })

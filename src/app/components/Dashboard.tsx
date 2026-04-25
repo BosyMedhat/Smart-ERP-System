@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import apiClient from '../../api/axiosConfig';
 import {
   TrendingUp,
   Bell,
@@ -12,7 +13,7 @@ import {
   AlertTriangle,
   User,
   CreditCard,
-    Mic,
+  Mic,
 } from 'lucide-react';
 
 // Import all modals
@@ -23,34 +24,61 @@ import { CashPermissionModal } from './CashPermissionModal';
 import { PriceQuotationModal } from './PriceQuotationModal';
 import { InventoryAuditModal } from './InventoryAuditModal';
 
-interface Activity {
-  id: string;
-  type: 'sale' | 'purchase' | 'payment' | 'representative' | 'installment' | 'alert';
-  message: string;
-  time: string;
-  icon: typeof ShoppingCart;
-  color: string;
+interface DashboardData {
+  total_sales_today: number;
+  total_cash_today: number;
+  operations_count: number;
+  low_stock_alerts: number;
+  sales_chart: { date: string; total: number }[];
+  recent_activities: {
+    type: string;
+    description: string;
+    amount: number;
+    payment: string;
+    customer: string;
+    cashier: string;
+    time: string;
+    date: string;
+  }[];
 }
 
 export function Dashboard() {
+  // Modals state
   const [showShiftClosingModal, setShowShiftClosingModal] = useState(false);
   const [showSalesInvoiceModal, setShowSalesInvoiceModal] = useState(false);
   const [showPurchaseInvoiceModal, setShowPurchaseInvoiceModal] = useState(false);
   const [showCashPermissionModal, setShowCashPermissionModal] = useState(false);
   const [showPriceQuoteModal, setShowPriceQuoteModal] = useState(false);
   const [showInventoryAuditModal, setShowInventoryAuditModal] = useState(false);
-const [isRecording, setIsRecording] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
 
+  // Dashboard data state
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const [activities] = useState<Activity[]>([
-    { id: '1', type: 'representative', message: 'المندوب أحمد: تم إتمام فاتورة #22', time: 'منذ 5 دقائق', icon: User, color: '#3B82F6' },
-    { id: '2', type: 'installment', message: 'تم تحصيل قسط من العميل محمد - 1,500 ج.م', time: 'منذ 12 دقيقة', icon: CreditCard, color: '#10B981' },
-    { id: '3', type: 'sale', message: 'فاتورة مبيعات جديدة #221 - 8,450 ج.م', time: 'منذ 18 دقيقة', icon: ShoppingCart, color: '#3B82F6' },
-    { id: '4', type: 'alert', message: 'تنبيه: منتج "لابتوب HP" أقل من الحد الأدنى', time: 'منذ 25 دقيقة', icon: AlertTriangle, color: '#F59E0B' },
-    { id: '5', type: 'representative', message: 'المندوبة سارة: زيارة عميل جديد بالمنطقة الشرقية', time: 'منذ 35 دقيقة', icon: User, color: '#8B5CF6' },
-    { id: '6', type: 'installment', message: 'تم تحصيل قسط من العميل فاطمة - 2,000 ج.م', time: 'منذ 42 دقيقة', icon: CreditCard, color: '#10B981' },
-    { id: '7', type: 'purchase', message: 'فاتورة مشتريات #115 تم استلامها', time: 'منذ 1 ساعة', icon: ShoppingBag, color: '#F59E0B' },
-  ]);
+  // Get current user data
+  const savedUser = localStorage.getItem('erp_user');
+  const currentUser = savedUser ? JSON.parse(savedUser) : null;
+  const displayName = currentUser?.first_name || currentUser?.username || 'المستخدم';
+
+  const fetchDashboard = async () => {
+    try {
+      const res = await apiClient.get('/dashboard/');
+      setData(res.data);
+    } catch {
+      setError('تعذر تحميل بيانات لوحة التحكم');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboard();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchDashboard, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
 
   const quickActions = [
@@ -103,11 +131,14 @@ const [isRecording, setIsRecording] = useState(false);
             </div>
             <div className="flex items-center gap-3 bg-gray-100 px-4 py-2 rounded-xl">
               <div className="text-left">
-                <div className="text-sm font-bold text-gray-800">أحمد المدير</div>
-                <div className="text-xs text-gray-600">مدير النظام</div>
+                <div className="text-sm font-bold text-gray-800">{displayName}</div>
+                <div className="text-xs text-gray-600">
+                  {currentUser?.role === 'admin' ? 'مدير النظام' :
+                   currentUser?.role === 'manager' ? 'مشرف' : 'كاشير'}
+                </div>
               </div>
               <div className="w-10 h-10 bg-gradient-to-br from-[#3B82F6] to-[#1E293B] rounded-full flex items-center justify-center text-white font-bold">
-                أ
+                {displayName.charAt(0)}
               </div>
             </div>
           </div>
@@ -117,53 +148,78 @@ const [isRecording, setIsRecording] = useState(false);
       {/* Main Content */}
       <div className="h-[calc(100vh-80px)] overflow-y-auto p-6">
         <div className="max-w-[1600px] mx-auto space-y-6">
-          {/* Welcome */}
-          <div>
-            <h1 className="text-3xl font-bold text-[#1E293B] mb-2">مرحباً بك في لوحة التحكم</h1>
-            <p className="text-gray-600">نظرة شاملة على أداء مؤسستك</p>
-          </div>
+          {/* Loading & Error States */}
+          {loading && (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-gray-500">جاري تحميل البيانات...</div>
+            </div>
+          )}
 
-                {/* ===== KPI CARDS ===== */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {error && (
+            <div className="text-red-500 text-center p-8">{error}</div>
+          )}
 
+          {!loading && !error && (
+            <>
+              {/* Welcome Banner */}
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl p-5 mb-6 flex items-center justify-between">
+                <div>
+                  <p className="text-blue-100 text-sm">مرحباً بك في نظام ERP الذكي</p>
+                  <h2 className="text-white text-2xl font-bold mt-1">
+                    أهلاً، {displayName} 👋
+                  </h2>
+                  <p className="text-blue-200 text-sm mt-1">
+                    {new Date().toLocaleDateString('ar-EG', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </p>
+                </div>
+                <div className="text-6xl opacity-20">🏢</div>
+              </div>
 
-{/* Card 1 */}
-<div className="rounded-2xl p-6 text-white shadow-lg bg-gradient-to-br from-green-300 to-green-500">
-  <ShoppingCart size={28} />
-  <p className="mt-4 text-base md:text-lg font-semibold">مبيعات اليوم</p>
-  <h2 className="text-3xl md:text-4xl font-bold">47,850 ج.م</h2> {/* أصغر شويه */}
-  <span className="text-sm md:text-base opacity-90">+18%</span>
-</div>
+              {/* Welcome */}
+              <div>
+                <h1 className="text-3xl font-bold text-[#1E293B] mb-2">مرحباً بك في لوحة التحكم</h1>
+                <p className="text-gray-600">نظرة شاملة على أداء مؤسستك</p>
+              </div>
 
-{/* Card 2 */}
-<div className="rounded-2xl p-6 text-white shadow-lg bg-gradient-to-br from-blue-300 to-blue-500">
-  <CreditCard size={28} />
-  <p className="mt-4 text-base md:text-lg font-semibold">تحصيلات اليوم</p>
-  <h2 className="text-3xl md:text-4xl font-bold">12,500 ج.م</h2> {/* أصغر شويه */}
-  <span className="text-sm md:text-base opacity-90">8 عمليات</span>
-</div>
+              {/* ===== KPI CARDS (REAL DATA) ===== */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Card 1 - Today's Sales */}
+                <div className="rounded-2xl p-6 text-white shadow-lg bg-gradient-to-br from-green-300 to-green-500">
+                  <ShoppingCart size={28} />
+                  <p className="mt-4 text-base md:text-lg font-semibold">مبيعات اليوم</p>
+                  <h2 className="text-3xl md:text-4xl font-bold">{data?.total_sales_today.toFixed(2)} ج.م</h2>
+                  <span className="text-sm md:text-base opacity-90">+{data?.operations_count || 0} عملية</span>
+                </div>
 
-{/* Card 3 */}
-<div className="rounded-2xl p-6 text-white shadow-lg bg-gradient-to-br from-orange-300 to-orange-500">
-  <Bell size={28} />
-  <p className="mt-4 text-base md:text-lg font-semibold">تنبيهات</p>
-  <h2 className="text-3xl md:text-4xl font-bold">5</h2>
-  <span className="text-sm md:text-base opacity-90">عاجلة</span>
-</div>
+                {/* Card 2 - Cash Collections */}
+                <div className="rounded-2xl p-6 text-white shadow-lg bg-gradient-to-br from-blue-300 to-blue-500">
+                  <CreditCard size={28} />
+                  <p className="mt-4 text-base md:text-lg font-semibold">التحصيلات النقدية</p>
+                  <h2 className="text-3xl md:text-4xl font-bold">{data?.total_cash_today.toFixed(2)} ج.م</h2>
+                  <span className="text-sm md:text-base opacity-90">كاش فقط</span>
+                </div>
 
-{/* Card 4 */}
-<div className="rounded-2xl p-6 text-white shadow-lg bg-gradient-to-br from-purple-300 to-purple-500">
-  <Users size={28} />
-  <p className="mt-4 text-base md:text-lg font-semibold">المناديب</p>
-  <h2 className="text-3xl md:text-4xl font-bold">4</h2>
-  <span className="text-sm md:text-base opacity-90">نشطين</span>
-</div>
+                {/* Card 3 - Low Stock Alerts */}
+                <div className="rounded-2xl p-6 text-white shadow-lg bg-gradient-to-br from-orange-300 to-orange-500">
+                  <Bell size={28} />
+                  <p className="mt-4 text-base md:text-lg font-semibold">تنبيهات المخزون</p>
+                  <h2 className="text-3xl md:text-4xl font-bold">{data?.low_stock_alerts || 0}</h2>
+                  <span className="text-sm md:text-base opacity-90">منتجات تحت الحد الأدنى</span>
+                </div>
 
-
-
-
-
-        </div> 
+                {/* Card 4 - Operations Count */}
+                <div className="rounded-2xl p-6 text-white shadow-lg bg-gradient-to-br from-purple-300 to-purple-500">
+                  <Users size={28} />
+                  <p className="mt-4 text-base md:text-lg font-semibold">عدد العمليات</p>
+                  <h2 className="text-3xl md:text-4xl font-bold">{data?.operations_count || 0}</h2>
+                  <span className="text-sm md:text-base opacity-90">عمليات اليوم</span>
+                </div>
+              </div> 
 
 
 
@@ -210,49 +266,67 @@ const [isRecording, setIsRecording] = useState(false);
             </div>
           </div>
 
-          {/* Charts + Activity Feed */}
-          <div className="grid grid-cols-3 gap-6">
-            {/* Sales Chart */}
-            <div className="col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-bold text-[#1E293B] mb-4">مبيعات آخر 7 أيام</h2>
-              <div className="h-64 flex items-center justify-center bg-gradient-to-br from-blue-50 to-slate-50 rounded-xl border border-gray-200">
-                <div className="text-center text-gray-400">
-                  <TrendingUp size={48} className="mx-auto mb-3 opacity-50" />
-                  <p className="text-sm">الرسم البياني سيظهر هنا</p>
+              {/* Charts + Activity Feed */}
+              <div className="grid grid-cols-3 gap-6">
+                {/* Sales Chart - REAL DATA */}
+                <div className="col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h2 className="text-xl font-bold text-[#1E293B] mb-4">مبيعات آخر 7 أيام</h2>
+                  <div className="h-64 flex items-end gap-2 px-4">
+                    {data?.sales_chart.map((day, i) => {
+                      const max = Math.max(...(data?.sales_chart?.map(d => d.total) || [1]), 1);
+                      const height = max > 0 ? (day.total / max) * 100 : 0;
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-xs text-gray-500">
+                            {day.total > 0 ? day.total.toFixed(0) : ''}
+                          </span>
+                          <div
+                            className="w-full rounded-t bg-[#3B82F6] hover:bg-[#2563EB] transition-colors"
+                            style={{ height: `${Math.max(height, 4)}%`, minHeight: '4px' }}
+                          />
+                          <span className="text-xs text-gray-400">{day.date}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Activity Feed - REAL DATA */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-[#1E293B]">آخر الأنشطة</h2>
+                    <button className="text-xs text-[#3B82F6] hover:text-[#2563EB] font-semibold">عرض الكل</button>
+                  </div>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {data?.recent_activities.length === 0 ? (
+                      <p className="text-gray-400 text-center py-4">لا توجد أنشطة بعد</p>
+                    ) : (
+                      data?.recent_activities.map((activity, index) => (
+                        <div
+                          key={index}
+                          className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                        >
+                          <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-100">
+                            <ShoppingCart size={18} className="text-blue-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-800 font-medium leading-snug">{activity.description}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {activity.customer} • {activity.payment === 'cash' ? 'كاش' : 'آجل'}
+                            </p>
+                          </div>
+                          <div className="text-left">
+                            <p className="font-bold text-green-600 text-sm">{activity.amount.toFixed(2)} ج.م</p>
+                            <p className="text-xs text-gray-400">{activity.time}</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-
-            {/* Activity Feed */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-[#1E293B]">آخر الأنشطة</h2>
-                <button className="text-xs text-[#3B82F6] hover:text-[#2563EB] font-semibold">عرض الكل</button>
-              </div>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {activities.map((activity) => {
-                  const Icon = activity.icon;
-                  return (
-                    <div
-                      key={activity.id}
-                      className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
-                    >
-                      <div
-                        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: `${activity.color}15` }}
-                      >
-                        <Icon size={18} style={{ color: activity.color }} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-800 font-medium leading-snug">{activity.message}</p>
-                        <p className="text-xs text-gray-500 mt-1">{activity.time}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       </div>
 
