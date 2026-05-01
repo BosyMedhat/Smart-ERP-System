@@ -1,5 +1,6 @@
 import { Search, Barcode, Mic, RefreshCw } from 'lucide-react';
 import { Product } from '../App';
+import { formatCurrency } from '../utils/currency';
 
 interface ProductGridProps {
   products: Product[];
@@ -82,28 +83,26 @@ export function ProductGrid({
       </div>
 
       {/* Product Grid */}
-      <div className="flex-1 bg-white rounded-xl p-4 shadow-sm overflow-y-auto">
-        <div className="grid grid-cols-4 gap-4">
+      <div className="flex-1 bg-white rounded-xl p-3 shadow-sm overflow-y-auto">
+        <div className="grid grid-cols-3 gap-2">
           {products.map((product) => (
             <button
               key={product.id}
               onClick={() => onAddToCart(product)}
-              className="bg-white border border-gray-200 rounded-xl p-3 hover:shadow-lg hover:border-[#3B82F6] transition-all group"
+              className="bg-white border-2 border-gray-100 rounded-xl p-3 hover:border-[#3B82F6] hover:bg-blue-50 hover:shadow-md transition-all active:scale-95 text-right"
             >
-              <div className="aspect-square mb-2 rounded-lg overflow-hidden bg-gray-100">
-                <img
-                  src={product.image}
-                  alt={product.name}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                />
-              </div>
-              <div className="text-sm font-semibold text-gray-800 mb-1 truncate">
+              <div className="font-bold text-gray-800 text-sm leading-tight mb-1 line-clamp-2">
                 {product.name}
               </div>
-              <div className="text-xs text-gray-500 mb-2">{product.category}</div>
-              <div className="text-lg font-bold text-[#3B82F6]">
-                {product.price.toFixed(2)} ج.م
+              <div className="text-xs text-gray-400 mb-2">{product.category}</div>
+              <div className="text-base font-bold text-[#3B82F6]">
+                {formatCurrency(product.price)}
               </div>
+              {product.current_stock !== undefined && (
+                <div className={`text-xs mt-1 font-medium ${product.current_stock <= 5 ? 'text-red-500' : 'text-green-600'}`}>
+                  مخزون: {product.current_stock}
+                </div>
+              )}
             </button>
           ))}
         </div>

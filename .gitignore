@@ -27,3 +27,4 @@ media/
 .idea/
 *.swp
 *.swo
+/dist/ 

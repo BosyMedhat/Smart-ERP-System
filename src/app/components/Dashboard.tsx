@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/axiosConfig';
+import { formatCurrency } from '../utils/currency';
 import {
   TrendingUp,
   Bell,
@@ -192,7 +193,7 @@ export function Dashboard() {
                 <div className="rounded-2xl p-6 text-white shadow-lg bg-gradient-to-br from-green-300 to-green-500">
                   <ShoppingCart size={28} />
                   <p className="mt-4 text-base md:text-lg font-semibold">مبيعات اليوم</p>
-                  <h2 className="text-3xl md:text-4xl font-bold">{data?.total_sales_today.toFixed(2)} ج.م</h2>
+                  <h2 className="text-3xl md:text-4xl font-bold">{formatCurrency(data?.total_sales_today)}</h2>
                   <span className="text-sm md:text-base opacity-90">+{data?.operations_count || 0} عملية</span>
                 </div>
 
@@ -200,7 +201,7 @@ export function Dashboard() {
                 <div className="rounded-2xl p-6 text-white shadow-lg bg-gradient-to-br from-blue-300 to-blue-500">
                   <CreditCard size={28} />
                   <p className="mt-4 text-base md:text-lg font-semibold">التحصيلات النقدية</p>
-                  <h2 className="text-3xl md:text-4xl font-bold">{data?.total_cash_today.toFixed(2)} ج.م</h2>
+                  <h2 className="text-3xl md:text-4xl font-bold">{formatCurrency(data?.total_cash_today)}</h2>
                   <span className="text-sm md:text-base opacity-90">كاش فقط</span>
                 </div>
 
@@ -316,7 +317,7 @@ export function Dashboard() {
                             </p>
                           </div>
                           <div className="text-left">
-                            <p className="font-bold text-green-600 text-sm">{activity.amount.toFixed(2)} ج.م</p>
+                            <p className="font-bold text-green-600 text-sm">{formatCurrency(activity.amount)}</p>
                             <p className="text-xs text-gray-400">{activity.time}</p>
                           </div>
                         </div>

@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status, serializers
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from django.contrib.auth import authenticate
@@ -58,6 +58,23 @@ class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
     permission_classes = [IsManagerOrHasPermission]
+
+    @action(detail=True, methods=['post'])
+    def collect(self, request, pk=None):
+        customer = self.get_object()
+        amount = float(request.data.get('amount', 0))
+        if amount <= 0:
+            return Response({'error': 'المبلغ يجب أن يكون أكبر من صفر'}, status=400)
+        new_balance = max(0, float(customer.balance) - amount)
+        customer.balance = new_balance
+        customer.save()
+        return Response({'success': True, 'balance': customer.balance})
+
+    @action(detail=False, methods=['get'])
+    def debtors(self, request):
+        debtors = Customer.objects.filter(balance__gt=0).order_by('-balance')
+        serializer = self.get_serializer(debtors, many=True)
+        return Response(serializer.data)
 
 # إدارة المستخدمين — للمدير فقط
 class UserViewSet(viewsets.ModelViewSet):

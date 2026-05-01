@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Plus, Minus, Printer, Clock, CreditCard, X, Loader2 } from 'lucide-react';
-import { CartItem } from '../App';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Minus, Printer, X, Loader2, ScanLine } from 'lucide-react';
+import { CartItem, Product } from '../App';
 import apiClient from '../../api/axiosConfig';
+import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
+import { formatCurrency } from '../utils/currency';
 
 interface CartProps {
   cartItems: CartItem[];
@@ -12,6 +14,7 @@ interface CartProps {
   onUpdateQuantity: (id: string, delta: number) => void;
   onClearCart: () => void;
   onSaleComplete?: () => void;
+  onAddToCart?: (product: Product) => void;
 }
 
 interface Customer {
@@ -32,12 +35,58 @@ export function Cart({
   onUpdateQuantity,
   onClearCart,
   onSaleComplete,
+  onAddToCart,
 }: CartProps) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState('');
-  const [paymentType, setPaymentType] = useState<'cash' | 'credit'>('cash');
+  const [paymentType, setPaymentType] = useState<'cash' | 'vodafone_cash' | 'instapay' | 'card' | 'credit' | 'installment'>('cash');
+  const [showCreditWarning, setShowCreditWarning] = useState(false);
+  const [showInstallmentModal, setShowInstallmentModal] = useState(false);
+  const [installmentData, setInstallmentData] = useState({
+    down_payment: '',
+    months_count: '3',
+    due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  });
+  const [lastScannedProduct, setLastScannedProduct] = useState<string | null>(null);
+
+  // Barcode scan handler
+  const handleBarcodeScan = useCallback(async (barcode: string) => {
+    if (!onAddToCart) return;
+    
+    try {
+      const response = await apiClient.get(`/products/barcode/${barcode}/`);
+      const product = response.data;
+      
+      // Map backend product to frontend Product interface
+      const mappedProduct: Product = {
+        id: String(product.id),
+        name: product.name,
+        price: parseFloat(product.retail_price || 0),
+        retail_price: parseFloat(product.retail_price || 0),
+        category: product.category || 'عام',
+        image: product.image || `https://placehold.co/400x400/3B82F6/FFFFFF?text=${encodeURIComponent(product.name.substring(0, 10))}`,
+        current_stock: parseFloat(product.current_stock || 0),
+        sku: product.sku,
+      };
+      
+      onAddToCart(mappedProduct);
+      setLastScannedProduct(product.name);
+      
+      // Clear the success message after 3 seconds
+      setTimeout(() => setLastScannedProduct(null), 3000);
+    } catch (err) {
+      console.error('Barcode scan error:', err);
+      alert(`❌ باركود غير موجود: ${barcode}`);
+    }
+  }, [onAddToCart]);
+
+  // Enable barcode scanner
+  const { isScanning } = useBarcodeScanner({ 
+    onScan: handleBarcodeScan, 
+    enabled: !!onAddToCart 
+  });
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -65,9 +114,31 @@ export function Cart({
       return;
     }
 
-    setCheckoutLoading(true);
+    // Check if credit is selected without a customer
+    if (paymentType === 'credit' && !selectedCustomer) {
+      setShowCreditWarning(true);
+      return;
+    }
+    setShowCreditWarning(false);
+
     try {
-      const res = await apiClient.post('/sales/', {
+      // Validate installment
+      if (paymentType === 'installment') {
+        if (!selectedCustomer) {
+          setShowCreditWarning(true);
+          setCheckoutLoading(false);
+          return;
+        }
+        if (!installmentData.down_payment && installmentData.down_payment !== '0') {
+          alert('⚠️ برجاء إدخال المقدم (يمكن أن يكون صفر)');
+          setCheckoutLoading(false);
+          return;
+        }
+      }
+
+      setCheckoutLoading(true);
+
+      const payload: Record<string, unknown> = {
         customer: selectedCustomer ? parseInt(selectedCustomer) : null,
         total_amount: subtotal,
         discount: discount,
@@ -78,18 +149,35 @@ export function Cart({
           quantity: item.quantity,
           unit_price: item.price,
         }))
-      });
-      alert(`✅ تم البيع!\nرقم الفاتورة: ${res.data.invoice_number}\nالإجمالي: ${res.data.final_amount} ج.م`);
+      };
+
+      if (paymentType === 'installment') {
+        payload.down_payment = parseFloat(installmentData.down_payment) || 0;
+        payload.months_count = parseInt(installmentData.months_count) || 3;
+        payload.due_date = installmentData.due_date;
+      }
+
+      const res = await apiClient.post('/sales/', payload);
+      const paymentMethodNames: Record<string, string> = {
+        'cash': 'كاش',
+        'vodafone_cash': 'فودافون كاش',
+        'instapay': 'انستاباي',
+        'card': 'بطاقة بنكية',
+        'credit': 'آجل'
+      };
+      alert(`✅ تم البيع!\nرقم الفاتورة: ${res.data.invoice_number}\nالإجمالي: ${res.data.final_amount} ج.م\nطريقة الدفع: ${paymentMethodNames[paymentType]}`);
       onClearCart();
       if (onSaleComplete) onSaleComplete();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Checkout error:', err);
-      if (err.response?.status === 400) {
-        const errors = err.response?.data;
-        const errorMsg = errors ? JSON.stringify(errors, null, 2) : 'خطأ في البيانات';
-        alert('❌ خطأ في البيانات:\n' + errorMsg);
+      const axiosErr = err as { response?: { status?: number; data?: unknown } };
+      if (axiosErr.response?.status === 400) {
+        const errMsg = axiosErr.response?.data
+          ? JSON.stringify(axiosErr.response.data, null, 2)
+          : 'Error in data';
+        alert('Error:\n' + errMsg);
       } else {
-        alert('❌ فشل في إتمام البيع، يرجى المحاولة مرة أخرى');
+        alert('Failed to complete sale. Please try again.');
       }
     } finally {
       setCheckoutLoading(false);
@@ -97,9 +185,9 @@ export function Cart({
   };
 
   return (
-    <div className="h-full bg-white rounded-xl shadow-sm flex flex-col">
-      {/* Customer Selection */}
-      <div className="p-4 border-b border-gray-200">
+    <div className="h-full bg-white rounded-xl shadow-sm flex flex-col overflow-hidden">
+      {(paymentType === 'credit' || paymentType === 'installment') && (
+      <div className="p-3 border-b border-gray-200 shrink-0">
         <label className="block text-sm font-semibold text-gray-700 mb-2">
           اختيار العميل
         </label>
@@ -122,10 +210,29 @@ export function Cart({
             </option>
           ))}
         </select>
+        
+        {/* Barcode Scanner Indicator */}
+        {onAddToCart && (
+          <div className="mt-3 flex items-center gap-2">
+            <div className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              isScanning 
+                ? 'bg-green-100 text-green-700 border border-green-300' 
+                : 'bg-blue-50 text-blue-600 border border-blue-200'
+            }`}>
+              <ScanLine size={14} className={isScanning ? 'animate-pulse' : ''} />
+              {isScanning ? 'جاري المسح...' : '🔍 جاهز لمسح الباركود'}
+            </div>
+            {lastScannedProduct && (
+              <div className="flex-1 px-2 py-1.5 bg-green-50 border border-green-200 rounded text-xs text-green-700 animate-pulse">
+                ✅ تم إضافة: {lastScannedProduct}
+              </div>
+            )}
+          </div>
+        )}
       </div>
-
+      )}
       {/* Cart Items */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-3 min-h-0 basis-0">
         {cartItems.length === 0 ? (
           <div className="h-full flex items-center justify-center text-gray-400">
             <div className="text-center">
@@ -138,43 +245,30 @@ export function Cart({
             {cartItems.map((item) => (
               <div
                 key={item.id}
-                className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow"
+                className="border border-gray-100 rounded-lg p-2 hover:bg-gray-50 transition-colors"
               >
-                <div className="flex items-center gap-3">
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="w-16 h-16 object-cover rounded-lg"
-                  />
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-gray-800 text-sm truncate">
-                      {item.name}
-                    </div>
-                    <div className="text-[#3B82F6] font-bold text-sm">
-                      {item.price.toFixed(2)} ج.م
-                    </div>
+                    <div className="font-bold text-gray-800 text-sm truncate">{item.name}</div>
+                    <div className="text-[#3B82F6] font-bold text-xs">{formatCurrency(item.price)}</div>
                   </div>
-                </div>
-                <div className="flex items-center justify-between mt-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => onUpdateQuantity(item.id, -1)}
-                      className="w-8 h-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center hover:bg-red-200 transition-colors"
+                      className="w-6 h-6 bg-red-100 text-red-600 rounded flex items-center justify-center hover:bg-red-200 transition-colors"
                     >
-                      <Minus size={16} />
+                      <Minus size={12} />
                     </button>
-                    <span className="w-12 text-center font-bold text-gray-800">
-                      {item.quantity}
-                    </span>
+                    <span className="w-7 text-center font-bold text-gray-800 text-sm">{item.quantity}</span>
                     <button
                       onClick={() => onUpdateQuantity(item.id, 1)}
-                      className="w-8 h-8 bg-green-100 text-green-600 rounded-lg flex items-center justify-center hover:bg-green-200 transition-colors"
+                      className="w-6 h-6 bg-green-100 text-green-600 rounded flex items-center justify-center hover:bg-green-200 transition-colors"
                     >
-                      <Plus size={16} />
+                      <Plus size={12} />
                     </button>
                   </div>
-                  <div className="font-bold text-gray-800">
-                    {(item.price * item.quantity).toFixed(2)} ج.م
+                  <div className="font-bold text-gray-800 text-sm shrink-0 w-16 text-left">
+                    {formatCurrency(item.price * item.quantity)}
                   </div>
                 </div>
               </div>
@@ -184,32 +278,12 @@ export function Cart({
       </div>
 
       {/* Financial Summary */}
-      <div className="border-t border-gray-200 p-4 bg-gray-50">
-        <div className="space-y-2 mb-4">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">الإجمالي الفرعي</span>
-            <span className="font-semibold text-gray-800">{subtotal.toFixed(2)} ج.م</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">الضريبة (14%)</span>
-            <span className="font-semibold text-gray-800">{tax.toFixed(2)} ج.م</span>
-          </div>
-          <div className="flex justify-between text-sm items-center">
-            <span className="text-gray-600">الخصم</span>
-            <input
-              type="number"
-              value={discount}
-              onChange={(e) => onDiscountChange(parseFloat(e.target.value) || 0)}
-              className="w-24 px-2 py-1 border border-gray-300 rounded text-left focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-              placeholder="0.00"
-            />
-          </div>
-        </div>
+      <div className="border-t border-gray-200 p-3 bg-gray-50 shrink-0">
         <div className="border-t border-gray-300 pt-3 mb-4">
           <div className="flex justify-between items-center">
             <span className="text-lg font-bold text-gray-800">الصافي النهائي</span>
             <span className="text-2xl font-bold text-[#10B981]">
-              {total.toFixed(2)} ج.م
+              {formatCurrency(total)}
             </span>
           </div>
         </div>
@@ -219,28 +293,74 @@ export function Cart({
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             طريقة الدفع
           </label>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-1">
             <button
-              onClick={() => setPaymentType('cash')}
-              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+              onClick={() => { setPaymentType('cash'); setShowCreditWarning(false); }}
+              className={`py-1.5 px-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
                 paymentType === 'cash'
                   ? 'bg-[#10B981] text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              كاش
+              💵 كاش
+            </button>
+            <button
+              onClick={() => { setPaymentType('vodafone_cash'); setShowCreditWarning(false); }}
+              className={`py-1.5 px-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
+                paymentType === 'vodafone_cash'
+                  ? 'bg-[#10B981] text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              📱 فودافون كاش
+            </button>
+            <button
+              onClick={() => { setPaymentType('instapay'); setShowCreditWarning(false); }}
+              className={`py-1.5 px-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
+                paymentType === 'instapay'
+                  ? 'bg-[#10B981] text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              📲 انستاباي
+            </button>
+            <button
+              onClick={() => { setPaymentType('card'); setShowCreditWarning(false); }}
+              className={`py-1.5 px-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
+                paymentType === 'card'
+                  ? 'bg-[#10B981] text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              💳 بطاقة بنكية
             </button>
             <button
               onClick={() => setPaymentType('credit')}
-              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+              className={`py-1.5 px-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
                 paymentType === 'credit'
                   ? 'bg-[#3B82F6] text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              آجل
+              📋 آجل
+            </button>
+            <button
+              onClick={() => { setPaymentType('installment'); setShowInstallmentModal(true); }}
+              className={`py-1.5 px-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
+                paymentType === 'installment'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              📅 تقسيط
             </button>
           </div>
+          {/* Credit Warning */}
+          {showCreditWarning && (
+            <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded-lg text-sm text-red-700 text-center">
+              ⚠️ يجب اختيار عميل للبيع الآجل
+            </div>
+          )}
         </div>
 
         {/* Action Buttons */}
@@ -257,32 +377,102 @@ export function Cart({
             )}
             {checkoutLoading ? 'جاري المعالجة...' : 'إتمام البيع وطباعة'}
           </button>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              className="bg-[#F59E0B] hover:bg-[#D97706] text-white font-semibold py-2 px-3 rounded-xl flex items-center justify-center gap-1 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={cartItems.length === 0}
-            >
-              <Clock size={16} />
-              تعليق
-            </button>
-            <button
-              className="bg-[#3B82F6] hover:bg-[#2563EB] text-white font-semibold py-2 px-3 rounded-xl flex items-center justify-center gap-1 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={cartItems.length === 0}
-            >
-              <CreditCard size={16} />
-              آجل
-            </button>
-            <button
-              onClick={onClearCart}
-              className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-3 rounded-xl flex items-center justify-center gap-1 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={cartItems.length === 0}
-            >
-              <X size={16} />
-              إلغاء
-            </button>
-          </div>
+          <button
+            onClick={onClearCart}
+            disabled={cartItems.length === 0}
+            className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-3 rounded-xl flex items-center justify-center gap-1 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <X size={16} />
+            إلغاء السلة
+          </button>
         </div>
       </div>
+
+      {/* Installment Modal */}
+      {showInstallmentModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[999] p-4 backdrop-blur-sm" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="bg-purple-600 p-5 text-white flex justify-between items-center">
+              <h2 className="text-lg font-bold flex items-center gap-2">📅 بيانات التقسيط</h2>
+              <button onClick={() => { setShowInstallmentModal(false); setPaymentType('cash'); }}>✕</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-purple-50 rounded-xl p-3 text-center">
+                <div className="text-sm text-gray-600">إجمالي الفاتورة</div>
+                <div className="text-2xl font-bold text-purple-700">{formatCurrency(total)}</div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">المقدم (ج.م)</label>
+                <input
+                  type="number"
+                  min="0"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl font-bold text-center text-lg focus:border-purple-400 focus:outline-none"
+                  value={installmentData.down_payment}
+                  onChange={(e) => setInstallmentData({...installmentData, down_payment: e.target.value})}
+                  placeholder="0"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">عدد الأشهر</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[3, 6, 9, 12].map(m => (
+                    <button
+                      key={m}
+                      onClick={() => setInstallmentData({...installmentData, months_count: String(m)})}
+                      className={`py-2 rounded-xl font-bold text-sm transition-colors ${
+                        installmentData.months_count === String(m)
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {m} شهر
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  className="w-full mt-2 px-4 py-2 border border-gray-200 rounded-xl text-center focus:outline-none focus:border-purple-400"
+                  value={installmentData.months_count}
+                  onChange={(e) => setInstallmentData({...installmentData, months_count: e.target.value})}
+                  placeholder="أو أدخل عدد مخصص"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">تاريخ أول قسط</label>
+                <input
+                  type="date"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl font-bold focus:border-purple-400 focus:outline-none"
+                  value={installmentData.due_date}
+                  onChange={(e) => setInstallmentData({...installmentData, due_date: e.target.value})}
+                />
+              </div>
+
+              {installmentData.down_payment !== '' && installmentData.months_count && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
+                  <div className="text-sm text-gray-600">القسط الشهري</div>
+                  <div className="text-xl font-bold text-green-700">
+                    {formatCurrency((total - (parseFloat(installmentData.down_payment) || 0)) / (parseInt(installmentData.months_count) || 1))}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    المتبقي بعد المقدم: {formatCurrency(total - (parseFloat(installmentData.down_payment) || 0))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => setShowInstallmentModal(false)}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl transition-colors"
+              >
+                ✅ تأكيد وإتمام البيع
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

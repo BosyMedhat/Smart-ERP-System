@@ -8,15 +8,31 @@ from .models import (
 # 1. الموظفين
 class EmployeeSerializer(serializers.ModelSerializer):
     netSalary = serializers.ReadOnlyField() # الحقل المحسوب
+    username = serializers.CharField(
+        source='user.username',
+        read_only=True,
+        default=''
+    )
 
     class Meta:
         model = Employee
-        fields = ['id', 'name', 'position', 'baseSalary', 'advances', 'incentives', 'netSalary', 'attendance']
+        fields = ['id', 'name', 'position', 'baseSalary', 'advances', 'incentives', 'netSalary', 'attendance', 'username']
 
-# 2. الأقساط (معدل لربط بيانات العميل والفاتورة)
 class InstallmentSerializer(serializers.ModelSerializer):
-    customer_name = serializers.CharField(source='invoice.customer.name', read_only=True)
-    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    invoice_number = serializers.CharField(source='sale.invoice_number', read_only=True)
+    sale_final_amount = serializers.DecimalField(source='sale.final_amount', max_digits=12, decimal_places=2, read_only=True)
+    monthly_amount = serializers.SerializerMethodField()
+
+    def get_customer_name(self, obj):
+        if obj.sale and obj.sale.customer:
+            return obj.sale.customer.name
+        return 'عميل نقدي'
+
+    def get_monthly_amount(self, obj):
+        if obj.months_count and obj.months_count > 0:
+            return round(float(obj.amount) / obj.months_count, 2)
+        return float(obj.amount)
 
     class Meta:
         model = Installment
@@ -42,12 +58,26 @@ class WorkShiftSerializer(serializers.ModelSerializer):
 
 # 7. الموردين
 class SupplierSerializer(serializers.ModelSerializer):
+    purchase_count = serializers.SerializerMethodField()
+    total_purchases = serializers.SerializerMethodField()
+
+    def get_purchase_count(self, obj):
+        return obj.purchases.count()
+
+    def get_total_purchases(self, obj):
+        from django.db.models import Sum
+        result = obj.purchases.aggregate(total=Sum('total_amount'))
+        return result['total'] or 0
+
     class Meta:
         model = Supplier
         fields = '__all__'
 
 # 8. المشتريات
 class PurchaseSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+    product_name = serializers.CharField(source='product.name', read_only=True)
+
     class Meta:
         model = Purchase
         fields = '__all__'

@@ -10,12 +10,14 @@ from django.db.models import Sum, Count, F
 from inventory.models import Sale, SaleItem, Product
 import statistics
 import json
+import pdfplumber
+import requests
 
 
 @api_view(['POST'])
 def ask_ai(request):
     """
-    AI Assistant endpoint with Ollama llama3 integration.
+    AI Assistant endpoint with qwen2.5:3b integration via Ollama Docker container.
     Includes timeout, system context, and graceful error handling.
     """
     try:
@@ -25,10 +27,11 @@ def ask_ai(request):
 
         # Initialize Ollama LLM with extended timeout
         llm = OllamaLLM(
-            model="llama3",
+            model="qwen2.5:3b",
             base_url="http://127.0.0.1:11434",
             timeout=120,  # 2 minutes timeout
             num_predict=500,
+            keep_alive=-1,
         )
 
         # Fetch real system context
@@ -221,3 +224,137 @@ class SmartAnalyticsView(APIView):
             'recommendations': recommendations,
             'sales_trend': sales_trend,
         })
+
+
+class PDFProductImportView(APIView):
+    """
+    PDF Product Import View.
+    Accepts a PDF file, extracts text using pdfplumber,
+    sends to Ollama (qwen2.5:3b) for AI parsing,
+    returns structured product data as JSON preview.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            pdf_file = request.FILES.get('file')
+            if not pdf_file:
+                return Response({
+                    'status': 'error',
+                    'message': 'لم يتم رفع ملف PDF'
+                }, status=400)
+
+            # Extract text from PDF
+            extracted_text = ""
+            try:
+                with pdfplumber.open(pdf_file) as pdf:
+                    for page in pdf.pages:
+                        page_text = page.extract_text()
+                        if page_text:
+                            extracted_text += page_text + "\n"
+            except Exception as e:
+                return Response({
+                    'status': 'error',
+                    'message': f'خطأ في قراءة ملف PDF: {str(e)}'
+                }, status=400)
+
+            if not extracted_text.strip():
+                return Response({
+                    'status': 'error',
+                    'message': 'لم يتم استخراج أي نص من ملف PDF'
+                }, status=400)
+
+            # Prepare prompt for Ollama
+            prompt = f"""
+أنت مساعد ذكي لنظام ERP. 
+المهمة: استخرج قائمة المنتجات من النص التالي وأرجعها كـ JSON فقط.
+
+الصيغة المطلوبة:
+{{
+  "products": [
+    {{
+      "name": "اسم المنتج",
+      "retail_price": 0.0,
+      "wholesale_price": 0.0,
+      "category": "الفئة",
+      "unit": "الوحدة",
+      "quantity": 0
+    }}
+  ]
+}}
+
+قواعد مهمة:
+- أرجع JSON فقط بدون أي نص إضافي
+- إذا لم تجد سعراً، اجعله 0
+- إذا لم تجد فئة، اجعلها "عام"
+- إذا لم تجد وحدة، اجعلها "قطعة"
+
+النص:
+{extracted_text[:2000]}
+"""
+
+            # Call Ollama API
+            try:
+                response = requests.post(
+                    'http://localhost:11434/api/generate',
+                    json={
+                        'model': 'qwen2.5:3b',
+                        'prompt': prompt,
+                        'stream': False,
+                        'keep_alive': -1,
+                        'options': {
+                            'temperature': 0.1,
+                            'num_predict': 1000
+                        }
+                    },
+                    timeout=300
+                )
+                response.raise_for_status()
+                ai_response = response.json()
+                ai_text = ai_response.get('response', '')
+            except requests.exceptions.Timeout:
+                return Response({
+                    'status': 'error',
+                    'message': 'انتهى الوقت المحدد للانتظار - Ollama بطيء'
+                }, status=504)
+            except requests.exceptions.ConnectionError:
+                return Response({
+                    'status': 'error',
+                    'message': 'تعذر الاتصال بـ Ollama - تأكد من تشغيل الخدمة'
+                }, status=503)
+            except Exception as e:
+                return Response({
+                    'status': 'error',
+                    'message': f'خطأ في الاتصال بـ Ollama: {str(e)}'
+                }, status=500)
+
+            # Parse JSON from AI response
+            try:
+                # Find JSON in response (in case there's extra text)
+                json_start = ai_text.find('{')
+                json_end = ai_text.rfind('}')
+                if json_start != -1 and json_end != -1:
+                    json_str = ai_text[json_start:json_end + 1]
+                    products_data = json.loads(json_str)
+                    products = products_data.get('products', [])
+                else:
+                    products = []
+            except json.JSONDecodeError as e:
+                return Response({
+                    'status': 'error',
+                    'message': f'فشل في تحليل JSON من الرد: {str(e)}',
+                    'raw_response': ai_text[:500]
+                }, status=400)
+
+            return Response({
+                'status': 'success',
+                'products': products,
+                'count': len(products),
+                'extracted_text_preview': extracted_text[:200] + "..." if len(extracted_text) > 200 else extracted_text
+            })
+
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': f'خطأ غير متوقع: {str(e)}'
+            }, status=500)

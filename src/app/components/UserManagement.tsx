@@ -241,12 +241,32 @@ export function UserManagement() {
                   <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-[#3B82F6] font-bold text-2xl">
                     {selectedUser.name.charAt(0)}
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <h2 className="text-2xl font-bold">{selectedUser.name}</h2>
                     <p className="text-blue-200">{selectedUser.role}</p>
                   </div>
                 </div>
               </div>
+
+              {/* Default Manager Permissions Badge */}
+              {selectedUser.role === 'مدير' && (
+                <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Shield size={20} className="text-amber-600" />
+                    <span className="font-bold text-amber-800">صلاحيات افتراضية للمدير</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {['مبيعات', 'مخزون', 'تقارير', 'موظفين', 'خزينة'].map((perm) => (
+                      <span key={perm} className="px-3 py-1 bg-amber-100 text-amber-700 rounded-lg text-sm font-bold">
+                        {perm}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-sm text-amber-600 mt-2">
+                    المدير يملك صلاحية وصول كاملة لجميع موديولات النظام
+                  </p>
+                </div>
+              )}
 
               {/* Sidebar Access Section */}
               <div className="border border-gray-200 rounded-xl p-5 mb-6">

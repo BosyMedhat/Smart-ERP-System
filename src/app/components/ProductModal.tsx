@@ -57,6 +57,7 @@ export function ProductModal({ product, onSave, onClose }: ProductModalProps) {
     // تجهيز البيانات لتطابق الـ Backend في Django
     const productData = {
       sku: formData.barcode,
+      barcode: formData.barcode,
       name: formData.name,
       category: formData.category,
       current_stock: Number(formData.currentStock),
@@ -113,7 +114,16 @@ export function ProductModal({ product, onSave, onClose }: ProductModalProps) {
             </div>
             <div className="col-span-2 md:col-span-1">
               <label className="block text-sm font-semibold mb-2">الباركود (SKU) *</label>
-              <input type="text" value={formData.barcode} onChange={(e) => handleChange('barcode', e.target.value)} className="w-full px-4 py-2 border rounded-lg" required />
+              <input 
+                type="text" 
+                data-barcode-input="true"
+                value={formData.barcode} 
+                onChange={(e) => handleChange('barcode', e.target.value)} 
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" 
+                placeholder="امسح الباركود أو اكتبه يدوياً"
+                required 
+              />
+              <p className="text-xs text-gray-500 mt-1">يمكنك مسح الباركود مباشرة في هذا الحقل</p>
             </div>
           </div>
 

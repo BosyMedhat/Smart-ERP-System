@@ -1,8 +1,30 @@
-import { useState, useEffect } from 'react';
-import { Mic, AlertTriangle, TrendingUp, CheckCircle, Brain, ShoppingCart, Package, Sparkles } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Mic, AlertTriangle, TrendingUp, CheckCircle, Brain, ShoppingCart, Package, Sparkles, FileUp, Loader2, Upload, X, Check } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 import apiClient from '../../api/axiosConfig';
+
+// PDF Import Types
+interface ExtractedProduct {
+  name: string;
+  retail_price: number;
+  wholesale_price: number;
+  category: string;
+  unit: string;
+  quantity: number;
+}
+
+interface ImportResult {
+  status: string;
+  products: ExtractedProduct[];
+  count: number;
+  extracted_text_preview?: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
+}
 
 // Types
 interface Summary {
@@ -59,12 +81,46 @@ export function AICenter() {
   // Analytics state
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'anomalies' | 'stock'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'anomalies' | 'stock' | 'import'>('overview');
+
+  // PDF Import state
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfImportLoading, setPdfImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importError, setImportError] = useState<string>('');
+  const [importSuccess, setImportSuccess] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loadingMessage, setLoadingMessage] = useState('جارٍ قراءة الملف...');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch analytics on mount
   useEffect(() => {
     fetchAnalytics();
   }, []);
+
+  // Cycle loading messages during PDF import
+  useEffect(() => {
+    if (!pdfImportLoading) {
+      setLoadingMessage('جارٍ قراءة الملف...');
+      return;
+    }
+
+    const messages = [
+      'جارٍ قراءة الملف...',
+      'جارٍ تحليل المحتوى بالذكاء الاصطناعي...',
+      'قد يستغرق هذا 30-60 ثانية...'
+    ];
+
+    let messageIndex = 0;
+    setLoadingMessage(messages[0]);
+
+    const interval = setInterval(() => {
+      messageIndex = (messageIndex + 1) % messages.length;
+      setLoadingMessage(messages[messageIndex]);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [pdfImportLoading]);
 
   const fetchAnalytics = async () => {
     try {
@@ -128,6 +184,138 @@ export function AICenter() {
       info: "bg-blue-500/10 border-blue-500/30 text-blue-400"
     };
     return styles[type as keyof typeof styles] || styles.info;
+  };
+
+  // PDF Import functions
+  const loadCategories = async () => {
+    try {
+      const response = await apiClient.get('/categories/');
+      setCategories(response.data || []);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    }
+  };
+
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file && file.type === 'application/pdf') {
+      setPdfFile(file);
+      setImportError('');
+    } else {
+      setImportError('الرجاء رفع ملف PDF فقط');
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      setPdfFile(file);
+      setImportError('');
+    } else {
+      setImportError('الرجاء رفع ملف PDF فقط');
+    }
+  };
+
+  const analyzePdf = async () => {
+    if (!pdfFile) return;
+
+    setPdfImportLoading(true);
+    setImportError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', pdfFile);
+
+      const response = await apiClient.post('/ai/import-pdf/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 300000  // 5 minutes in milliseconds
+      });
+
+      if (response.data.status === 'success') {
+        setImportResult(response.data);
+        await loadCategories();
+      } else {
+        setImportError(response.data.message || 'حدث خطأ في تحليل الملف');
+      }
+    } catch (error: any) {
+      console.error('PDF import error:', error);
+      setImportError(error.response?.data?.message || 'حدث خطأ في الاتصال بالخادم');
+    } finally {
+      setPdfImportLoading(false);
+    }
+  };
+
+  const getCategoryId = (categoryName: string): number | null => {
+    const cat = categories.find(c => c.name === categoryName);
+    return cat?.id || null;
+  };
+
+  const saveProducts = async () => {
+    if (!importResult?.products) return;
+
+    setPdfImportLoading(true);
+    let successCount = 0;
+    let errors: string[] = [];
+
+    try {
+      for (const product of importResult.products) {
+        try {
+          // Generate SKU from product name + random number
+          const sku = `${product.name.replace(/\s+/g, '-').substring(0, 10).toUpperCase()}-${Math.floor(Math.random() * 10000)}`;
+          
+          // cost_price is required - use wholesale_price as cost if available
+          const costPrice = parseFloat(String(product.wholesale_price)) || 
+                           (parseFloat(String(product.retail_price)) * 0.7) || 0;
+          
+          const productData = {
+            sku: sku,
+            name: product.name,
+            cost_price: costPrice,
+            retail_price: parseFloat(String(product.retail_price)) || 0,
+            wholesale_price: parseFloat(String(product.wholesale_price)) || 0,
+            unit: product.unit || 'قطعة',
+            current_stock: parseInt(String(product.quantity)) || 0
+            // min_stock_level uses model default (5)
+          };
+
+          await apiClient.post('/products/', productData);
+          successCount++;
+        } catch (err: any) {
+          errors.push(`${product.name}: ${err.response?.data?.message || 'خطأ في الحفظ'}`);
+        }
+      }
+
+      if (successCount > 0) {
+        setImportSuccess(true);
+      }
+      
+      if (errors.length > 0) {
+        console.error('Import errors:', errors);
+      }
+    } catch (error) {
+      console.error('Save products error:', error);
+    } finally {
+      setPdfImportLoading(false);
+    }
+  };
+
+  const updateProductField = (index: number, field: keyof ExtractedProduct, value: string | number) => {
+    if (!importResult) return;
+    
+    const updatedProducts = [...importResult.products];
+    updatedProducts[index] = { ...updatedProducts[index], [field]: value };
+    setImportResult({ ...importResult, products: updatedProducts });
+  };
+
+  const resetImport = () => {
+    setPdfFile(null);
+    setImportResult(null);
+    setImportError('');
+    setImportSuccess(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   if (analyticsLoading) {
@@ -312,6 +500,7 @@ export function AICenter() {
           { key: 'overview', label: 'نظرة عامة', icon: Sparkles },
           { key: 'anomalies', label: 'العمليات المشبوهة', icon: AlertTriangle },
           { key: 'stock', label: 'المخزون المنخفض', icon: Package },
+          { key: 'import', label: 'استيراد من PDF', icon: FileUp },
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -460,7 +649,7 @@ export function AICenter() {
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
                   <p className="text-blue-400 font-bold mb-2">💡 توصية للمبيعات</p>
                   <p className="text-slate-300 text-sm">
-                    بناءً على تحليل البيانات، يُنصح بالتركيز على المنتجات الأكثر مبيعاً 
+                    بناءً على تحليل البيانات، يُنصح بالتركيز على المنتجات الأكثر مبيعاً
                     وتوفير مخزون إضافي منها لتجنب النفاد.
                   </p>
                 </div>
@@ -480,6 +669,232 @@ export function AICenter() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* PDF Import Tab */}
+        {activeTab === 'import' && (
+          <div className="bg-slate-900/50 rounded-2xl border border-slate-700/50 p-6">
+            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              <FileUp className="text-blue-400" />
+              استيراد منتجات من PDF
+            </h3>
+
+            {/* STATE 4 - Success */}
+            {importSuccess ? (
+              <div className="text-center py-12">
+                <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Check size={40} className="text-emerald-400" />
+                </div>
+                <h4 className="text-2xl font-bold text-white mb-2">تم بنجاح!</h4>
+                <p className="text-slate-400 mb-6">
+                  تم إضافة {importResult?.count || 0} منتج للمخزن بنجاح
+                </p>
+                <button
+                  onClick={resetImport}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-colors flex items-center gap-2 mx-auto"
+                >
+                  <Upload size={18} />
+                  استيراد ملف آخر
+                </button>
+              </div>
+            ) : importResult ? (
+              /* STATE 3 - Preview Table */
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <p className="text-slate-400">
+                    تم استخراج <span className="text-blue-400 font-bold">{importResult.count}</span> منتج
+                  </p>
+                  <p className="text-slate-500 text-sm">
+                    يمكنك تعديل البيانات قبل الحفظ
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-right">
+                    <thead className="text-slate-400 border-b border-slate-700">
+                      <tr>
+                        <th className="pb-3 px-3">اسم المنتج</th>
+                        <th className="pb-3 px-3">سعر البيع</th>
+                        <th className="pb-3 px-3">سعر الجملة</th>
+                        <th className="pb-3 px-3">الفئة</th>
+                        <th className="pb-3 px-3">الوحدة</th>
+                        <th className="pb-3 px-3">الكمية</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {importResult.products.map((product, idx) => (
+                        <tr key={idx}>
+                          <td className="py-3 px-3">
+                            <input
+                              type="text"
+                              value={product.name}
+                              onChange={(e) => updateProductField(idx, 'name', e.target.value)}
+                              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                            />
+                          </td>
+                          <td className="py-3 px-3">
+                            <input
+                              type="number"
+                              value={product.retail_price}
+                              onChange={(e) => updateProductField(idx, 'retail_price', parseFloat(e.target.value) || 0)}
+                              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                            />
+                          </td>
+                          <td className="py-3 px-3">
+                            <input
+                              type="number"
+                              value={product.wholesale_price}
+                              onChange={(e) => updateProductField(idx, 'wholesale_price', parseFloat(e.target.value) || 0)}
+                              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                            />
+                          </td>
+                          <td className="py-3 px-3">
+                            <input
+                              type="text"
+                              value={product.category}
+                              onChange={(e) => updateProductField(idx, 'category', e.target.value)}
+                              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                            />
+                          </td>
+                          <td className="py-3 px-3">
+                            <input
+                              type="text"
+                              value={product.unit}
+                              onChange={(e) => updateProductField(idx, 'unit', e.target.value)}
+                              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                            />
+                          </td>
+                          <td className="py-3 px-3">
+                            <input
+                              type="number"
+                              value={product.quantity}
+                              onChange={(e) => updateProductField(idx, 'quantity', parseInt(e.target.value) || 0)}
+                              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex items-center justify-center gap-4">
+                  <button
+                    onClick={saveProducts}
+                    disabled={pdfImportLoading}
+                    className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white rounded-xl transition-colors flex items-center gap-2"
+                  >
+                    {pdfImportLoading ? (
+                      <>
+                        <Loader2 size={18} className="animate-spin" />
+                        جارٍ الحفظ...
+                      </>
+                    ) : (
+                      <>
+                        <Check size={18} />
+                        ✅ إضافة {importResult.count} منتجات للمخزن
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={resetImport}
+                    disabled={pdfImportLoading}
+                    className="px-6 py-3 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 text-white rounded-xl transition-colors flex items-center gap-2"
+                  >
+                    <X size={18} />
+                    ❌ إلغاء
+                  </button>
+                </div>
+              </div>
+            ) : pdfImportLoading ? (
+              /* STATE 2 - Loading */
+              <div className="text-center py-12">
+                <Loader2 size={48} className="text-blue-400 animate-spin mx-auto mb-4" />
+                <p className="text-white font-medium mb-2">{loadingMessage}</p>
+                <p className="text-slate-400 text-sm animate-pulse">
+                  جارٍ استخراج المنتجات بالذكاء الاصطناعي
+                  <span className="inline-block animate-bounce">.</span>
+                  <span className="inline-block animate-bounce delay-100">.</span>
+                  <span className="inline-block animate-bounce delay-200">.</span>
+                </p>
+              </div>
+            ) : (
+              /* STATE 1 - Upload Zone */
+              <div className="space-y-4">
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={handleFileDrop}
+                  className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${
+                    pdfFile
+                      ? 'border-emerald-500/50 bg-emerald-500/10'
+                      : 'border-slate-600 hover:border-slate-500 bg-slate-800/30'
+                  }`}
+                >
+                  {pdfFile ? (
+                    <div className="space-y-3">
+                      <div className="w-16 h-16 bg-emerald-500/20 rounded-xl flex items-center justify-center mx-auto">
+                        <FileUp size={32} className="text-emerald-400" />
+                      </div>
+                      <p className="text-white font-medium">{pdfFile.name}</p>
+                      <p className="text-slate-400 text-sm">
+                        {(pdfFile.size / 1024).toFixed(1)} KB
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="w-16 h-16 bg-slate-700/50 rounded-xl flex items-center justify-center mx-auto">
+                        <Upload size={32} className="text-slate-400" />
+                      </div>
+                      <p className="text-slate-300">ارفع ملف PDF يحتوي على قائمة المنتجات</p>
+                      <p className="text-slate-500 text-sm">اسحب الملف هنا أو انقر للاختيار</p>
+                    </div>
+                  )}
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+
+                  {!pdfFile && (
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                    >
+                      اختيار ملف
+                    </button>
+                  )}
+                </div>
+
+                {importError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center">
+                    <p className="text-red-400">{importError}</p>
+                  </div>
+                )}
+
+                {pdfFile && (
+                  <div className="flex items-center justify-center gap-4">
+                    <button
+                      onClick={analyzePdf}
+                      disabled={pdfImportLoading}
+                      className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-colors flex items-center gap-2"
+                    >
+                      <Brain size={18} />
+                      تحليل الملف بالذكاء الاصطناعي
+                    </button>
+                    <button
+                      onClick={resetImport}
+                      className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

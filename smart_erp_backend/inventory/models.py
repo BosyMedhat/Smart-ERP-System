@@ -5,7 +5,14 @@ from django.dispatch import receiver as signal_receiver
 
 # 1. المنتجات
 class Product(models.Model):
-    sku = models.CharField("الباركود", max_length=100, unique=True)
+    sku = models.CharField("الSKU", max_length=100, unique=True)
+    barcode = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        unique=True,
+        verbose_name='الباركود'
+    )
     name = models.CharField("اسم المنتج", max_length=255)
     unit = models.CharField("الوحدة", max_length=50, default="قطعة")
     cost_price = models.DecimalField("سعر التكلفة", max_digits=10, decimal_places=2)
@@ -30,11 +37,51 @@ class StockMovement(models.Model):
 
 # 3. الورديات
 class WorkShift(models.Model):
-    user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
-    start_time = models.DateTimeField(auto_now_add=True)
-    end_time = models.DateTimeField(null=True, blank=True)
-    starting_cash = models.DecimalField(max_digits=10, decimal_places=2)
-    actual_cash = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    STATUS_CHOICES = [
+        ('open', 'مفتوحة'),
+        ('closed', 'مغلقة'),
+    ]
+
+    user           = models.ForeignKey('auth.User', on_delete=models.CASCADE,
+                                       verbose_name='المستخدم')
+    shift_date     = models.DateField(default='2024-01-01', verbose_name='تاريخ الوردية')
+    start_time     = models.DateTimeField(auto_now_add=True, verbose_name='وقت البداية')
+    end_time       = models.DateTimeField(null=True, blank=True,
+                                          verbose_name='وقت النهاية')
+    starting_cash  = models.DecimalField(max_digits=10, decimal_places=2,
+                                         verbose_name='رصيد أول الوردية')
+    actual_cash    = models.DecimalField(max_digits=10, decimal_places=2,
+                                         null=True, blank=True,
+                                         verbose_name='الكاش الفعلي')
+    expected_cash  = models.DecimalField(max_digits=10, decimal_places=2,
+                                         null=True, blank=True,
+                                         verbose_name='الكاش المتوقع')
+    difference     = models.DecimalField(max_digits=10, decimal_places=2,
+                                         null=True, blank=True,
+                                         verbose_name='الفرق')
+    total_sales    = models.DecimalField(max_digits=10, decimal_places=2,
+                                         default=0, verbose_name='إجمالي المبيعات')
+    status         = models.CharField(max_length=10, choices=STATUS_CHOICES,
+                                      default='open', verbose_name='الحالة')
+    notes          = models.TextField(blank=True, verbose_name='ملاحظات')
+    created_at     = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-start_time']
+        verbose_name = 'وردية'
+        verbose_name_plural = 'الورديات'
+
+    def __str__(self):
+        return f"{self.user.username} - {self.shift_date} - {self.get_status_display()}"
+
+    def close_shift(self, actual_cash, notes=''):
+        from django.utils import timezone
+        self.end_time = timezone.now()
+        self.actual_cash = actual_cash
+        self.difference = actual_cash - (self.expected_cash or 0)
+        self.status = 'closed'
+        self.notes = notes
+        self.save()
 
 # 5. الفواتير
 class Invoice(models.Model):
@@ -46,14 +93,29 @@ class Invoice(models.Model):
     payment_type = models.CharField(max_length=20, choices=TYPES, default='CASH')
     created_at = models.DateTimeField(auto_now_add=True)
 
-# 6. الأقساط (معدل ليناسب شاشة التحصيل)
+# 6. الأقساط (مربوط بـ Sale مباشرة)
 class Installment(models.Model):
-    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='installments')
-    due_date = models.DateField("تاريخ الاستحقاق")
-    amount = models.DecimalField("إجمالي مبلغ القسط", max_digits=10, decimal_places=2)
-    remaining_amount = models.DecimalField("المبلغ المتبقي", max_digits=10, decimal_places=2)
-    installments_count = models.IntegerField("عدد الأقساط", default=1) # عشان الفرونت إند بيبعته
-    is_paid = models.BooleanField("هل تم السداد؟", default=False)
+    sale = models.ForeignKey(
+        'Sale', on_delete=models.CASCADE,
+        related_name='installments',
+        verbose_name='فاتورة البيع',
+        null=True, blank=True
+    )
+    down_payment = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        verbose_name='المقدم'
+    )
+    months_count = models.IntegerField(default=1, verbose_name='عدد الأشهر')
+    amount = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        verbose_name='إجمالي مبلغ التقسيط'
+    )
+    remaining_amount = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        verbose_name='المبلغ المتبقي'
+    )
+    due_date = models.DateField(verbose_name='تاريخ أول قسط')
+    is_paid = models.BooleanField(default=False, verbose_name='هل تم السداد الكامل؟')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
@@ -61,19 +123,61 @@ class Installment(models.Model):
             self.remaining_amount = self.amount
         super().save(*args, **kwargs)
 
+    class Meta:
+        verbose_name = 'قسط'
+        verbose_name_plural = 'الأقساط'
+
+    def __str__(self):
+        return f"قسط فاتورة {self.sale.invoice_number} - متبقي: {self.remaining_amount}"
+
 # 7. الموردين
 class Supplier(models.Model):
     name = models.CharField("اسم المورد", max_length=255)
     phone = models.CharField("رقم الهاتف", max_length=20, null=True, blank=True)
+    email = models.EmailField("البريد الإلكتروني", null=True, blank=True)
     company = models.CharField("الشركة", max_length=255, null=True, blank=True)
+    address = models.TextField("العنوان", null=True, blank=True)
+    balance = models.DecimalField("الرصيد المستحق", max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "مورد"
+        verbose_name_plural = "الموردين"
+
+    def __str__(self):
+        return self.name
 
 # 8. المشتريات
 class Purchase(models.Model):
-    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.DecimalField(max_digits=10, decimal_places=2)
-    cost_price = models.DecimalField(max_digits=10, decimal_places=2)
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='purchases', verbose_name="المورد")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="المنتج")
+    quantity = models.DecimalField("الكمية", max_digits=10, decimal_places=2)
+    cost_price = models.DecimalField("سعر التكلفة", max_digits=10, decimal_places=2)
+    total_amount = models.DecimalField("الإجمالي", max_digits=12, decimal_places=2, default=0)
+    invoice_number = models.CharField("رقم الفاتورة", max_length=100, null=True, blank=True)
+    notes = models.TextField("ملاحظات", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        self.total_amount = self.quantity * self.cost_price
+        # Update product stock and cost price
+        if self.product:
+            self.product.current_stock = (self.product.current_stock or 0) + float(self.quantity)
+            self.product.cost_price = self.cost_price
+            self.product.save()
+        # Add to supplier balance
+        if not self.pk:
+            self.supplier.balance += self.total_amount
+            self.supplier.save()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        verbose_name = "مشتريات"
+        verbose_name_plural = "المشتريات"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.supplier.name} - {self.product.name} x{self.quantity}"
 
 # 9. المصاريف (معدل ليتوافق مع Modal الموظفين)
 class Expense(models.Model):
@@ -94,6 +198,14 @@ class Treasury(models.Model):
 
 # 11. الموظفين (معدل ليناسب كود React تماماً)
 class Employee(models.Model):
+    user = models.OneToOneField(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='employee_profile',
+        verbose_name='حساب المستخدم'
+    )
     name = models.CharField("اسم الموظف", max_length=255)
     position = models.CharField("المسمى الوظيفي", max_length=100)
     baseSalary = models.DecimalField("الراتب الأساسي", max_digits=10, decimal_places=2)
@@ -137,12 +249,34 @@ def create_user_profile(sender, instance, created, **kwargs):
 
 # 13. StoreSettings — إعدادات المتجر
 class StoreSettings(models.Model):
+    # معلومات الشركة (Company Info)
     store_name = models.CharField(max_length=200, default='Smart ERP', verbose_name='اسم المتجر')
-    store_logo = models.ImageField(upload_to='logos/', null=True, blank=True, verbose_name='شعار المتجر')
+    system_name = models.CharField(max_length=100, default='Smart ERP', verbose_name='اسم النظام')
     currency = models.CharField(max_length=10, default='EGP', verbose_name='العملة')
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=14.00, verbose_name='نسبة الضريبة')
+    phone = models.CharField(max_length=20, blank=True, default='', verbose_name='رقم الهاتف')
+    address = models.TextField(blank=True, default='', verbose_name='العنوان')
+    email = models.EmailField(blank=True, default='', verbose_name='البريد الإلكتروني')
+    store_logo = models.ImageField(upload_to='logos/', null=True, blank=True, verbose_name='شعار المتجر')
+
+    # الفواتير والمبيعات (Invoices & Sales)
+    invoice_prefix = models.CharField(max_length=10, default='INV', verbose_name='بادئة الفاتورة')
+    invoice_starting_number = models.IntegerField(default=1, verbose_name='رقم بداية الفواتير')
+    invoice_due_days = models.IntegerField(default=30, verbose_name='أيام استحقاق الفاتورة')
+    show_tax_on_invoice = models.BooleanField(default=True, verbose_name='إظهار الضريبة في الفاتورة')
+    invoice_notes = models.TextField(blank=True, default='', verbose_name='ملاحظات ثابتة في الفاتورة')
+
+    # الأمان (Security)
+    session_timeout_hours = models.IntegerField(default=8, verbose_name='مدة الجلسة بالساعات')
+    max_login_attempts = models.IntegerField(default=5, verbose_name='محاولات الدخول المسموحة')
+    lockout_duration_minutes = models.IntegerField(default=30, verbose_name='مدة الحظر بالدقائق')
+
+    # المظهر واللغة (Appearance & Language)
     primary_color = models.CharField(max_length=7, default='#3B82F6', verbose_name='اللون الأساسي')
-    system_name = models.CharField(max_length=100, default='Smart ERP', verbose_name='اسم النظام')
+    language = models.CharField(max_length=10, default='ar', verbose_name='اللغة', choices=[('ar', 'العربية'), ('en', 'English')])
+    date_format = models.CharField(max_length=20, default='DD/MM/YYYY', verbose_name='تنسيق التاريخ', choices=[('DD/MM/YYYY', 'DD/MM/YYYY'), ('MM/DD/YYYY', 'MM/DD/YYYY'), ('YYYY-MM-DD', 'YYYY-MM-DD')])
+
+    # الحالة (Status)
     is_configured = models.BooleanField(default=False, verbose_name='تم الإعداد')
 
     class Meta:
@@ -160,7 +294,11 @@ class StoreSettings(models.Model):
 class Sale(models.Model):
     PAYMENT_TYPES = [
         ('cash', 'كاش'),
+        ('vodafone_cash', 'فودافون كاش'),
+        ('instapay', 'انستاباي'),
+        ('card', 'بطاقة بنكية'),
         ('credit', 'آجل'),
+        ('installment', 'تقسيط'),
     ]
 
     invoice_number = models.CharField(
@@ -194,19 +332,24 @@ class Sale(models.Model):
         verbose_name='المبلغ النهائي'
     )
     payment_type = models.CharField(
-        max_length=10,
+        max_length=20,
         choices=PAYMENT_TYPES,
         default='cash',
-        verbose_name='نوع الدفع'
+        verbose_name='طريقة الدفع'
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
     notes = models.TextField(blank=True, verbose_name='ملاحظات')
 
     def save(self, *args, **kwargs):
         if not self.invoice_number:
+            # Get settings for prefix and starting number
+            settings = StoreSettings.objects.first()
+            prefix = settings.invoice_prefix if settings else 'INV'
+            starting_num = settings.invoice_starting_number if settings else 1
+
             last = Sale.objects.order_by('-id').first()
-            num = (last.id + 1) if last else 1
-            self.invoice_number = f'INV-{num:05d}'
+            num = (last.id + starting_num) if last else starting_num
+            self.invoice_number = f'{prefix}-{num:05d}'
         super().save(*args, **kwargs)
 
     class Meta:

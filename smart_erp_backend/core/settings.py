@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'inventory',
     'customers',
     'ai_assistant',
+    'hr',
 
 ]
 

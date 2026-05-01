@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../../api/axiosConfig';
-import { CreditCard, Plus, X, Calendar, DollarSign, CheckCircle, AlertTriangle } from 'lucide-react';
+import { CreditCard, Calendar, DollarSign, CheckCircle, AlertTriangle, X } from 'lucide-react';
 
 interface Installment {
   id: string;
   customer_name: string;
   invoice_number: string;
-  invoice: number;
-  amount: number; 
-  remaining_amount: number; 
+  sale: number;
+  amount: number;
+  remaining_amount: number;
+  down_payment: number;
+  months_count: number;
+  monthly_amount: number;
+  sale_final_amount: number;
   due_date: string;
   is_paid: boolean;
 }
@@ -16,24 +20,16 @@ interface Installment {
 export function InstallmentsManagement() {
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showNewInstallmentModal, setShowNewInstallmentModal] = useState(false);
   const [showCollectModal, setShowCollectModal] = useState(false);
   const [selectedInstallment, setSelectedInstallment] = useState<Installment | null>(null);
   const [error, setError] = useState('');
-
-  const [formData, setFormData] = useState({ 
-    invoiceId: '', 
-    totalAmount: '', 
-    installmentsCount: '1', // الخانة الجديدة
-    nextDate: '' 
-  });
   const [collectAmount, setCollectAmount] = useState('');
 
   const fetchInstallments = async () => {
     try {
       setError('');
       const response = await apiClient.get('/installments/');
-      setInstallments(response.data);
+      setInstallments(Array.isArray(response.data) ? response.data : response.data.results ?? []);
       setLoading(false);
     } catch (error: any) {
       console.error("Error fetching installments:", error);
@@ -56,45 +52,13 @@ export function InstallmentsManagement() {
       return isLate;
   }).length;
 
-  const handleSave = async () => {
-    if (!formData.invoiceId || !formData.totalAmount) {
-      return alert("برجاء إدخال رقم الفاتورة والمبلغ");
-    }
-    try {
-      const payload = {
-        invoice: parseInt(formData.invoiceId),
-        amount: parseFloat(formData.totalAmount),
-        remaining_amount: parseFloat(formData.totalAmount),
-        due_date: formData.nextDate || new Date().toISOString().split('T')[0],
-        installments_count: parseInt(formData.installmentsCount), // بنبعت عدد الأقساط
-        is_paid: false
-      };
-      await apiClient.post('/installments/', payload);
-      alert("تم حفظ القسط بنجاح! ✅");
-      fetchInstallments();
-      setShowNewInstallmentModal(false);
-      setFormData({ invoiceId: '', totalAmount: '', installmentsCount: '1', nextDate: '' });
-    } catch (error: any) {
-      console.error("Error saving installment:", error);
-      if (error.response?.status === 401) {
-        setError('ليس لديك صلاحية لتنفيذ هذا الإجراء');
-      } else if (error.response?.status === 403) {
-        setError('غير مصرح لك بهذه العملية');
-      } else {
-        setError('حدث خطأ، يرجى المحاولة مرة أخرى');
-      }
-    }
-  };
-
   const handleCollect = async () => {
     if (!selectedInstallment || !collectAmount) return;
     try {
-      const newRem = selectedInstallment.remaining_amount - Number(collectAmount);
-      await apiClient.patch(`/installments/${selectedInstallment.id}/`, {
-        remaining_amount: Math.max(0, newRem),
-        is_paid: newRem <= 0
+      await apiClient.post(`/installments/${selectedInstallment.id}/pay/`, {
+        amount: parseFloat(collectAmount)
       });
-      fetchInstallments();
+      await fetchInstallments();
       setShowCollectModal(false);
       setCollectAmount('');
     } catch (error: any) {
@@ -126,9 +90,9 @@ export function InstallmentsManagement() {
           <h1 className="text-3xl font-bold text-[#1E293B] mb-2">إدارة عمليات التقسيط</h1>
           <p className="text-gray-600">تتبع شامل لمديونيات العملاء</p>
         </div>
-        <button onClick={() => setShowNewInstallmentModal(true)} className="px-6 py-3 bg-[#3B82F6] hover:bg-[#2563EB] text-white font-bold rounded-xl flex items-center gap-2 shadow-lg transition-transform active:scale-95">
-          <Plus size={20} /> قسط جديد
-        </button>
+        <div className="px-4 py-3 bg-purple-100 text-purple-700 font-bold rounded-xl text-sm text-center">
+          📅 الأقساط تُنشأ تلقائياً عند البيع بالتقسيط من شاشة POS
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -152,8 +116,12 @@ export function InstallmentsManagement() {
               <tr>
                 <th className="px-4 py-3 text-right">العميل</th>
                 <th className="px-4 py-3 text-right">رقم الفاتورة</th>
-                <th className="px-4 py-3 text-right">المبلغ المتبقي</th>
-                <th className="px-4 py-3 text-right">تاريخ الاستحقاق</th>
+                <th className="px-4 py-3 text-right">إجمالي الفاتورة</th>
+                <th className="px-4 py-3 text-right">المقدم</th>
+                <th className="px-4 py-3 text-right">القسط الشهري</th>
+                <th className="px-4 py-3 text-right">المتبقي</th>
+                <th className="px-4 py-3 text-right">الأشهر</th>
+                <th className="px-4 py-3 text-right">تاريخ أول قسط</th>
                 <th className="px-4 py-3 text-right">الحالة</th>
                 <th className="px-4 py-3 text-center">الإجراءات</th>
               </tr>
@@ -163,7 +131,11 @@ export function InstallmentsManagement() {
                 <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-4 font-bold text-gray-800">{item.customer_name}</td>
                   <td className="px-4 py-4 text-gray-500 font-mono">#{item.invoice_number}</td>
+                  <td className="px-4 py-4 font-bold text-gray-700">{Number(item.sale_final_amount).toLocaleString()} ج.م</td>
+                  <td className="px-4 py-4 font-bold text-blue-600">{Number(item.down_payment).toLocaleString()} ج.م</td>
+                  <td className="px-4 py-4 font-bold text-purple-600">{Number(item.monthly_amount).toLocaleString()} ج.م</td>
                   <td className="px-4 py-4 font-bold text-orange-600">{Number(item.remaining_amount).toLocaleString()} ج.م</td>
+                  <td className="px-4 py-4 text-center text-gray-600 font-bold">{item.months_count} شهر</td>
                   <td className="px-4 py-4 flex items-center gap-2"><Calendar size={16} className="text-gray-400" />{item.due_date}</td>
                   <td className="px-4 py-4">{getStatusBadge(item)}</td>
                   <td className="px-4 py-4 text-center">
@@ -179,34 +151,6 @@ export function InstallmentsManagement() {
           </table>
         </div>
       </div>
-
-      {/* Modal New Installment - بنفس التصميم اللي في صورتك بالضبط */}
-      {showNewInstallmentModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[999] p-4 backdrop-blur-sm text-right">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="bg-blue-600 p-6 text-white flex justify-between items-center font-bold">
-              <h2 className="text-xl flex items-center gap-2"><Plus /> إضافة قسط جديد</h2>
-              <button onClick={() => setShowNewInstallmentModal(false)}><X /></button>
-            </div>
-            <div className="p-6 space-y-4">
-              <label className="block text-sm font-bold text-gray-700">رقم تعريف الفاتورة (ID):</label>
-              <input type="number" className="w-full px-4 py-3 border rounded-xl" value={formData.invoiceId} onChange={(e)=>setFormData({...formData, invoiceId: e.target.value})} />
-              
-              <label className="block text-sm font-bold text-gray-700">قيمة القسط الإجمالية:</label>
-              <input type="number" className="w-full px-4 py-3 border rounded-xl font-bold" value={formData.totalAmount} onChange={(e)=>setFormData({...formData, totalAmount: e.target.value})} />
-              
-              {/* الخانة اللي كانت ناقصة */}
-              <label className="block text-sm font-bold text-gray-700">عدد الأقساط:</label>
-              <input type="number" className="w-full px-4 py-3 border rounded-xl font-bold" value={formData.installmentsCount} onChange={(e)=>setFormData({...formData, installmentsCount: e.target.value})} />
-
-              <label className="block text-sm font-bold text-gray-700">تاريخ الاستحقاق:</label>
-              <input type="date" className="w-full px-4 py-3 border rounded-xl font-bold" value={formData.nextDate} onChange={(e)=>setFormData({...formData, nextDate: e.target.value})} />
-              
-              <button onClick={handleSave} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg">حفظ في قاعدة البيانات ✅</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Collect Modal */}
       {showCollectModal && selectedInstallment && (

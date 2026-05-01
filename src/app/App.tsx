@@ -5,7 +5,6 @@ import { Cart } from './components/Cart';
 import { InventoryScreen } from './components/InventoryScreen';
 import { AICenter } from './components/AICenter';
 import { AutomationEngine } from './components/AutomationEngine';
-import { EmployeeExpenseManagement } from './components/EmployeeExpenseManagement';
 import { Settings } from './components/Settings';
 import { UserManagement } from './components/UserManagement';
 import { LoginScreen } from './components/LoginScreen';
@@ -16,6 +15,9 @@ import { SalesRepresentatives } from './components/SalesRepresentatives';
 import { SalesHistory } from './components/SalesHistory';
 import { Reports } from './components/Reports';
 import { EmployeeProfile } from './components/EmployeeProfile';
+import { SuppliersScreen } from './components/SuppliersScreen';
+import { HRModule } from './components/HRModule';
+import { CreditDashboard } from './components/CreditDashboard';
 import apiClient from '../api/axiosConfig';
 
 
@@ -36,7 +38,7 @@ export interface CartItem extends Product {
   quantity: number;
 }
 
-export type Screen = 'pos' | 'inventory' | 'home' | 'reports' | 'ai' | 'automation' | 'employees' | 'settings' | 'users' | 'installments' | 'representatives' | 'quotations' | 'sales' | 'profile';
+export type Screen = 'pos' | 'inventory' | 'home' | 'reports' | 'ai' | 'automation' | 'hr' | 'settings' | 'users' | 'suppliers' | 'installments' | 'representatives' | 'quotations' | 'sales' | 'profile' | 'credit';
 
 export default function App() {
   const savedUser = localStorage.getItem('erp_user');
@@ -161,7 +163,7 @@ export default function App() {
       'installments'    : ['add_invoice'],
       'representatives' : [],
       'quotations'      : ['add_invoice'],
-      'employees'       : ['employee_report'],
+      'hr'              : ['employee_report'],
       'ai'              : [],
       'automation'      : [],
       'users'           : ['user_management'],
@@ -259,8 +261,8 @@ if (!isLoggedIn) {
       {/* Main Content */}
       {activeScreen === 'pos' && (
         <div className="flex-1 flex gap-4 p-4">
-          {/* Right Side - Products (65%) */}
-          <div className="flex-[65] flex flex-col gap-4">
+          {/* Right Side - Products (60%) */}
+          <div className="flex-[60] flex flex-col gap-4">
             <ProductGrid
               products={filteredProducts}
               categories={categories}
@@ -274,8 +276,8 @@ if (!isLoggedIn) {
             />
           </div>
 
-          {/* Left Side - Cart (35%) */}
-          <div className="flex-[35]">
+          {/* Left Side - Cart (40%) */}
+          <div className="flex-[40] min-h-0 h-full">
             <Cart
               cartItems={cartItems}
               selectedCustomer={selectedCustomer}
@@ -284,6 +286,7 @@ if (!isLoggedIn) {
               onDiscountChange={setDiscount}
               onUpdateQuantity={updateQuantity}
               onClearCart={clearCart}
+              onAddToCart={addToCart}
             />
           </div>
         </div>
@@ -307,9 +310,9 @@ if (!isLoggedIn) {
         </div>
       )}
 
-      {activeScreen === 'employees' && (
+      {activeScreen === 'hr' && (
         <div className="flex-1">
-          {hasPermission('employees') ? <EmployeeExpenseManagement /> : <UnauthorizedScreen />}
+          {hasPermission('hr') ? <HRModule /> : <UnauthorizedScreen />}
         </div>
       )}
 
@@ -337,6 +340,18 @@ if (!isLoggedIn) {
       {activeScreen === 'home' && (
         <div className="flex-1">
           <Dashboard />
+        </div>
+      )}
+
+      {activeScreen === 'suppliers' && (
+        <div className="flex-1">
+          <SuppliersScreen />
+        </div>
+      )}
+
+      {activeScreen === 'credit' && (
+        <div className="flex-1">
+          <CreditDashboard />
         </div>
       )}
 

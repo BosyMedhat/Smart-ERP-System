@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search, ChevronLeft, ChevronRight, Receipt, Calendar, User, CreditCard, Package } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
+import { formatCurrency } from '../utils/currency';
 
 interface SaleItem {
   id: number;
@@ -173,9 +174,9 @@ export function SalesHistory() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700">{sale.cashier_name}</td>
-                      <td className="px-4 py-3 text-sm text-gray-700">{parseFloat(sale.total_amount).toFixed(2)} ج.م</td>
-                      <td className="px-4 py-3 text-sm text-red-600">{parseFloat(sale.discount).toFixed(2)} ج.م</td>
-                      <td className="px-4 py-3 text-sm font-bold text-green-600">{parseFloat(sale.final_amount).toFixed(2)} ج.م</td>
+                      <td className="px-4 py-3 text-sm text-gray-700">{formatCurrency(sale.total_amount)}</td>
+                      <td className="px-4 py-3 text-sm text-red-600">{formatCurrency(sale.discount)}</td>
+                      <td className="px-4 py-3 text-sm font-bold text-green-600">{formatCurrency(sale.final_amount)}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentTypeColor(sale.payment_type)}`}>
                           {getPaymentTypeLabel(sale.payment_type)}
@@ -302,8 +303,8 @@ export function SalesHistory() {
                         <tr key={index}>
                           <td className="px-4 py-2 text-sm text-gray-800">{item.product_name || `منتج #${item.product}`}</td>
                           <td className="px-4 py-2 text-sm text-gray-700 text-center">{item.quantity}</td>
-                          <td className="px-4 py-2 text-sm text-gray-700">{parseFloat(item.unit_price).toFixed(2)} ج.م</td>
-                          <td className="px-4 py-2 text-sm font-medium text-gray-800">{parseFloat(item.subtotal).toFixed(2)} ج.م</td>
+                          <td className="px-4 py-2 text-sm text-gray-700">{formatCurrency(item.unit_price)}</td>
+                          <td className="px-4 py-2 text-sm font-medium text-gray-800">{formatCurrency(item.subtotal)}</td>
                         </tr>
                       )) || (
                         <tr>
@@ -317,19 +318,19 @@ export function SalesHistory() {
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-gray-600">الإجمالي:</span>
-                    <span className="font-medium">{parseFloat(selectedSale.total_amount).toFixed(2)} ج.م</span>
+                    <span className="font-medium">{formatCurrency(selectedSale.total_amount)}</span>
                   </div>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-gray-600">الخصم:</span>
-                    <span className="font-medium text-red-600">-{parseFloat(selectedSale.discount).toFixed(2)} ج.م</span>
+                    <span className="font-medium text-red-600">-{formatCurrency(selectedSale.discount)}</span>
                   </div>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-gray-600">الضريبة:</span>
-                    <span className="font-medium text-blue-600">+{parseFloat(selectedSale.tax_amount || '0').toFixed(2)} ج.م</span>
+                    <span className="font-medium text-blue-600">+{formatCurrency(selectedSale.tax_amount || '0')}</span>
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                     <span className="text-lg font-bold text-gray-800">الصافي النهائي:</span>
-                    <span className="text-lg font-bold text-green-600">{parseFloat(selectedSale.final_amount).toFixed(2)} ج.م</span>
+                    <span className="text-lg font-bold text-green-600">{formatCurrency(selectedSale.final_amount)}</span>
                   </div>
                 </div>
               </div>

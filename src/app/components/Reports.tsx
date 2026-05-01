@@ -12,6 +12,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
+import { formatCurrency } from '../utils/currency';
 
 // Types
 interface SalesReport {
@@ -274,19 +275,19 @@ export function Reports() {
           />
           <SummaryCard
             title="إجمالي الإيرادات"
-            value={`${salesData.total_revenue.toFixed(2)} ج.م`}
+            value={formatCurrency(salesData.total_revenue)}
             icon={TrendingUp}
             color="bg-green-500"
           />
           <SummaryCard
             title="صافي الإيرادات"
-            value={`${salesData.net_revenue.toFixed(2)} ج.م`}
+            value={formatCurrency(salesData.net_revenue)}
             icon={DollarSign}
             color="bg-indigo-500"
           />
           <SummaryCard
             title="الخصومات"
-            value={`${salesData.total_discount.toFixed(2)} ج.م`}
+            value={formatCurrency(salesData.total_discount)}
             icon={CheckCircle}
             color="bg-amber-500"
           />
@@ -314,7 +315,7 @@ export function Reports() {
                     <tr key={i} className="border-b border-slate-700/50">
                       <td className="py-2">{p.product_name}</td>
                       <td className="text-center py-2">{p.quantity_sold}</td>
-                      <td className="text-left py-2">{p.revenue.toFixed(2)} ج.م</td>
+                      <td className="text-left py-2">{formatCurrency(p.revenue)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -409,7 +410,7 @@ export function Reports() {
           />
           <SummaryCard
             title="قيمة المخزون"
-            value={`${inventoryData.stock_value.toFixed(2)} ج.م`}
+            value={formatCurrency(inventoryData.stock_value)}
             icon={DollarSign}
             color="bg-green-500"
           />
@@ -485,7 +486,7 @@ export function Reports() {
                     <tr key={i} className="border-b border-slate-700/50">
                       <td className="py-2">{p.product_name}</td>
                       <td className="text-center py-2">{p.quantity_sold}</td>
-                      <td className="text-left py-2">{p.revenue.toFixed(2)} ج.م</td>
+                      <td className="text-left py-2">{formatCurrency(p.revenue)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -521,25 +522,25 @@ export function Reports() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <SummaryCard
             title="إجمالي الإيرادات"
-            value={`${financialData.total_revenue.toFixed(2)} ج.م`}
+            value={formatCurrency(financialData.total_revenue)}
             icon={DollarSign}
             color="bg-green-500"
           />
           <SummaryCard
             title="إيرادات الكاش"
-            value={`${financialData.cash_revenue.toFixed(2)} ج.م`}
+            value={formatCurrency(financialData.cash_revenue)}
             icon={CheckCircle}
             color="bg-blue-500"
           />
           <SummaryCard
             title="إيرادات الآجل"
-            value={`${financialData.credit_revenue.toFixed(2)} ج.م`}
+            value={formatCurrency(financialData.credit_revenue)}
             icon={FileText}
             color="bg-amber-500"
           />
           <SummaryCard
             title="صافي الربح المقدر"
-            value={`${financialData.net_profit_estimate.toFixed(2)} ج.م`}
+            value={formatCurrency(financialData.net_profit_estimate)}
             icon={TrendingUp}
             color="bg-indigo-500"
           />
@@ -599,7 +600,7 @@ export function Reports() {
                       <td className="py-2">{d.date}</td>
                       <td className="text-center py-2 text-green-400">{d.cash_in.toFixed(2)}</td>
                       <td className="text-center py-2 text-amber-400">{d.credit_in.toFixed(2)}</td>
-                      <td className="text-left py-2">{d.total.toFixed(2)} ج.م</td>
+                      <td className="text-left py-2">{formatCurrency(d.total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -612,11 +613,11 @@ export function Reports() {
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
             <h4 className="text-slate-400 text-sm mb-1">إجمالي الضرائب المحصلة</h4>
-            <p className="text-2xl font-bold">{financialData.total_tax_collected.toFixed(2)} ج.م</p>
+            <p className="text-2xl font-bold">{formatCurrency(financialData.total_tax_collected)}</p>
           </div>
           <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
             <h4 className="text-slate-400 text-sm mb-1">إجمالي الخصومات</h4>
-            <p className="text-2xl font-bold">{financialData.total_discount_given.toFixed(2)} ج.م</p>
+            <p className="text-2xl font-bold">{formatCurrency(financialData.total_discount_given)}</p>
           </div>
         </div>
       </div>

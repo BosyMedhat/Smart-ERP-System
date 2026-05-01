@@ -1,4 +1,5 @@
-from rest_framework import viewsets, status, serializers
+from rest_framework import viewsets, status, serializers, viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.views import APIView
@@ -117,17 +118,43 @@ class WorkShiftViewSet(viewsets.ModelViewSet):
     serializer_class = WorkShiftSerializer
     permission_classes = [IsManagerOrHasPermission]
 
-# 8. الأقساط
 class InstallmentViewSet(viewsets.ModelViewSet):
-    queryset = Installment.objects.all()
+    queryset = Installment.objects.all().select_related('sale__customer')
     serializer_class = InstallmentSerializer
     permission_classes = [IsManagerOrHasPermission]
+
+    @action(detail=True, methods=['post'])
+    def pay(self, request, pk=None):
+        installment = self.get_object()
+        amount = float(request.data.get('amount', 0))
+        if amount <= 0:
+            return Response({'error': 'المبلغ يجب أن يكون أكبر من صفر'}, status=400)
+        new_remaining = max(0, float(installment.remaining_amount) - amount)
+        installment.remaining_amount = new_remaining
+        installment.is_paid = new_remaining <= 0
+        installment.save()
+        return Response({
+            'success': True,
+            'remaining_amount': installment.remaining_amount,
+            'is_paid': installment.is_paid
+        })
 
 # 9. الموردين
 class SupplierViewSet(viewsets.ModelViewSet):
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
     permission_classes = [CanManageSuppliers]
+
+    @action(detail=True, methods=['post'])
+    def pay_debt(self, request, pk=None):
+        supplier = self.get_object()
+        amount = float(request.data.get('amount', 0))
+        if amount <= 0:
+            return Response({'error': 'المبلغ يجب أن يكون أكبر من صفر'}, status=400)
+        new_balance = max(0, float(supplier.balance) - amount)
+        supplier.balance = new_balance
+        supplier.save()
+        return Response({'success': True, 'balance': supplier.balance})
 
 # 10. المشتريات
 class PurchaseViewSet(viewsets.ModelViewSet):
@@ -170,25 +197,60 @@ class SaleViewSet(viewsets.ModelViewSet):
         return SaleSerializer
 
     def perform_create(self, serializer):
-        """حساب الضريبة والمبلغ النهائي من StoreSettings"""
-        # جلب إعدادات المتجر للحصول على نسبة الضريبة
-        from .models import StoreSettings
+        from .models import StoreSettings, Installment
+        import datetime
         settings = StoreSettings.objects.first()
-        tax_rate = settings.tax_rate if settings else 14.00  # 14% افتراضي
-
+        tax_rate = settings.tax_rate if settings else 14.00
         total = serializer.validated_data.get('total_amount', 0)
         discount = serializer.validated_data.get('discount', 0)
-
+        payment_type = serializer.validated_data.get('payment_type', 'cash')
         after_discount = float(total) - float(discount)
         tax_amount = after_discount * (float(tax_rate) / 100)
         final_amount = after_discount + tax_amount
 
-        # تمرير القيم للـ serializer عبر context
-        serializer.save(
+        sale = serializer.save(
             cashier=self.request.user,
             tax_amount=tax_amount,
             final_amount=final_amount
         )
+
+        # If credit: add to customer balance
+        if payment_type == 'credit' and sale.customer:
+            sale.customer.balance += sale.final_amount
+            sale.customer.save()
+
+        # If installment: auto-create installment record
+        if payment_type == 'installment':
+            down_payment = float(self.request.data.get('down_payment', 0))
+            months_count = int(self.request.data.get('months_count', 1))
+            due_date_str = self.request.data.get('due_date', None)
+            due_date = datetime.date.fromisoformat(due_date_str) if due_date_str else datetime.date.today()
+            installment_amount = final_amount - down_payment
+            Installment.objects.create(
+                sale=sale,
+                down_payment=down_payment,
+                months_count=months_count,
+                amount=installment_amount,
+                remaining_amount=installment_amount,
+                due_date=due_date,
+                is_paid=False
+            )
+
+
+# ==================== BARCODE LOOKUP API ====================
+class ProductByBarcodeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, barcode):
+        try:
+            product = Product.objects.get(barcode=barcode)
+            serializer = ProductSerializer(product)
+            return Response(serializer.data)
+        except Product.DoesNotExist:
+            return Response(
+                {'error': f'لم يتم العثور على منتج بالباركود: {barcode}'},
+                status=404
+            )
 
 
 # ==================== DASHBOARD API ====================

@@ -19,7 +19,8 @@ from inventory.views import (
     EmployeeViewSet, # تم إضافة استيراد الموظفين هنا 
     StoreSettingsViewSet, # إعدادات المتجر
     SaleViewSet,  # فواتير المبيعات الجديدة
-    DashboardView  # Dashboard API
+    DashboardView,  # Dashboard API
+    ProductByBarcodeView  # Barcode lookup API
 )
 
 # إنشاء الـ Router الرئيسي للمشروع
@@ -48,4 +49,6 @@ urlpatterns = [
     path('api/ai/', include('ai_assistant.urls')),
     path('api/dashboard/', DashboardView.as_view()),
     path('api/reports/', include('reports.urls')),
+    path('api/hr/', include('hr.urls')),
+    path('api/products/barcode/<str:barcode>/', ProductByBarcodeView.as_view()),
 ]

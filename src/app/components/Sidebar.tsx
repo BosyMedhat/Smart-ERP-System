@@ -1,4 +1,4 @@
-import { Home, Package, ShoppingCart, FileText, Brain, Zap, Users, Settings, Shield, CreditCard, UserCheck, FileCheck, LogOut, Receipt } from 'lucide-react';
+import { Home, Package, ShoppingCart, FileText, Brain, Zap, Users, Settings, Shield, CreditCard, UserCheck, FileCheck, LogOut, Receipt, Briefcase, Truck, HandCoins } from 'lucide-react';
 import { Screen } from '../App';
 
 interface SidebarProps {
@@ -14,9 +14,11 @@ const menuItems: { key: string; icon: typeof Home; label: string; screen: Screen
   { key: 'pos', icon: ShoppingCart, label: 'نقطة البيع', screen: 'pos' },
   { key: 'sales', icon: Receipt, label: 'سجل المبيعات', screen: 'sales' },
   { key: 'installments', icon: CreditCard, label: 'التقسيط', screen: 'installments' },
+  { key: 'credit', icon: HandCoins, label: 'الآجل والديون', screen: 'credit' },
+  { key: 'suppliers', icon: Truck, label: 'الموردين', screen: 'suppliers' },
   { key: 'representatives', icon: UserCheck, label: 'المناديب', screen: 'representatives' },
   { key: 'quotations', icon: FileCheck, label: 'عروض الأسعار', screen: 'quotations' },
-  { key: 'employees', icon: Users, label: 'الموظفين', screen: 'employees' },
+  { key: 'hr', icon: Briefcase, label: 'الموارد البشرية', screen: 'hr' },
   { key: 'ai', icon: Brain, label: 'الذكاء الاصطناعي', screen: 'ai' },
   { key: 'automation', icon: Zap, label: 'الأتمتة', screen: 'automation' },
   { key: 'user_management', icon: Shield, label: 'الصلاحيات', screen: 'users' },
@@ -35,7 +37,7 @@ export function Sidebar({ activeScreen, onScreenChange, currentUser, onLogout }:
       'installments'    : ['add_invoice'],
       'representatives' : [],
       'quotations'      : ['add_invoice'],
-      'employees'       : ['employee_report'],
+      'hr'              : ['employee_report'],
       'ai'              : [],
       'automation'      : [],
       'users'           : ['user_management'],
