@@ -20,7 +20,8 @@ from inventory.views import (
     StoreSettingsViewSet, # إعدادات المتجر
     SaleViewSet,  # فواتير المبيعات الجديدة
     DashboardView,  # Dashboard API
-    ProductByBarcodeView  # Barcode lookup API
+    ProductByBarcodeView,  # Barcode lookup API
+    SupplierEvaluationViewSet
 )
 
 # إنشاء الـ Router الرئيسي للمشروع
@@ -41,6 +42,7 @@ router.register(r'employees', EmployeeViewSet) # تم إضافة مسار الم
 router.register(r'users', UserViewSet) # تم إضافة مسار المستخدمين هنا 
 router.register(r'settings', StoreSettingsViewSet) # إعدادات المتجر
 router.register(r'sales', SaleViewSet)  # فواتير المبيعات الجديدة
+router.register(r'supplier-evaluations', SupplierEvaluationViewSet, basename='supplier-evaluations')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

@@ -147,6 +147,63 @@ class Supplier(models.Model):
     def __str__(self):
         return self.name
 
+# 7.5. تقييمات الموردين
+class SupplierEvaluation(models.Model):
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.CASCADE,
+        related_name='evaluations',
+        verbose_name='المورد'
+    )
+    delivery_rating = models.PositiveSmallIntegerField(
+        default=3,
+        verbose_name='تقييم الاستلام'
+    )
+    quality_rating = models.PositiveSmallIntegerField(
+        default=3,
+        verbose_name='تقييم الجودة'
+    )
+    price_rating = models.PositiveSmallIntegerField(
+        default=3,
+        verbose_name='تقييم السعر'
+    )
+    communication_rating = models.PositiveSmallIntegerField(
+        default=3,
+        verbose_name='تقييم التواصل'
+    )
+    notes = models.TextField(blank=True, verbose_name='ملاحظات')
+    evaluated_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='بواسطة'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'تقييم المورد'
+        verbose_name_plural = 'تقييمات الموردين'
+
+    @property
+    def average_score(self):
+        from decimal import Decimal
+        total = (self.delivery_rating + self.quality_rating +
+                 self.price_rating + self.communication_rating)
+        return round(Decimal(total) / Decimal(4), 2)
+
+    def save(self, *args, **kwargs):
+        for field in ['delivery_rating', 'quality_rating',
+                      'price_rating', 'communication_rating']:
+            val = getattr(self, field)
+            if not (1 <= val <= 5):
+                raise ValueError(f'{field} يجب أن يكون بين 1 و 5')
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"تقييم {self.supplier.name} - {self.created_at.date()}"
+
 # 8. المشتريات
 class Purchase(models.Model):
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='purchases', verbose_name="المورد")

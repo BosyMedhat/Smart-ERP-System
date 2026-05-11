@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, X, Phone, Mail, MapPin, ShoppingCart, DollarSign, Building2, Search } from 'lucide-react';
+import { Plus, X, Phone, Mail, MapPin, ShoppingCart, DollarSign, Building2, Search, Star } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
 import { formatCurrency } from '../utils/currency';
 import { notify } from '@/lib/notifications';
@@ -14,7 +14,30 @@ interface Supplier {
   balance: number;
   purchase_count: number;
   total_purchases: number;
+  supplier_score: number | null;
+  evaluation_count: number;
   created_at: string;
+}
+
+interface Evaluation {
+  id: number;
+  supplier: number;
+  delivery_rating: number;
+  quality_rating: number;
+  price_rating: number;
+  communication_rating: number;
+  notes: string;
+  evaluated_by_name: string;
+  average_score: number;
+  created_at: string;
+}
+
+interface EvalForm {
+  delivery_rating: number;
+  quality_rating: number;
+  price_rating: number;
+  communication_rating: number;
+  notes: string;
 }
 
 interface Product {
@@ -38,7 +61,7 @@ interface Purchase {
 }
 
 export function SuppliersScreen() {
-  const [activeTab, setActiveTab] = useState<'suppliers' | 'purchases' | 'debts'>('suppliers');
+  const [activeTab, setActiveTab] = useState<'suppliers' | 'purchases' | 'debts' | 'evaluations'>('suppliers');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -51,6 +74,18 @@ export function SuppliersScreen() {
   const [payAmount, setPayAmount] = useState('');
   const [supplierForm, setSupplierForm] = useState({ name: '', phone: '', email: '', company: '', address: '' });
   const [purchaseForm, setPurchaseForm] = useState({ supplier: '', product: '', quantity: '', cost_price: '', invoice_number: '', notes: '' });
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [evalLoading, setEvalLoading] = useState(false);
+  const [showEvalModal, setShowEvalModal] = useState(false);
+  const [evalTargetId, setEvalTargetId] = useState<number | null>(null);
+  const [evalTargetName, setEvalTargetName] = useState('');
+  const [evalForm, setEvalForm] = useState<EvalForm>({
+    delivery_rating: 3,
+    quality_rating: 3,
+    price_rating: 3,
+    communication_rating: 3,
+    notes: ''
+  });
 
   const fetchAll = async () => {
     try {
@@ -67,6 +102,12 @@ export function SuppliersScreen() {
   };
 
   useEffect(() => { fetchAll(); }, []);
+
+  useEffect(() => {
+    if (activeTab === 'evaluations') {
+      fetchEvaluations();
+    }
+  }, [activeTab]);
 
   const filteredSuppliers = suppliers.filter(s =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -129,6 +170,41 @@ export function SuppliersScreen() {
     } catch (e) { notify.error('حدث خطأ'); }
   };
 
+  const fetchEvaluations = async (supplierId?: number) => {
+    setEvalLoading(true);
+    try {
+      const url = supplierId
+        ? `/supplier-evaluations/?supplier=${supplierId}`
+        : '/supplier-evaluations/';
+      const res = await apiClient.get(url);
+      setEvaluations(res.data);
+    } catch {
+      notify.error('فشل في تحميل التقييمات');
+    } finally {
+      setEvalLoading(false);
+    }
+  };
+
+  const handleSubmitEval = async () => {
+    if (!evalTargetId) return;
+    try {
+      await apiClient.post('/supplier-evaluations/', {
+        supplier: evalTargetId,
+        ...evalForm
+      });
+      notify.success('تم حفظ التقييم بنجاح');
+      setShowEvalModal(false);
+      setEvalForm({
+        delivery_rating: 3, quality_rating: 3,
+        price_rating: 3, communication_rating: 3, notes: ''
+      });
+      fetchAll();
+      fetchEvaluations();
+    } catch {
+      notify.error('فشل في حفظ التقييم');
+    }
+  };
+
   const totalDebt = suppliers.reduce((sum, s) => sum + Number(s.balance), 0);
   const suppliersWithDebt = suppliers.filter(s => Number(s.balance) > 0).length;
 
@@ -170,7 +246,7 @@ export function SuppliersScreen() {
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-gray-200">
-        {[{ key: 'suppliers', label: '🏭 الموردين' }, { key: 'purchases', label: '🛒 المشتريات' }, { key: 'debts', label: '💰 الديون' }].map(tab => (
+        {[{ key: 'suppliers', label: '🏭 الموردين' }, { key: 'purchases', label: '🛒 المشتريات' }, { key: 'debts', label: '💰 الديون' }, { key: 'evaluations', label: '⭐ التقييمات' }].map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key as any)}
             className={`px-5 py-2.5 font-bold text-sm rounded-t-xl transition-colors ${activeTab === tab.key ? 'bg-white border-b-2 border-[#3B82F6] text-[#3B82F6]' : 'text-gray-500 hover:text-gray-700'}`}>
             {tab.label}
@@ -198,6 +274,7 @@ export function SuppliersScreen() {
                   <th className="px-4 py-3 text-right">عدد المشتريات</th>
                   <th className="px-4 py-3 text-right">إجمالي المشتريات</th>
                   <th className="px-4 py-3 text-right">الدين المستحق</th>
+                  <th className="px-4 py-3 text-center">التقييم</th>
                   <th className="px-4 py-3 text-center">الإجراءات</th>
                 </tr>
               </thead>
@@ -219,8 +296,34 @@ export function SuppliersScreen() {
                         {Number(s.balance) > 0 ? formatCurrency(s.balance) : 'لا يوجد'}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      {s.supplier_score !== null && s.supplier_score !== undefined ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                            s.supplier_score >= 4 ? 'bg-green-100 text-green-700' :
+                            s.supplier_score >= 3 ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            <Star size={10} fill="currentColor" /> {s.supplier_score}
+                          </span>
+                          <span className="text-[10px] text-gray-400">({s.evaluation_count} تقييم)</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">لم يُقيَّم</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
+                        <button onClick={() => {
+                          setEvalTargetId(s.id);
+                          setEvalTargetName(s.name);
+                          setEvalForm({
+                            delivery_rating: 3, quality_rating: 3,
+                            price_rating: 3, communication_rating: 3, notes: ''
+                          });
+                          setShowEvalModal(true);
+                        }}
+                          className="px-3 py-1 border border-blue-300 text-blue-600 text-xs font-bold rounded-lg hover:bg-blue-50 transition">تقييم</button>
                         {Number(s.balance) > 0 && (
                           <button onClick={() => { setSelectedSupplier(s); setShowPayModal(true); }}
                             className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-lg hover:bg-green-200 transition flex items-center gap-1">
@@ -302,6 +405,61 @@ export function SuppliersScreen() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Tab: Evaluations */}
+      {activeTab === 'evaluations' && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          {evalLoading && (
+            <div className="p-16 text-center text-gray-400">جاري التحميل...</div>
+          )}
+          {!evalLoading && evaluations.length === 0 && (
+            <div className="p-16 text-center text-gray-400">لا توجد تقييمات بعد</div>
+          )}
+          {!evalLoading && evaluations.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 text-xs font-bold text-gray-600 uppercase">
+                  <tr>
+                    <th className="px-4 py-3 text-right">المورد</th>
+                    <th className="px-4 py-3 text-center">تسليم</th>
+                    <th className="px-4 py-3 text-center">جودة</th>
+                    <th className="px-4 py-3 text-center">سعر</th>
+                    <th className="px-4 py-3 text-center">تواصل</th>
+                    <th className="px-4 py-3 text-center">المتوسط</th>
+                    <th className="px-4 py-3 text-right">بواسطة</th>
+                    <th className="px-4 py-3 text-right">التاريخ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {evaluations.map(ev => (
+                    <tr key={ev.id} className="hover:bg-gray-50 transition">
+                      <td className="px-4 py-3 font-bold text-gray-800">
+                        {suppliers.find(s => s.id === ev.supplier)?.name || ev.supplier}
+                      </td>
+                      {([ev.delivery_rating, ev.quality_rating, ev.price_rating, ev.communication_rating] as number[]).map((r, idx) => (
+                        <td key={idx} className="px-4 py-3 text-center">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${
+                            r >= 5 ? 'bg-emerald-100 text-emerald-700' :
+                            r >= 4 ? 'bg-green-100 text-green-700' :
+                            r >= 3 ? 'bg-yellow-100 text-yellow-700' :
+                            r >= 2 ? 'bg-orange-100 text-orange-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>{r}</span>
+                        </td>
+                      ))}
+                      <td className="px-4 py-3 text-center font-bold text-blue-700">
+                        <span className="inline-flex items-center gap-1"><Star size={12} fill="currentColor" /> {ev.average_score}</span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 text-sm">{ev.evaluated_by_name}</td>
+                      <td className="px-4 py-3 text-gray-500 text-sm">{new Date(ev.created_at).toLocaleDateString('ar-EG')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -392,6 +550,60 @@ export function SuppliersScreen() {
               <button onClick={handleSavePurchase} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl">
                 حفظ فاتورة الشراء ✅
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Evaluation */}
+      {showEvalModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-lg font-bold text-gray-800">تقييم المورد: {evalTargetName}</h2>
+              <button onClick={() => setShowEvalModal(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="space-y-4">
+              {[
+                { label: 'تسليم الطلبات', key: 'delivery_rating' as const },
+                { label: 'جودة البضاعة', key: 'quality_rating' as const },
+                { label: 'تنافسية الأسعار', key: 'price_rating' as const },
+                { label: 'جودة التواصل', key: 'communication_rating' as const },
+              ].map(field => (
+                <div key={field.key} className="flex items-center justify-between">
+                  <label className="text-sm font-bold text-gray-700">{field.label}</label>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setEvalForm(prev => ({ ...prev, [field.key]: star }))}
+                        className="text-xl transition-colors"
+                        style={{ color: star <= evalForm[field.key] ? '#F59E0B' : '#D1D5DB' }}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">ملاحظات إضافية (اختياري)</label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
+                  rows={3}
+                  value={evalForm.notes}
+                  onChange={e => setEvalForm({ ...evalForm, notes: e.target.value })}
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={handleSubmitEval} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition">
+                  حفظ التقييم
+                </button>
+                <button onClick={() => setShowEvalModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition">
+                  إلغاء
+                </button>
+              </div>
             </div>
           </div>
         </div>

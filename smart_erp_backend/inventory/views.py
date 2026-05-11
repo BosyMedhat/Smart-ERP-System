@@ -14,14 +14,16 @@ from .models import (
     Supplier, Purchase, Expense, Treasury, StockMovement,
     Employee,  # تم إضافة الموظفين
     StoreSettings,  # إعدادات المتجر
-    Sale, SaleItem  # فواتير المبيعات الجديدة
+    Sale, SaleItem,  # فواتير المبيعات الجديدة
+    SupplierEvaluation
 )
 from .serializers import (
     ProductSerializer, InvoiceSerializer, WorkShiftSerializer, InstallmentSerializer,
     SupplierSerializer, PurchaseSerializer, ExpenseSerializer, TreasurySerializer, 
     StockMovementSerializer,
     EmployeeSerializer, # تم إضافة السيرياليزر للموظفين
-    SaleItemSerializer, SaleSerializer, SaleItemWriteSerializer, SaleWriteSerializer
+    SaleItemSerializer, SaleSerializer, SaleItemWriteSerializer, SaleWriteSerializer,
+    SupplierEvaluationSerializer
 )
 from .permissions import (
     CanManageProducts,
@@ -157,11 +159,38 @@ class SupplierViewSet(viewsets.ModelViewSet):
         supplier.save()
         return Response({'success': True, 'balance': supplier.balance})
 
+    @action(detail=True, methods=['get'], url_path='evaluations')
+    def evaluations(self, request, pk=None):
+        supplier = self.get_object()
+        evals = supplier.evaluations.select_related(
+            'evaluated_by'
+        ).order_by('-created_at')
+        serializer = SupplierEvaluationSerializer(evals, many=True)
+        return Response(serializer.data)
+
 # 10. المشتريات
 class PurchaseViewSet(viewsets.ModelViewSet):
     queryset = Purchase.objects.all()
     serializer_class = PurchaseSerializer
     permission_classes = [CanManageSuppliers]
+
+# 9.5. تقييمات الموردين
+class SupplierEvaluationViewSet(viewsets.ModelViewSet):
+    serializer_class = SupplierEvaluationSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'post', 'delete']
+
+    def get_queryset(self):
+        supplier_id = self.request.query_params.get('supplier')
+        qs = SupplierEvaluation.objects.select_related(
+            'supplier', 'evaluated_by'
+        )
+        if supplier_id:
+            qs = qs.filter(supplier_id=supplier_id)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(evaluated_by=self.request.user)
 
 # 11. حركات المخزن
 class StockMovementViewSet(viewsets.ModelViewSet):

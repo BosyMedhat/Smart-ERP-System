@@ -2,7 +2,8 @@ from rest_framework import serializers
 from .models import (
     Product, Invoice, WorkShift, Installment, 
     Supplier, Purchase, Expense, Treasury, 
-    StockMovement, Employee, Sale, SaleItem
+    StockMovement, Employee, Sale, SaleItem,
+    SupplierEvaluation
 )
 
 # 1. الموظفين
@@ -60,6 +61,8 @@ class WorkShiftSerializer(serializers.ModelSerializer):
 class SupplierSerializer(serializers.ModelSerializer):
     purchase_count = serializers.SerializerMethodField()
     total_purchases = serializers.SerializerMethodField()
+    supplier_score = serializers.SerializerMethodField()
+    evaluation_count = serializers.SerializerMethodField()
 
     def get_purchase_count(self, obj):
         return obj.purchases.count()
@@ -69,9 +72,45 @@ class SupplierSerializer(serializers.ModelSerializer):
         result = obj.purchases.aggregate(total=Sum('total_amount'))
         return result['total'] or 0
 
+    def get_supplier_score(self, obj):
+        from decimal import Decimal
+        evals = obj.evaluations.all()
+        if not evals.exists():
+            return None
+        scores = [e.average_score for e in evals]
+        total = sum(scores)
+        return round(total / Decimal(len(scores)), 2)
+
+    def get_evaluation_count(self, obj):
+        return obj.evaluations.count()
+
     class Meta:
         model = Supplier
-        fields = '__all__'
+        fields = [
+            'id', 'name', 'phone', 'email', 'company',
+            'address', 'balance', 'created_at',
+            'purchase_count', 'total_purchases',
+            'supplier_score', 'evaluation_count'
+        ]
+
+class SupplierEvaluationSerializer(serializers.ModelSerializer):
+    average_score = serializers.ReadOnlyField()
+    evaluated_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SupplierEvaluation
+        fields = [
+            'id', 'supplier', 'delivery_rating', 'quality_rating',
+            'price_rating', 'communication_rating', 'notes',
+            'evaluated_by', 'evaluated_by_name',
+            'average_score', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'evaluated_by']
+
+    def get_evaluated_by_name(self, obj):
+        if obj.evaluated_by:
+            return obj.evaluated_by.get_full_name() or obj.evaluated_by.username
+        return 'غير محدد'
 
 # 8. المشتريات
 class PurchaseSerializer(serializers.ModelSerializer):
