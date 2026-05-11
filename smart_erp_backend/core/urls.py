@@ -1,5 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 
 # 1. استيراد موديول العملاء والـ login
@@ -54,3 +56,9 @@ urlpatterns = [
     path('api/hr/', include('hr.urls')),
     path('api/products/barcode/<str:barcode>/', ProductByBarcodeView.as_view()),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(
+        settings.MEDIA_URL,
+        document_root=settings.MEDIA_ROOT
+    )

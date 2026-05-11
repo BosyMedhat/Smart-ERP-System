@@ -171,6 +171,18 @@ class SupplierEvaluation(models.Model):
         default=3,
         verbose_name='تقييم التواصل'
     )
+    invoice_image = models.ImageField(
+        upload_to='supplier_evaluations/',
+        null=True,
+        blank=True,
+        verbose_name='صورة الفاتورة'
+    )
+    goods_image = models.ImageField(
+        upload_to='supplier_evaluations/',
+        null=True,
+        blank=True,
+        verbose_name='صورة البضاعة'
+    )
     notes = models.TextField(blank=True, verbose_name='ملاحظات')
     evaluated_by = models.ForeignKey(
         'auth.User',

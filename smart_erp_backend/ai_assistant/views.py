@@ -4,6 +4,8 @@ from rest_framework.decorators import api_view
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework import status
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Sum, Count, F
@@ -358,3 +360,107 @@ class PDFProductImportView(APIView):
                 'status': 'error',
                 'message': f'خطأ غير متوقع: {str(e)}'
             }, status=500)
+
+
+class AnalyzeInvoiceView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        image_file = request.FILES.get('image')
+        if not image_file:
+            return Response(
+                {'error': 'لم يتم إرفاق صورة'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file type
+        allowed_types = ['image/jpeg', 'image/png',
+                         'image/jpg', 'image/webp']
+        if image_file.content_type not in allowed_types:
+            return Response(
+                {'error': 'نوع الملف غير مدعوم. استخدم JPG أو PNG'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file size (max 5MB)
+        if image_file.size > 5 * 1024 * 1024:
+            return Response(
+                {'error': 'حجم الصورة يتجاوز 5 ميجابايت'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            import base64
+            image_data = base64.b64encode(
+                image_file.read()
+            ).decode('utf-8')
+
+            prompt = """أنت نظام استخراج بيانات من فواتير.
+حلل هذه الصورة واستخرج المعلومات التالية بتنسيق JSON فقط:
+{
+  "supplier_name": "اسم المورد أو الشركة",
+  "invoice_number": "رقم الفاتورة",
+  "invoice_date": "تاريخ الفاتورة",
+  "total_amount": "المبلغ الإجمالي",
+  "items": [
+    {
+      "name": "اسم المنتج",
+      "quantity": "الكمية",
+      "unit_price": "سعر الوحدة",
+      "total": "الإجمالي"
+    }
+  ],
+  "notes": "أي ملاحظات مهمة"
+}
+إذا لم تتمكن من استخراج قيمة معينة، اكتب null.
+أجب بـ JSON فقط بدون أي نص إضافي."""
+
+            import requests as req
+            ollama_response = req.post(
+                'http://localhost:11434/api/generate',
+                json={
+                    'model': 'qwen2.5:3b',
+                    'prompt': prompt,
+                    'images': [image_data],
+                    'stream': False,
+                    'keep_alive': -1
+                },
+                timeout=60
+            )
+
+            if ollama_response.status_code != 200:
+                return Response(
+                    {'error': 'فشل في الاتصال بنموذج الذكاء الاصطناعي'},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+
+            result_text = ollama_response.json().get(
+                'response', ''
+            ).strip()
+
+            # Try to parse as JSON
+            import json
+            try:
+                # Clean markdown code blocks if present
+                clean = result_text.replace(
+                    '```json', ''
+                ).replace('```', '').strip()
+                parsed = json.loads(clean)
+                return Response({
+                    'success': True,
+                    'data': parsed,
+                    'raw': result_text
+                })
+            except json.JSONDecodeError:
+                return Response({
+                    'success': True,
+                    'data': None,
+                    'raw': result_text
+                })
+
+        except Exception as e:
+            return Response(
+                {'error': f'حدث خطأ: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -3,6 +3,7 @@ import { Mic, AlertTriangle, TrendingUp, CheckCircle, Brain, ShoppingCart, Packa
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 import apiClient from '../../api/axiosConfig';
+import { notify } from '../../lib/notifications';
 
 // PDF Import Types
 interface ExtractedProduct {
@@ -72,6 +73,20 @@ interface AnalyticsData {
   sales_trend: { month: string; actual: number | null; forecast: number | null }[];
 }
 
+interface InvoiceData {
+  supplier_name: string | null;
+  invoice_number: string | null;
+  invoice_date: string | null;
+  total_amount: string | null;
+  items: {
+    name: string;
+    quantity: string;
+    unit_price: string;
+    total: string;
+  }[];
+  notes: string | null;
+}
+
 export function AICenter() {
   // Voice state
   const [aiResponse, setAiResponse] = useState<string>('');
@@ -92,6 +107,14 @@ export function AICenter() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingMessage, setLoadingMessage] = useState('جارٍ قراءة الملف...');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Invoice Analysis state
+  const [invoiceImage, setInvoiceImage] = useState<File | null>(null);
+  const [invoicePreview, setInvoicePreview] = useState<string | null>(null);
+  const [invoiceAnalyzing, setInvoiceAnalyzing] = useState(false);
+  const [invoiceResult, setInvoiceResult] = useState<InvoiceData | null>(null);
+  const [invoiceRaw, setInvoiceRaw] = useState<string>('');
+  const [invoiceError, setInvoiceError] = useState<string>('');
 
   // Fetch analytics on mount
   useEffect(() => {
@@ -315,6 +338,54 @@ export function AICenter() {
     setImportSuccess(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  // Invoice Analysis handlers
+  const handleInvoiceUpload = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setInvoiceImage(file);
+    setInvoiceResult(null);
+    setInvoiceRaw('');
+    setInvoiceError('');
+    const reader = new FileReader();
+    reader.onload = () =>
+      setInvoicePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleAnalyzeInvoice = async () => {
+    if (!invoiceImage) return;
+    setInvoiceAnalyzing(true);
+    setInvoiceError('');
+    setInvoiceResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('image', invoiceImage);
+      const res = await apiClient.post(
+        '/ai/analyze-invoice/',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      if (res.data.data) {
+        setInvoiceResult(res.data.data);
+        notify.success('تم تحليل الفاتورة بنجاح');
+      } else {
+        setInvoiceRaw(res.data.raw || '');
+        setInvoiceError(
+          'لم يتمكن الذكاء الاصطناعي من استخراج البيانات بشكل منظم'
+        );
+      }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })
+        ?.response?.data?.error || 'فشل في تحليل الفاتورة';
+      setInvoiceError(msg);
+      notify.error(msg);
+    } finally {
+      setInvoiceAnalyzing(false);
     }
   };
 
@@ -893,6 +964,147 @@ export function AICenter() {
                     </button>
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Invoice Image Analysis Section */}
+      <div className="bg-white rounded-2xl shadow p-6 mt-6" dir="rtl">
+        <h3 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+          <span>🧾</span> تحليل صورة الفاتورة بالذكاء الاصطناعي
+        </h3>
+        <p className="text-gray-500 text-sm mb-4">
+          ارفع صورة فاتورة مورد وسيقوم الذكاء الاصطناعي باستخراج
+          جميع البيانات تلقائياً
+        </p>
+
+        {/* Upload Area */}
+        <label className="block w-full border-2 border-dashed
+          border-blue-300 rounded-xl p-6 text-center cursor-pointer
+          hover:border-blue-500 hover:bg-blue-50 transition-colors">
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleInvoiceUpload}
+          />
+          {invoicePreview ? (
+            <img
+              src={invoicePreview}
+              alt="معاينة الفاتورة"
+              className="max-h-48 mx-auto rounded-lg object-contain"
+            />
+          ) : (
+            <div>
+              <div className="text-4xl mb-2">📄</div>
+              <p className="text-blue-600 font-medium">
+                اضغط لرفع صورة الفاتورة
+              </p>
+              <p className="text-gray-400 text-xs mt-1">
+                JPG, PNG, WEBP — بحد أقصى 5MB
+              </p>
+            </div>
+          )}
+        </label>
+
+        {/* Analyze Button */}
+        {invoiceImage && (
+          <button
+            onClick={handleAnalyzeInvoice}
+            disabled={invoiceAnalyzing}
+            className="w-full mt-4 bg-blue-600 hover:bg-blue-700
+              disabled:bg-blue-300 text-white font-bold py-3
+              rounded-xl transition-colors flex items-center
+              justify-center gap-2">
+            {invoiceAnalyzing ? (
+              <>
+                <span className="animate-spin">⟳</span>
+                جاري التحليل...
+              </>
+            ) : (
+              <>
+                <span>🤖</span>
+                تحليل الفاتورة بالذكاء الاصطناعي
+              </>
+            )}
+          </button>
+        )}
+
+        {/* Error */}
+        {invoiceError && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-200
+            rounded-xl text-red-700 text-sm">
+            ⚠️ {invoiceError}
+            {invoiceRaw && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs">
+                  عرض الرد الخام
+                </summary>
+                <pre className="text-xs mt-1 whitespace-pre-wrap
+                  text-gray-600">{invoiceRaw}</pre>
+              </details>
+            )}
+          </div>
+        )}
+
+        {/* Results */}
+        {invoiceResult && (
+          <div className="mt-4 bg-green-50 border border-green-200
+            rounded-xl p-4">
+            <h4 className="font-bold text-green-800 mb-3">
+              ✅ البيانات المستخرجة
+            </h4>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {[
+                ['المورد', invoiceResult.supplier_name],
+                ['رقم الفاتورة', invoiceResult.invoice_number],
+                ['التاريخ', invoiceResult.invoice_date],
+                ['الإجمالي', invoiceResult.total_amount],
+                ['ملاحظات', invoiceResult.notes],
+              ].map(([label, value]) => value && (
+                <div key={String(label)}
+                     className="bg-white rounded-lg p-2 border
+                                border-green-100">
+                  <span className="text-gray-500 text-xs">{String(label)}</span>
+                  <p className="font-medium text-gray-800">{String(value)}</p>
+                </div>
+              ))}
+            </div>
+
+            {invoiceResult.items && invoiceResult.items.length > 0 && (
+              <div className="mt-3">
+                <h5 className="font-bold text-gray-700 mb-2 text-sm">
+                  المنتجات:
+                </h5>
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-green-100">
+                      <th className="p-2 text-right">المنتج</th>
+                      <th className="p-2 text-center">الكمية</th>
+                      <th className="p-2 text-center">السعر</th>
+                      <th className="p-2 text-center">الإجمالي</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoiceResult.items.map((item, i) => (
+                      <tr key={i}
+                          className="border-t border-green-100">
+                        <td className="p-2">{item.name}</td>
+                        <td className="p-2 text-center">
+                          {item.quantity}
+                        </td>
+                        <td className="p-2 text-center">
+                          {item.unit_price}
+                        </td>
+                        <td className="p-2 text-center">
+                          {item.total}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
