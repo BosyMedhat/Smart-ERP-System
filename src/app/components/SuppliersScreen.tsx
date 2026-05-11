@@ -87,6 +87,11 @@ export function SuppliersScreen() {
     notes: ''
   });
 
+  const [invoiceImageFile, setInvoiceImageFile] = useState<File | null>(null);
+  const [goodsImageFile, setGoodsImageFile] = useState<File | null>(null);
+  const [invoicePreview, setInvoicePreview] = useState<string | null>(null);
+  const [goodsPreview, setGoodsPreview] = useState<string | null>(null);
+
   const fetchAll = async () => {
     try {
       const [suppRes, purRes, prodRes] = await Promise.all([
@@ -185,12 +190,48 @@ export function SuppliersScreen() {
     }
   };
 
+  const handleImageSelect = (
+    type: 'invoice' | 'goods',
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      if (type === 'invoice') {
+        setInvoiceImageFile(file);
+        setInvoicePreview(result);
+      } else {
+        setGoodsImageFile(file);
+        setGoodsPreview(result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmitEval = async () => {
     if (!evalTargetId) return;
     try {
-      await apiClient.post('/supplier-evaluations/', {
-        supplier: evalTargetId,
-        ...evalForm
+      const formData = new FormData();
+      formData.append('supplier', String(evalTargetId));
+      formData.append('delivery_rating',
+        String(evalForm.delivery_rating));
+      formData.append('quality_rating',
+        String(evalForm.quality_rating));
+      formData.append('price_rating',
+        String(evalForm.price_rating));
+      formData.append('communication_rating',
+        String(evalForm.communication_rating));
+      formData.append('notes', evalForm.notes);
+      if (invoiceImageFile) {
+        formData.append('invoice_image', invoiceImageFile);
+      }
+      if (goodsImageFile) {
+        formData.append('goods_image', goodsImageFile);
+      }
+      await apiClient.post('/supplier-evaluations/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
       notify.success('تم حفظ التقييم بنجاح');
       setShowEvalModal(false);
@@ -198,6 +239,10 @@ export function SuppliersScreen() {
         delivery_rating: 3, quality_rating: 3,
         price_rating: 3, communication_rating: 3, notes: ''
       });
+      setInvoiceImageFile(null);
+      setGoodsImageFile(null);
+      setInvoicePreview(null);
+      setGoodsPreview(null);
       fetchAll();
       fetchEvaluations();
     } catch {
@@ -596,11 +641,92 @@ export function SuppliersScreen() {
                   onChange={e => setEvalForm({ ...evalForm, notes: e.target.value })}
                 />
               </div>
+
+              <div style={{marginTop: '12px'}}>
+                <p style={{
+                  fontSize: '13px',
+                  color: 'var(--color-text-secondary)',
+                  marginBottom: '8px'
+                }}>
+                  صور اختيارية
+                </p>
+
+                <div style={{display: 'flex', gap: '12px'}}>
+
+                  {/* Invoice image */}
+                  <label style={{
+                    flex: 1, border: '2px dashed #CBD5E1',
+                    borderRadius: '10px', padding: '10px',
+                    textAlign: 'center', cursor: 'pointer',
+                    fontSize: '12px', color: '#64748B'
+                  }}>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      style={{display: 'none'}}
+                      onChange={(e) => handleImageSelect('invoice', e)}
+                    />
+                    {invoicePreview ? (
+                      <img
+                        src={invoicePreview}
+                        alt="فاتورة"
+                        style={{
+                          height: '60px', width: '100%',
+                          objectFit: 'cover', borderRadius: '6px'
+                        }}
+                      />
+                    ) : (
+                      <div>
+                        <div style={{fontSize: '20px'}}>🧾</div>
+                        <div>صورة الفاتورة</div>
+                      </div>
+                    )}
+                  </label>
+
+                  {/* Goods image */}
+                  <label style={{
+                    flex: 1, border: '2px dashed #CBD5E1',
+                    borderRadius: '10px', padding: '10px',
+                    textAlign: 'center', cursor: 'pointer',
+                    fontSize: '12px', color: '#64748B'
+                  }}>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      style={{display: 'none'}}
+                      onChange={(e) => handleImageSelect('goods', e)}
+                    />
+                    {goodsPreview ? (
+                      <img
+                        src={goodsPreview}
+                        alt="بضاعة"
+                        style={{
+                          height: '60px', width: '100%',
+                          objectFit: 'cover', borderRadius: '6px'
+                        }}
+                      />
+                    ) : (
+                      <div>
+                        <div style={{fontSize: '20px'}}>📦</div>
+                        <div>صورة البضاعة</div>
+                      </div>
+                    )}
+                  </label>
+
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-2">
                 <button onClick={handleSubmitEval} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition">
                   حفظ التقييم
                 </button>
-                <button onClick={() => setShowEvalModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition">
+                <button onClick={() => {
+                  setShowEvalModal(false);
+                  setInvoiceImageFile(null);
+                  setGoodsImageFile(null);
+                  setInvoicePreview(null);
+                  setGoodsPreview(null);
+                }} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition">
                   إلغاء
                 </button>
               </div>
