@@ -7,9 +7,10 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Sum, Count, F as models_F
+from customers.models import Customer
 # استيراد كل الموديلات والسيرياليزر (تأكدي من وجود Employee في الموديلات)
 from .models import (
-    Product, Invoice, WorkShift, Installment, 
+    Product, Invoice, WorkShift, Installment,
     Supplier, Purchase, Expense, Treasury, StockMovement,
     Employee,  # تم إضافة الموظفين
     StoreSettings,  # إعدادات المتجر
@@ -197,44 +198,89 @@ class SaleViewSet(viewsets.ModelViewSet):
         return SaleSerializer
 
     def perform_create(self, serializer):
+        from django.db import transaction
+        from django.core.exceptions import ValidationError
         from .models import StoreSettings, Installment
+        from decimal import Decimal
         import datetime
-        settings = StoreSettings.objects.first()
-        tax_rate = settings.tax_rate if settings else 14.00
-        total = serializer.validated_data.get('total_amount', 0)
-        discount = serializer.validated_data.get('discount', 0)
+
+        # Validate: installment and credit sales require a customer
         payment_type = serializer.validated_data.get('payment_type', 'cash')
-        after_discount = float(total) - float(discount)
-        tax_amount = after_discount * (float(tax_rate) / 100)
-        final_amount = after_discount + tax_amount
+        customer = serializer.validated_data.get('customer')
+        if payment_type in ['installment', 'credit'] and not customer:
+            raise serializers.ValidationError({'customer': 'يجب اختيار عميل لفاتورة التقسيط أو الآجل'})
 
-        sale = serializer.save(
-            cashier=self.request.user,
-            tax_amount=tax_amount,
-            final_amount=final_amount
-        )
+        # For cash payments: require walk_in_name and walk_in_phone, auto-create/find Customer
+        if payment_type in ['cash', 'vodafone_cash', 'instapay', 'card']:
+            walk_in_name = self.request.data.get('walk_in_name', '').strip()
+            walk_in_phone = self.request.data.get('walk_in_phone', '').strip()
 
-        # If credit: add to customer balance
-        if payment_type == 'credit' and sale.customer:
-            sale.customer.balance += sale.final_amount
-            sale.customer.save()
+            if not walk_in_name:
+                raise serializers.ValidationError({'walk_in_name': 'اسم العميل مطلوب'})
+            if not walk_in_phone:
+                raise serializers.ValidationError({'walk_in_phone': 'رقم الهاتف مطلوب'})
+            if not walk_in_phone.isdigit() or not (10 <= len(walk_in_phone) <= 15):
+                raise serializers.ValidationError({'walk_in_phone': 'رقم الهاتف غير صحيح'})
 
-        # If installment: auto-create installment record
-        if payment_type == 'installment':
-            down_payment = float(self.request.data.get('down_payment', 0))
-            months_count = int(self.request.data.get('months_count', 1))
-            due_date_str = self.request.data.get('due_date', None)
-            due_date = datetime.date.fromisoformat(due_date_str) if due_date_str else datetime.date.today()
-            installment_amount = final_amount - down_payment
-            Installment.objects.create(
-                sale=sale,
-                down_payment=down_payment,
-                months_count=months_count,
-                amount=installment_amount,
-                remaining_amount=installment_amount,
-                due_date=due_date,
-                is_paid=False
+            # Find or create customer by phone (use filter to avoid MultipleObjectsReturned)
+            customer = Customer.objects.filter(phone=walk_in_phone).first()
+            if not customer:
+                customer = Customer.objects.create(
+                    phone=walk_in_phone,
+                    name=walk_in_name
+                )
+            # Link customer to sale data
+            serializer.validated_data['customer'] = customer
+
+        with transaction.atomic():
+            settings = StoreSettings.objects.first()
+            tax_rate = settings.tax_rate if settings else 14.00
+            total = serializer.validated_data.get('total_amount', 0)
+            discount = serializer.validated_data.get('discount', 0)
+            after_discount = Decimal(str(total)) - Decimal(str(discount))
+            tax_amount = after_discount * (Decimal(str(tax_rate)) / Decimal('100'))
+            final_amount = after_discount + tax_amount
+
+            sale = serializer.save(
+                cashier=self.request.user,
+                tax_amount=tax_amount,
+                final_amount=final_amount
             )
+
+            # Deduct stock for each sale item
+            for item in sale.items.all():
+                if item.product:
+                    product = item.product
+                    if product.current_stock >= item.quantity:
+                        product.current_stock -= item.quantity
+                        product.save()
+                    else:
+                        raise ValidationError(
+                            f"المخزون غير كافٍ للمنتج: {product.name} "
+                            f"(المطلوب: {item.quantity}, المتاح: {product.current_stock})"
+                        )
+
+            # If credit: add to customer balance
+            if payment_type == 'credit' and sale.customer:
+                sale.customer.balance += sale.final_amount
+                sale.customer.save()
+
+            # If installment: auto-create installment record
+            if payment_type == 'installment':
+                down_payment = Decimal(str(self.request.data.get('down_payment', 0)))
+                months_count = int(self.request.data.get('months_count', 1))
+                due_date_str = self.request.data.get('due_date', None)
+                due_date = datetime.date.fromisoformat(due_date_str) if due_date_str else datetime.date.today()
+                installment_amount = final_amount - down_payment
+                Installment.objects.create(
+                    sale=sale,
+                    down_payment=down_payment,
+                    months_count=months_count,
+                    amount=installment_amount,
+                    remaining_amount=installment_amount,
+                    due_date=due_date,
+                    is_paid=False
+                )
 
 
 # ==================== BARCODE LOOKUP API ====================

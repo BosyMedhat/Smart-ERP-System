@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .models import Purchase, Treasury, SaleItem, Sale
@@ -18,6 +19,7 @@ def update_treasury_on_purchase(sender, instance, created, **kwargs):
 @receiver(post_save, sender=SaleItem)
 def deduct_stock_on_sale(sender, instance, created, **kwargs):
     """تحديث المخزون عند إتمام عملية بيع - مع التحقق من الكمية"""
+    return  # disabled: stock deduction moved to SaleViewSet.perform_create()
     if created and instance.product:
         product = instance.product
         if product.current_stock >= instance.quantity:
@@ -46,5 +48,5 @@ def update_customer_balance_on_credit(sender, instance, created, **kwargs):
     """زيادة رصيد العميل عند البيع الآجل"""
     if created and instance.payment_type == 'credit' and instance.customer:
         customer = instance.customer
-        customer.balance = float(customer.balance) + float(instance.final_amount)
+        customer.balance = Decimal(str(customer.balance)) + Decimal(str(instance.final_amount))
         customer.save()

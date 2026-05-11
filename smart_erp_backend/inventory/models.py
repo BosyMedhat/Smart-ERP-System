@@ -159,10 +159,12 @@ class Purchase(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
+        from decimal import Decimal
         self.total_amount = self.quantity * self.cost_price
         # Update product stock and cost price
         if self.product:
-            self.product.current_stock = (self.product.current_stock or 0) + float(self.quantity)
+            current = self.product.current_stock or Decimal('0')
+            self.product.current_stock = current + self.quantity
             self.product.cost_price = self.cost_price
             self.product.save()
         # Add to supplier balance
