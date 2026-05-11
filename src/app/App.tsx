@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
+import { Toaster } from './components/ui/sonner';
+import FloatingAIAssistant from './components/FloatingAIAssistant';
+import { notify } from '../lib/notifications';
 import { Sidebar } from './components/Sidebar';
 import { ProductGrid } from './components/ProductGrid';
 import { Cart } from './components/Cart';
@@ -31,6 +34,7 @@ export interface Product {
   category?: string;
   image?: string;
   current_stock?: number;
+  min_stock_level?: number;
   sku?: string;
 }
 
@@ -105,6 +109,7 @@ export default function App() {
         category: p.category || 'عام',
         image: p.image || `https://placehold.co/400x400/3B82F6/FFFFFF?text=${encodeURIComponent(p.name.substring(0, 10))}`,
         current_stock: parseFloat(p.current_stock || 0),
+        min_stock_level: parseFloat(p.min_stock_level || 5),
         sku: p.sku,
       }));
       setProducts(mappedProducts);
@@ -190,7 +195,7 @@ export default function App() {
     </div>
   );
 
-if (!isLoggedIn) {
+  if (!isLoggedIn) {
   if (authScreen === 'login') {
     return (
       <LoginScreen
@@ -209,12 +214,21 @@ if (!isLoggedIn) {
   }
 }
 
-
-
   const addToCart = (product: Product) => {
+    const stock = Number(product.current_stock || 0);
+    if (stock <= 0) {
+      notify.error(`المنتج "${product.name}" غير متوفر في المخزون`);
+      return;
+    }
     setCartItems((prev) => {
       const existing = prev.find((item) => item.id === product.id);
       if (existing) {
+        if (existing.quantity >= stock) {
+          notify.warning(
+            `لا يمكن إضافة المزيد — الكمية المتاحة من "${product.name}" هي ${stock} فقط`
+          );
+          return prev;
+        }
         return prev.map((item) =>
           item.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
@@ -228,9 +242,20 @@ if (!isLoggedIn) {
   const updateQuantity = (id: string, delta: number) => {
     setCartItems((prev) =>
       prev
-        .map((item) =>
-          item.id === id ? { ...item, quantity: item.quantity + delta } : item
-        )
+        .map((item) => {
+          if (item.id === id && delta > 0) {
+            const stock = Number(item.current_stock || 0);
+            if (item.quantity >= stock) {
+              notify.warning(
+                `الكمية المتاحة من "${item.name}" هي ${stock} فقط`
+              );
+              return item;
+            }
+          }
+          return item.id === id
+            ? { ...item, quantity: item.quantity + delta }
+            : item;
+        })
         .filter((item) => item.quantity > 0)
     );
   };
@@ -254,149 +279,157 @@ if (!isLoggedIn) {
   const categories = ['الكل', ...Array.from(new Set(products.map((p: Product) => p.category).filter((c): c is string => !!c)))];
 
   return (
-    <div dir="rtl" className="h-screen flex bg-gray-50" style={{ fontFamily: 'Cairo, sans-serif' }}>
-      {/* Right Sidebar */}
-      <Sidebar activeScreen={activeScreen} onScreenChange={setActiveScreen} currentUser={currentUser} onLogout={handleLogout} />
+    <>
+      <div dir="rtl" className="h-screen flex bg-gray-50" style={{ fontFamily: 'Cairo, sans-serif' }}>
+        {/* Right Sidebar */}
+        <Sidebar activeScreen={activeScreen} onScreenChange={setActiveScreen} currentUser={currentUser} onLogout={handleLogout} />
 
-      {/* Main Content */}
-      {activeScreen === 'pos' && (
-        <div className="flex-1 flex gap-4 p-4">
-          {/* Right Side - Products (60%) */}
-          <div className="flex-[60] flex flex-col gap-4">
-            <ProductGrid
-              products={filteredProducts}
-              categories={categories}
-              selectedCategory={selectedCategory}
-              onCategoryChange={setSelectedCategory}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              onAddToCart={addToCart}
-              onRefresh={fetchProducts}
-              isLoading={productsLoading}
-            />
-          </div>
-
-          {/* Left Side - Cart (40%) */}
-          <div className="flex-[40] min-h-0 h-full">
-            <Cart
-              cartItems={cartItems}
-              selectedCustomer={selectedCustomer}
-              onCustomerChange={setSelectedCustomer}
-              discount={discount}
-              onDiscountChange={setDiscount}
-              onUpdateQuantity={updateQuantity}
-              onClearCart={clearCart}
-              onAddToCart={addToCart}
-            />
-          </div>
-        </div>
-      )}
-
-      {activeScreen === 'inventory' && (
-        <div className="flex-1">
-          {hasPermission('inventory') ? <InventoryScreen /> : <UnauthorizedScreen />}
-        </div>
-      )}
-
-      {activeScreen === 'ai' && (
-        <div className="flex-1">
-          {hasPermission('ai') ? <AICenter /> : <UnauthorizedScreen />}
-        </div>
-      )}
-
-      {activeScreen === 'automation' && (
-        <div className="flex-1">
-          {hasPermission('automation') ? <AutomationEngine /> : <UnauthorizedScreen />}
-        </div>
-      )}
-
-      {activeScreen === 'hr' && (
-        <div className="flex-1">
-          {hasPermission('hr') ? <HRModule /> : <UnauthorizedScreen />}
-        </div>
-      )}
-
-      {activeScreen === 'settings' && (
-        <div className="flex-1">
-          {hasPermission('settings') ? <Settings /> : <UnauthorizedScreen />}
-        </div>
-      )}
-
-      {activeScreen === 'users' && (
-        <div className="flex-1">
-          {hasPermission('users') ? <UserManagement /> : <UnauthorizedScreen />}
-        </div>
-      )}
-
-      {/* {activeScreen === 'login' && (
-        <div className="flex-1">
-          <LoginScreen />
-        </div>
-      )} */}
-
-
-
-
-      {activeScreen === 'home' && (
-        <div className="flex-1">
-          <Dashboard />
-        </div>
-      )}
-
-      {activeScreen === 'suppliers' && (
-        <div className="flex-1">
-          <SuppliersScreen />
-        </div>
-      )}
-
-      {activeScreen === 'credit' && (
-        <div className="flex-1">
-          <CreditDashboard />
-        </div>
-      )}
-
-      {activeScreen === 'installments' && (
-        <div className="flex-1">
-          {hasPermission('installments') ? <InstallmentsManagement /> : <UnauthorizedScreen />}
-        </div>
-      )}
-
-      {activeScreen === 'representatives' && (
-        <div className="flex-1">
-          {hasPermission('representatives') ? <SalesRepresentatives /> : <UnauthorizedScreen />}
-        </div>
-      )}
-
-      {activeScreen === 'reports' && (
-        <div className="flex-1">
-          {hasPermission('reports') ? <Reports /> : <UnauthorizedScreen />}
-        </div>
-      )}
-
-      {activeScreen === 'quotations' && (
-        <div className="flex-1">
-          {hasPermission('quotations') ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center text-gray-400">
-                <div className="text-6xl mb-4">🚧</div>
-                <div className="text-xl">قريباً</div>
-              </div>
+        {/* Main Content */}
+        {activeScreen === 'pos' && (
+          <div className="flex-1 flex gap-4 p-4">
+            {/* Right Side - Products (60%) */}
+            <div className="flex-[60] flex flex-col gap-4">
+              <ProductGrid
+                products={filteredProducts}
+                categories={categories}
+                selectedCategory={selectedCategory}
+                onCategoryChange={setSelectedCategory}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                onAddToCart={addToCart}
+                onRefresh={fetchProducts}
+                isLoading={productsLoading}
+              />
             </div>
-          ) : <UnauthorizedScreen />}
-        </div>
-      )}
 
-      {activeScreen === 'sales' && (
-        <div className="flex-1">
-          {hasPermission('sales') ? <SalesHistory /> : <UnauthorizedScreen />}
-        </div>
-      )}
+            {/* Left Side - Cart (40%) */}
+            <div className="flex-[40] min-h-0 h-full">
+              <Cart
+                cartItems={cartItems}
+                selectedCustomer={selectedCustomer}
+                onCustomerChange={setSelectedCustomer}
+                discount={discount}
+                onDiscountChange={setDiscount}
+                onUpdateQuantity={updateQuantity}
+                onClearCart={clearCart}
+                onAddToCart={addToCart}
+              />
+            </div>
+          </div>
+        )}
 
-      {activeScreen === 'profile' && (
-        <div className="flex-1">
-          <EmployeeProfile onLogout={handleLogout} />
-        </div>
-      )}
-    </div>
+        {activeScreen === 'inventory' && (
+          <div className="flex-1">
+            {hasPermission('inventory') ? <InventoryScreen /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'ai' && (
+          <div className="flex-1">
+            {hasPermission('ai') ? <AICenter /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'automation' && (
+          <div className="flex-1">
+            {hasPermission('automation') ? <AutomationEngine /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'hr' && (
+          <div className="flex-1">
+            {hasPermission('hr') ? <HRModule /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'settings' && (
+          <div className="flex-1">
+            {hasPermission('settings') ? <Settings /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'users' && (
+          <div className="flex-1">
+            {hasPermission('users') ? <UserManagement /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'home' && (
+          <div className="flex-1">
+            <Dashboard />
+          </div>
+        )}
+
+        {activeScreen === 'suppliers' && (
+          <div className="flex-1">
+            <SuppliersScreen />
+          </div>
+        )}
+
+        {activeScreen === 'credit' && (
+          <div className="flex-1">
+            <CreditDashboard />
+          </div>
+        )}
+
+        {activeScreen === 'installments' && (
+          <div className="flex-1">
+            {hasPermission('installments') ? <InstallmentsManagement /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'representatives' && (
+          <div className="flex-1">
+            {hasPermission('representatives') ? <SalesRepresentatives /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'reports' && (
+          <div className="flex-1">
+            {hasPermission('reports') ? <Reports /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'quotations' && (
+          <div className="flex-1">
+            {hasPermission('quotations') ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center text-gray-400">
+                  <div className="text-6xl mb-4">🚧</div>
+                  <div className="text-xl">قريباً</div>
+                </div>
+              </div>
+            ) : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'sales' && (
+          <div className="flex-1">
+            {hasPermission('sales') ? <SalesHistory /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'profile' && (
+          <div className="flex-1">
+            <EmployeeProfile onLogout={handleLogout} />
+          </div>
+        )}
+      </div>
+      <FloatingAIAssistant
+        onScreenChange={setActiveScreen}
+        currentUser={currentUser}
+      />
+      <Toaster
+        position="top-center"
+        richColors
+        closeButton
+        toastOptions={{
+          style: {
+            direction: "rtl",
+            fontFamily: "system-ui, -apple-system, sans-serif",
+          },
+        }}
+      />
+    </>
   );
 }
