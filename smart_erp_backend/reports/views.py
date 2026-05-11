@@ -24,6 +24,21 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 
+import os as _os
+
+_FONTS_DIR = _os.path.join(_os.path.dirname(__file__), 'fonts')
+_arabic_fonts_registered = False
+
+def _register_arabic_fonts():
+    global _arabic_fonts_registered
+    if not _arabic_fonts_registered:
+        try:
+            pdfmetrics.registerFont(TTFont('Amiri', _os.path.join(_FONTS_DIR, 'Amiri-Regular.ttf')))
+            pdfmetrics.registerFont(TTFont('Amiri-Bold', _os.path.join(_FONTS_DIR, 'Amiri-Bold.ttf')))
+            _arabic_fonts_registered = True
+        except Exception as e:
+            print(f"[WARN] Arabic font registration failed: {e}")
+
 # Arabic text handling
 try:
     import arabic_reshaper
@@ -44,6 +59,24 @@ def reshape_arabic(text):
         return get_display(reshaped)
     except:
         return str(text)
+
+
+def ar_p(text, bold=False, size=10, align=TA_CENTER):
+    """
+    Creates a Paragraph with Amiri font for Arabic text.
+    Use this for ALL Arabic text in table cells and headings.
+    """
+    styles = getSampleStyleSheet()
+    style = ParagraphStyle(
+        'ArabicCell',
+        parent=styles['Normal'],
+        fontName='Amiri-Bold' if bold else 'Amiri',
+        fontSize=size,
+        alignment=align,
+        leading=size + 6,
+        wordWrap='RTL',
+    )
+    return Paragraph(reshape_arabic(str(text)) if text else '', style)
 
 
 def add_cors_headers(response):
@@ -91,21 +124,45 @@ class SalesReportView(APIView):
         total_revenue = sales.aggregate(
             total=Sum('final_amount')
         )['total'] or Decimal('0')
-        total_discount = sales.aggregate(
-            total=Sum('discount')
+        
+        # Calculate discount: difference between total_amount and final_amount
+        # This is safe even if discount/tax fields don't exist separately
+        from django.db.models import ExpressionWrapper, DecimalField as DField
+        
+        discount_expr = sales.aggregate(
+            total=Sum(
+                ExpressionWrapper(
+                    F('total_amount') - F('final_amount'),
+                    output_field=DField(max_digits=12, decimal_places=2)
+                )
+            )
         )['total'] or Decimal('0')
+        
+        # Ensure non-negative (في حالة final_amount > total_amount بسبب ضريبة)
+        total_discount = max(discount_expr, Decimal('0'))
         total_tax = sales.aggregate(
             total=Sum('tax_amount')
         )['total'] or Decimal('0')
-        net_revenue = total_revenue - total_discount - total_tax
+        net_revenue = total_revenue - total_discount
 
-        # Cash vs Credit revenue
-        cash_revenue = sales.filter(
-            payment_type='cash'
-        ).aggregate(total=Sum('final_amount'))['total'] or Decimal('0')
-        credit_revenue = sales.filter(
-            payment_type='credit'
-        ).aggregate(total=Sum('final_amount'))['total'] or Decimal('0')
+        # All payment types breakdown
+        payment_breakdown = sales.aggregate(
+            cash=Sum('final_amount', filter=Q(payment_type='cash')),
+            credit=Sum('final_amount', filter=Q(payment_type='credit')),
+            vodafone=Sum('final_amount', filter=Q(payment_type='vodafone_cash')),
+            instapay=Sum('final_amount', filter=Q(payment_type='instapay')),
+            card=Sum('final_amount', filter=Q(payment_type='card')),
+            installment=Sum('final_amount', filter=Q(payment_type='installment')),
+        )
+        
+        cash_revenue = (
+            (payment_breakdown['cash'] or Decimal('0')) +
+            (payment_breakdown['vodafone'] or Decimal('0')) +
+            (payment_breakdown['instapay'] or Decimal('0')) +
+            (payment_breakdown['card'] or Decimal('0'))
+        )
+        credit_revenue = payment_breakdown['credit'] or Decimal('0')
+        installment_revenue = payment_breakdown['installment'] or Decimal('0')
 
         # Top products
         top_products = SaleItem.objects.filter(
@@ -163,6 +220,15 @@ class SalesReportView(APIView):
             'net_revenue': float(net_revenue),
             'cash_revenue': float(cash_revenue),
             'credit_revenue': float(credit_revenue),
+            'installment_revenue': float(installment_revenue),
+            'payment_breakdown': {
+                'cash': float(payment_breakdown['cash'] or 0),
+                'vodafone_cash': float(payment_breakdown['vodafone'] or 0),
+                'instapay': float(payment_breakdown['instapay'] or 0),
+                'card': float(payment_breakdown['card'] or 0),
+                'credit': float(payment_breakdown['credit'] or 0),
+                'installment': float(payment_breakdown['installment'] or 0),
+            },
             'top_products': list(top_products),
             'top_cashiers': formatted_cashiers,
             'daily_breakdown': formatted_daily
@@ -289,32 +355,51 @@ class FinancialReportView(APIView):
             total=Sum('final_amount')
         )['total'] or Decimal('0')
 
-        cash_revenue = sales.filter(
-            payment_type='cash'
-        ).aggregate(total=Sum('final_amount'))['total'] or Decimal('0')
+        # All payment types breakdown
+        payment_breakdown = sales.aggregate(
+            cash=Sum('final_amount', filter=Q(payment_type='cash')),
+            credit=Sum('final_amount', filter=Q(payment_type='credit')),
+            vodafone=Sum('final_amount', filter=Q(payment_type='vodafone_cash')),
+            instapay=Sum('final_amount', filter=Q(payment_type='instapay')),
+            card=Sum('final_amount', filter=Q(payment_type='card')),
+            installment=Sum('final_amount', filter=Q(payment_type='installment')),
+        )
+        
+        cash_revenue = (
+            (payment_breakdown['cash'] or Decimal('0')) +
+            (payment_breakdown['vodafone'] or Decimal('0')) +
+            (payment_breakdown['instapay'] or Decimal('0')) +
+            (payment_breakdown['card'] or Decimal('0'))
+        )
+        credit_revenue = payment_breakdown['credit'] or Decimal('0')
+        installment_revenue = payment_breakdown['installment'] or Decimal('0')
 
-        credit_revenue = sales.filter(
-            payment_type='credit'
-        ).aggregate(total=Sum('final_amount'))['total'] or Decimal('0')
-
+        # Safe discount calculation
+        discount_expr = sales.aggregate(
+            total=Sum(
+                ExpressionWrapper(
+                    F('total_amount') - F('final_amount'),
+                    output_field=DField(max_digits=12, decimal_places=2)
+                )
+            )
+        )['total'] or Decimal('0')
+        total_discount = max(discount_expr, Decimal('0'))
         total_tax = sales.aggregate(
             total=Sum('tax_amount')
         )['total'] or Decimal('0')
+        
+        # Net profit estimate (safe version)
+        net_profit = total_revenue - total_discount
 
-        total_discount = sales.aggregate(
-            total=Sum('discount')
-        )['total'] or Decimal('0')
-
-        # Net profit estimate
-        net_profit = total_revenue - total_discount - total_tax
-
-        # Payment split percentages
+        # Payment split percentages (all types)
         if total_revenue > 0:
             cash_percentage = (cash_revenue / total_revenue) * 100
             credit_percentage = (credit_revenue / total_revenue) * 100
+            installment_percentage = (installment_revenue / total_revenue) * 100
         else:
-            cash_percentage = 0
-            credit_percentage = 0
+            cash_percentage = Decimal('0')
+            credit_percentage = Decimal('0')
+            installment_percentage = Decimal('0')
 
         # Daily cash flow
         daily_cash_flow = sales.annotate(
@@ -343,13 +428,23 @@ class FinancialReportView(APIView):
             'total_revenue': float(total_revenue),
             'cash_revenue': float(cash_revenue),
             'credit_revenue': float(credit_revenue),
+            'installment_revenue': float(installment_revenue),
+            'payment_breakdown': {
+                'cash': float(payment_breakdown['cash'] or 0),
+                'vodafone_cash': float(payment_breakdown['vodafone'] or 0),
+                'instapay': float(payment_breakdown['instapay'] or 0),
+                'card': float(payment_breakdown['card'] or 0),
+                'credit': float(payment_breakdown['credit'] or 0),
+                'installment': float(payment_breakdown['installment'] or 0),
+            },
             'total_tax_collected': float(total_tax),
             'total_discount_given': float(total_discount),
             'net_profit_estimate': float(net_profit),
             'daily_cash_flow': formatted_daily,
             'payment_split': {
                 'cash_percentage': round(float(cash_percentage), 2),
-                'credit_percentage': round(float(credit_percentage), 2)
+                'credit_percentage': round(float(credit_percentage), 2),
+                'installment_percentage': round(float(installment_percentage), 2),
             }
         })
 
@@ -387,6 +482,7 @@ class SalesReportPDFView(APIView):
         return self.generate_pdf(data, from_date, to_date)
 
     def generate_pdf(self, data, from_date, to_date):
+        _register_arabic_fonts()
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="sales_report_{from_date}_to_{to_date}.pdf"'
 
@@ -406,7 +502,7 @@ class SalesReportPDFView(APIView):
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontName='Helvetica-Bold',
+            fontName='Amiri-Bold',
             fontSize=18,
             alignment=TA_CENTER,
             spaceAfter=20
@@ -422,16 +518,16 @@ class SalesReportPDFView(APIView):
         # Summary Table
         summary_data = [
             [
-                reshape_arabic('إجمالي الفواتير'),
-                reshape_arabic('إجمالي الإيرادات'),
-                reshape_arabic('الخصومات'),
-                reshape_arabic('الصافي')
+                ar_p('إجمالي الفواتير', bold=True),
+                ar_p('إجمالي الإيرادات', bold=True),
+                ar_p('الخصومات', bold=True),
+                ar_p('الصافي', bold=True),
             ],
             [
-                str(data['total_invoices']),
-                f"{data['total_revenue']:.2f}",
-                f"{data['total_discount']:.2f}",
-                f"{data['net_revenue']:.2f}"
+                ar_p(str(data['total_invoices'])),
+                ar_p(f"{data['total_revenue']:.2f}"),
+                ar_p(f"{data['total_discount']:.2f}"),
+                ar_p(f"{data['net_revenue']:.2f}"),
             ]
         ]
 
@@ -440,31 +536,31 @@ class SalesReportPDFView(APIView):
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Amiri-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 11),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Amiri'),
         ]))
         elements.append(summary_table)
         elements.append(Spacer(1, 20))
 
         # Top Products Table
-        elements.append(Paragraph(reshape_arabic('أفضل المنتجات مبيعاً'), styles['Heading2']))
+        elements.append(ar_p('أفضل المنتجات مبيعاً', bold=True, size=14, align=TA_RIGHT))
         elements.append(Spacer(1, 10))
 
         products_data = [[
-            reshape_arabic('المنتج'),
-            reshape_arabic('الكمية المباعة'),
-            reshape_arabic('الإيرادات')
+            ar_p('المنتج', bold=True),
+            ar_p('الكمية المباعة', bold=True),
+            ar_p('الإيرادات', bold=True),
         ]]
 
         for p in data['top_products'][:5]:
             products_data.append([
-                reshape_arabic(p['product_name']),
-                str(p['quantity_sold']),
-                f"{p['revenue']:.2f}"
+                ar_p(p['product_name']),
+                ar_p(str(p['quantity_sold'])),
+                ar_p(f"{p['revenue']:.2f}"),
             ])
 
         products_table = Table(products_data, colWidths=[7*cm, 4*cm, 4*cm])
@@ -472,27 +568,27 @@ class SalesReportPDFView(APIView):
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#27ae60')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Amiri-Bold'),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ]))
         elements.append(products_table)
         elements.append(Spacer(1, 20))
 
         # Top Cashiers Table
-        elements.append(Paragraph(reshape_arabic('أفضل الكاشيرين'), styles['Heading2']))
+        elements.append(ar_p('أفضل الكاشيرين', bold=True, size=14, align=TA_RIGHT))
         elements.append(Spacer(1, 10))
 
         cashiers_data = [[
-            reshape_arabic('الكاشير'),
-            reshape_arabic('عدد الفواتير'),
-            reshape_arabic('الإيرادات')
+            ar_p('الكاشير', bold=True),
+            ar_p('عدد الفواتير', bold=True),
+            ar_p('الإيرادات', bold=True),
         ]]
 
         for c in data['top_cashiers'][:5]:
             cashiers_data.append([
-                reshape_arabic(c['cashier_name']),
-                str(c['invoices_count']),
-                f"{c['revenue']:.2f}"
+                ar_p(c['cashier_name']),
+                ar_p(str(c['invoices_count'])),
+                ar_p(f"{c['revenue']:.2f}"),
             ])
 
         cashiers_table = Table(cashiers_data, colWidths=[7*cm, 4*cm, 4*cm])
@@ -500,7 +596,7 @@ class SalesReportPDFView(APIView):
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Amiri-Bold'),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ]))
         elements.append(cashiers_table)
@@ -524,19 +620,20 @@ class InventoryReportPDFView(APIView):
         # Fetch data
         view = InventoryReportView()
         view.request = request
-        response = view.get(request)
+        data_response = view.get(request)
 
-        if isinstance(response, Response) and response.status_code != 200:
-            return response
+        if isinstance(data_response, Response) and data_response.status_code != 200:
+            return data_response
 
-        data = response.data
+        data = data_response.data
 
         # Generate PDF
-        response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = 'attachment; filename="inventory_report.pdf"'
+        _register_arabic_fonts()
+        pdf_response = HttpResponse(content_type='application/pdf')
+        pdf_response['Content-Disposition'] = 'attachment; filename="inventory_report.pdf"'
 
         doc = SimpleDocTemplate(
-            response,
+            pdf_response,
             pagesize=A4,
             rightMargin=2*cm,
             leftMargin=2*cm,
@@ -551,7 +648,7 @@ class InventoryReportPDFView(APIView):
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontName='Helvetica-Bold',
+            fontName='Amiri-Bold',
             fontSize=18,
             alignment=TA_CENTER,
             spaceAfter=20
@@ -562,10 +659,10 @@ class InventoryReportPDFView(APIView):
 
         # Summary
         summary_data = [
-            [reshape_arabic('إجمالي المنتجات'), str(data['total_products'])],
-            [reshape_arabic('قيمة المخزون'), f"{data['stock_value']:.2f}"],
-            [reshape_arabic('منتجات منخفضة المخزون'), str(len(data['low_stock_products']))],
-            [reshape_arabic('منتجات نفدت من المخزون'), str(len(data['out_of_stock']))]
+            [ar_p('إجمالي المنتجات', bold=True), ar_p(str(data['total_products']))],
+            [ar_p('قيمة المخزون', bold=True), ar_p(f"{data['stock_value']:.2f}")],
+            [ar_p('منتجات منخفضة المخزون', bold=True), ar_p(str(len(data['low_stock_products'])))],
+            [ar_p('منتجات نفدت من المخزون', bold=True), ar_p(str(len(data['out_of_stock'])))]
         ]
 
         summary_table = Table(summary_data, colWidths=[8*cm, 7*cm])
@@ -581,22 +678,22 @@ class InventoryReportPDFView(APIView):
 
         # Low Stock Table
         if data['low_stock_products']:
-            elements.append(Paragraph(reshape_arabic('منتجات منخفضة المخزون'), styles['Heading2']))
+            elements.append(ar_p('منتجات منخفضة المخزون', bold=True, size=14, align=TA_RIGHT))
             elements.append(Spacer(1, 10))
 
             low_data = [[
-                reshape_arabic('المنتج'),
-                reshape_arabic('المخزون الحالي'),
-                reshape_arabic('الحد الأدنى'),
-                reshape_arabic('النقص')
+                ar_p('المنتج', bold=True),
+                ar_p('المخزون الحالي', bold=True),
+                ar_p('الحد الأدنى', bold=True),
+                ar_p('النقص', bold=True),
             ]]
 
             for p in data['low_stock_products'][:10]:
                 low_data.append([
-                    reshape_arabic(p['name']),
-                    str(p['current_stock']),
-                    str(p['min_stock_level']),
-                    str(p['shortage'])
+                    ar_p(p['name']),
+                    ar_p(str(p['current_stock'])),
+                    ar_p(str(p['min_stock_level'])),
+                    ar_p(str(p['shortage'])),
                 ])
 
             low_table = Table(low_data, colWidths=[5*cm, 3*cm, 3*cm, 3*cm])
@@ -604,7 +701,7 @@ class InventoryReportPDFView(APIView):
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e74c3c')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Amiri-Bold'),
                 ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ]))
             elements.append(low_table)
@@ -612,20 +709,20 @@ class InventoryReportPDFView(APIView):
 
         # Top Selling Products
         if data['top_selling_products']:
-            elements.append(Paragraph(reshape_arabic('أفضل المنتجات مبيعاً'), styles['Heading2']))
+            elements.append(ar_p('أفضل المنتجات مبيعاً', bold=True, size=14, align=TA_RIGHT))
             elements.append(Spacer(1, 10))
 
             top_data = [[
-                reshape_arabic('المنتج'),
-                reshape_arabic('الكمية المباعة'),
-                reshape_arabic('الإيرادات')
+                ar_p('المنتج', bold=True),
+                ar_p('الكمية المباعة', bold=True),
+                ar_p('الإيرادات', bold=True),
             ]]
 
             for p in data['top_selling_products'][:10]:
                 top_data.append([
-                    reshape_arabic(p['product_name']),
-                    str(p['quantity_sold']),
-                    f"{p['revenue']:.2f}"
+                    ar_p(p['product_name']),
+                    ar_p(str(p['quantity_sold'])),
+                    ar_p(f"{p['revenue']:.2f}"),
                 ])
 
             top_table = Table(top_data, colWidths=[7*cm, 4*cm, 4*cm])
@@ -633,13 +730,13 @@ class InventoryReportPDFView(APIView):
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#27ae60')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Amiri-Bold'),
                 ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ]))
             elements.append(top_table)
 
         doc.build(elements)
-        return add_cors_headers(response)
+        return add_cors_headers(pdf_response)
 
     def options(self, request, *args, **kwargs):
         response = HttpResponse()
@@ -666,19 +763,20 @@ class FinancialReportPDFView(APIView):
         # Fetch data
         view = FinancialReportView()
         view.request = request
-        response = view.get(request)
+        data_response = view.get(request)
 
-        if isinstance(response, Response) and response.status_code != 200:
-            return response
+        if isinstance(data_response, Response) and data_response.status_code != 200:
+            return data_response
 
-        data = response.data
+        data = data_response.data
 
         # Generate PDF
-        response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="financial_report_{from_date}_to_{to_date}.pdf"'
+        _register_arabic_fonts()
+        pdf_response = HttpResponse(content_type='application/pdf')
+        pdf_response['Content-Disposition'] = f'attachment; filename="financial_report_{from_date}_to_{to_date}.pdf"'
 
         doc = SimpleDocTemplate(
-            response,
+            pdf_response,
             pagesize=A4,
             rightMargin=2*cm,
             leftMargin=2*cm,
@@ -693,7 +791,7 @@ class FinancialReportPDFView(APIView):
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontName='Helvetica-Bold',
+            fontName='Amiri-Bold',
             fontSize=18,
             alignment=TA_CENTER,
             spaceAfter=20
@@ -708,13 +806,13 @@ class FinancialReportPDFView(APIView):
 
         # Summary Table
         summary_data = [
-            [reshape_arabic('البيان'), reshape_arabic('القيمة')],
-            [reshape_arabic('إجمالي الإيرادات'), f"{data['total_revenue']:.2f}"],
-            [reshape_arabic('إيرادات الكاش'), f"{data['cash_revenue']:.2f}"],
-            [reshape_arabic('إيرادات الآجل'), f"{data['credit_revenue']:.2f}"],
-            [reshape_arabic('إجمالي الضرائب'), f"{data['total_tax_collected']:.2f}"],
-            [reshape_arabic('إجمالي الخصومات'), f"{data['total_discount_given']:.2f}"],
-            [reshape_arabic('صافي الربح المقدر'), f"{data['net_profit_estimate']:.2f}"]
+            [ar_p('البيان', bold=True), ar_p('القيمة', bold=True)],
+            [ar_p('إجمالي الإيرادات'), ar_p(f"{data['total_revenue']:.2f}")],
+            [ar_p('إيرادات الكاش'), ar_p(f"{data['cash_revenue']:.2f}")],
+            [ar_p('إيرادات الآجل'), ar_p(f"{data['credit_revenue']:.2f}")],
+            [ar_p('إجمالي الضرائب'), ar_p(f"{data['total_tax_collected']:.2f}")],
+            [ar_p('إجمالي الخصومات'), ar_p(f"{data['total_discount_given']:.2f}")],
+            [ar_p('صافي الربح المقدر'), ar_p(f"{data['net_profit_estimate']:.2f}")]
         ]
 
         summary_table = Table(summary_data, colWidths=[8*cm, 7*cm])
@@ -722,22 +820,22 @@ class FinancialReportPDFView(APIView):
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Amiri-Bold'),
             ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#ecf0f1')),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (0, -1), (-1, -1), 'Amiri-Bold'),
         ]))
         elements.append(summary_table)
         elements.append(Spacer(1, 20))
 
         # Payment Split
-        elements.append(Paragraph(reshape_arabic('توزيع طرق الدفع'), styles['Heading2']))
+        elements.append(ar_p('توزيع طرق الدفع', bold=True, size=14, align=TA_RIGHT))
         elements.append(Spacer(1, 10))
 
         split_data = [
-            [reshape_arabic('طريقة الدفع'), reshape_arabic('النسبة')],
-            [reshape_arabic('كاش'), f"{data['payment_split']['cash_percentage']}%"],
-            [reshape_arabic('آجل'), f"{data['payment_split']['credit_percentage']}%"]
+            [ar_p('طريقة الدفع', bold=True), ar_p('النسبة', bold=True)],
+            [ar_p('كاش'), ar_p(f"{data['payment_split']['cash_percentage']}%")],
+            [ar_p('آجل'), ar_p(f"{data['payment_split']['credit_percentage']}%")]
         ]
 
         split_table = Table(split_data, colWidths=[7.5*cm, 7.5*cm])
@@ -745,7 +843,7 @@ class FinancialReportPDFView(APIView):
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#8e44ad')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Amiri-Bold'),
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ]))
         elements.append(split_table)
@@ -753,22 +851,22 @@ class FinancialReportPDFView(APIView):
 
         # Daily Cash Flow
         if data['daily_cash_flow']:
-            elements.append(Paragraph(reshape_arabic('التدفق النقدي اليومي'), styles['Heading2']))
+            elements.append(ar_p('التدفق النقدي اليومي', bold=True, size=14, align=TA_RIGHT))
             elements.append(Spacer(1, 10))
 
             flow_data = [[
-                reshape_arabic('التاريخ'),
-                reshape_arabic('الكاش'),
-                reshape_arabic('الآجل'),
-                reshape_arabic('الإجمالي')
+                ar_p('التاريخ', bold=True),
+                ar_p('الكاش', bold=True),
+                ar_p('الآجل', bold=True),
+                ar_p('الإجمالي', bold=True)
             ]]
 
             for d in data['daily_cash_flow']:
                 flow_data.append([
-                    d['date'],
-                    f"{d['cash_in']:.2f}",
-                    f"{d['credit_in']:.2f}",
-                    f"{d['total']:.2f}"
+                    ar_p(d['date']),
+                    ar_p(f"{d['cash_in']:.2f}"),
+                    ar_p(f"{d['credit_in']:.2f}"),
+                    ar_p(f"{d['total']:.2f}")
                 ])
 
             flow_table = Table(flow_data, colWidths=[4*cm, 3.5*cm, 3.5*cm, 3.5*cm])
@@ -776,14 +874,14 @@ class FinancialReportPDFView(APIView):
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2980b9')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Amiri-Bold'),
                 ('GRID', (0, 0), (-1, -1), 1, colors.black),
                 ('FONTSIZE', (0, 1), (-1, -1), 9),
             ]))
             elements.append(flow_table)
 
         doc.build(elements)
-        return add_cors_headers(response)
+        return add_cors_headers(pdf_response)
 
     def options(self, request, *args, **kwargs):
         response = HttpResponse()
