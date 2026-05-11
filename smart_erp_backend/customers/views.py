@@ -81,6 +81,19 @@ class CustomerViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(debtors, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'], url_path='search')
+    def search_by_phone(self, request):
+        phone = request.query_params.get('phone', '').strip()
+        if not phone or len(phone) < 3:
+            return Response(
+                {'error': 'أدخل على الأقل 3 أرقام للبحث'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        customers = Customer.objects.filter(
+            phone__icontains=phone
+        ).values('id', 'name', 'phone', 'email')[:10]
+        return Response(list(customers))
+
 # إدارة المستخدمين — للمدير فقط
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
