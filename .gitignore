@@ -28,3 +28,15 @@ media/
 *.swp
 *.swo
 /dist/ 
+
+# Temporary and local files
+tatus
+openingMessageForClaude
+FEATURE_TEMPLATE.md
+SMART_ERP_PROGRESS.md
+outputs/
+from_outside/
+generate_erp_final.py
+smart_erp_backend/temp_test.py
+smart_erp_backend/test_purchase.py
+Smart_ERP_Final_Presentation.pdf

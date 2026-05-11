@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/axiosConfig';
+import { notify } from '@/lib/notifications';
 import {
   Users, Calendar, DollarSign, FileText, Plus, X, CheckCircle, Clock,
   AlertCircle, ChevronDown, Download, Printer, Save, RefreshCw
@@ -175,7 +176,7 @@ export function HRModule() {
         });
       }
       fetchData();
-      alert('تم حفظ سجلات الحضور بنجاح');
+      notify.success('تم حفظ سجلات الحضور بنجاح');
     } catch (err: any) {
       handleError(err);
     } finally {
@@ -190,7 +191,7 @@ export function HRModule() {
       const res = await apiClient.post('/hr/payroll/', payrollForm);
       setPayrollRuns(prev => [...prev, res.data]);
       setShowPayrollModal(false);
-      alert('تم إنشاء مسير الرواتب بنجاح');
+      notify.success('تم إنشاء مسير الرواتب بنجاح');
     } catch (err: any) {
       handleError(err);
     } finally {
@@ -202,7 +203,7 @@ export function HRModule() {
     setLoading(true);
     try {
       const res = await apiClient.post(`/hr/payroll/${payrollId}/generate-slips/`);
-      alert(res.data.message);
+      notify.success(res.data.message || 'تمت العملية بنجاح');
       fetchData();
     } catch (err: any) {
       handleError(err);
@@ -215,7 +216,7 @@ export function HRModule() {
     setLoading(true);
     try {
       const res = await apiClient.post(`/hr/payroll/${payrollId}/approve/`);
-      alert(res.data.message);
+      notify.success(res.data.message || 'تمت العملية بنجاح');
       fetchData();
     } catch (err: any) {
       handleError(err);
@@ -228,7 +229,7 @@ export function HRModule() {
     setLoading(true);
     try {
       const res = await apiClient.post(`/hr/payroll/${payrollId}/mark-paid/`);
-      alert(res.data.message);
+      notify.success(res.data.message || 'تمت العملية بنجاح');
       fetchData();
     } catch (err: any) {
       handleError(err);

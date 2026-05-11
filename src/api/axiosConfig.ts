@@ -35,7 +35,8 @@ apiClient.interceptors.response.use(
         if (error.response?.status === 401) {
             // Session expired or not authenticated
             localStorage.removeItem('erp_user');
-            alert('انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى');
+            // Dispatch custom event for notification
+            window.dispatchEvent(new CustomEvent('sessionExpired'));
             window.location.href = '/login';
         } else if (error.response?.status === 403) {
             // Forbidden - no permission

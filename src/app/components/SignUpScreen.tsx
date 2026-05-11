@@ -393,6 +393,7 @@
 import { useState } from 'react';
 import logo from '../../assets/logo.png';
 import { User, Mail, Phone, Lock, Building } from 'lucide-react';
+import { notify } from '@/lib/notifications';
 
 interface SignUpScreenProps {
   onBackToLogin: () => void;
@@ -512,7 +513,7 @@ export function SignUpScreen({ onBackToLogin }: SignUpScreenProps) {
     const hasErrors = Object.values(errors).some((e) => e);
     if (!hasErrors && form.agree) {
       console.log('Signup Data:', form);
-      alert('تم إنشاء الحساب بنجاح');
+      notify.success('تم إنشاء الحساب بنجاح');
       onBackToLogin();
     }
   };

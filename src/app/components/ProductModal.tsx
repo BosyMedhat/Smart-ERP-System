@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, Save } from 'lucide-react';
+import { Plus, Save, X, AlertCircle } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
+import { notify } from '@/lib/notifications';
 
 // تعريف الـ Interface محلياً لضمان عدم وجود أخطاء في الـ Import
 export interface InventoryProduct {
@@ -83,13 +84,13 @@ export function ProductModal({ product, onSave, onClose }: ProductModalProps) {
 
       onSave(response.data); // تحديث القائمة في الشاشة الرئيسية
       onClose();
-      alert('تم حفظ المنتج في قاعدة البيانات بنجاح!');
+      notify.success('تم حفظ المنتج في قاعدة البيانات بنجاح!');
     } catch (error: any) {
       console.error('Connection Error:', error);
       if (error.response?.data) {
-        alert('خطأ من السيرفر: ' + JSON.stringify(error.response.data));
+        notify.error('خطأ من السيرفر', { description: JSON.stringify(error.response.data) });
       } else {
-        alert('تأكد من تشغيل سيرفر Django (المنفذ 8000)');
+        notify.error('خطأ في الاتصال', { description: 'تأكد من تشغيل سيرفر Django (المنفذ 8000)' });
       }
     }
   };

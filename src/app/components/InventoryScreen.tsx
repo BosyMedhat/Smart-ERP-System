@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Search, Edit2, Trash2, Users, ScanLine, Package, AlertCircle } from 'lucide-react';
+import { notify } from '@/lib/notifications';
+import { ConfirmDialog, useConfirm } from './ConfirmDialog';
 import { ProductModal } from './ProductModal';
 import { deleteProduct, getProducts } from '../../api/inventoryApi';
 import apiClient from '../../api/axiosConfig';
@@ -22,6 +24,8 @@ export function InventoryScreen() {
   const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null);
   const [scanError, setScanError] = useState('');
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+
+  const { confirm, ConfirmDialog: ConfirmDeleteDialog } = useConfirm();
 
   // دالة جلب البيانات لتحديث الجدول تلقائياً
   const fetchMyData = async () => {
@@ -85,9 +89,9 @@ export function InventoryScreen() {
       setBarcodeInput('');
       setStockQuantity('');
       setScannedProduct(null);
-      alert(`✅ تم تحديث المخزون: ${scannedProduct.name}\nالكمية الجديدة: ${newStock}`);
+      notify.success(`تم تحديث المخزون: ${scannedProduct.name} - الكمية الجديدة: ${newStock}`);
     } catch (error) {
-      alert('❌ فشل تحديث المخزون');
+      notify.error('فشل تحديث المخزون');
     }
   };
 
@@ -129,13 +133,20 @@ export function InventoryScreen() {
   };
 
   const handleDeleteProduct = async (id: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا المنتج؟')) {
+    const confirmed = await confirm({
+      title: 'تأكيد الحذف',
+      description: 'هل أنت متأكد من حذف هذا المنتج؟ لا يمكن التراجع عن هذا الإجراء.',
+      variant: 'destructive',
+      confirmLabel: 'حذف',
+      cancelLabel: 'إلغاء',
+    });
+    if (confirmed) {
       try {
         await deleteProduct(id);
         setProducts((prev) => prev.filter((p) => p.id !== id));
-        alert('تم الحذف بنجاح');
+        notify.success('تم الحذف بنجاح');
       } catch (error) {
-        alert('حدث خطأ أثناء الحذف');
+        notify.error('حدث خطأ أثناء الحذف');
       }
     }
   };

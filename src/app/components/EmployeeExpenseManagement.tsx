@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/axiosConfig';
+import { notify } from '@/lib/notifications';
 import {
   Users, DollarSign, TrendingUp, Plus, X, Calendar, FileText, Zap,
   Home as HomeIcon, Lightbulb, Wrench, UserPlus
@@ -123,11 +124,11 @@ export function EmployeeExpenseManagement() {
       closeModal();
     } catch (error: any) {
       if (error.response?.status === 401) {
-        alert('ليس لديك صلاحية لتنفيذ هذا الإجراء');
+        notify.error('ليس لديك صلاحية لتنفيذ هذا الإجراء');
       } else if (error.response?.status === 403) {
-        alert('غير مصرح لك بهذه العملية');
+        notify.error('غير مصرح لك بهذه العملية');
       } else {
-        alert('حدث خطأ، يرجى المحاولة مرة أخرى');
+        notify.error('حدث خطأ، يرجى المحاولة مرة أخرى');
       }
       closeModal();
     }

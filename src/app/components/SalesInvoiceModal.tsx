@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { X, ShoppingCart, Plus, Trash2, DollarSign } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Printer, X, Plus, Minus, ShoppingCart, Trash2, FileText, CircleDollarSign } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
+import { notify } from '@/lib/notifications';
 
 interface Item {
   id: number;
@@ -46,7 +47,7 @@ export function SalesInvoiceModal({ onClose }: SalesInvoiceModalProps) {
   // --- دالة الربط مع الباك إند (Django) ---
   const handleSaveAndPrint = async () => {
     if (items.length === 0) {
-      alert("سلة البيع فارغة!");
+      notify.warning('سلة البيع فارغة!', { description: 'أضف منتجات للسلة قبل إتمام البيع' });
       return;
     }
 
@@ -66,14 +67,14 @@ export function SalesInvoiceModal({ onClose }: SalesInvoiceModalProps) {
       // إرسال الطلب باستخدام apiClient (مع Token تلقائياً)
       await apiClient.post('/invoices/', saleData);
 
-      alert('✅ تم تسجيل الفاتورة بنجاح وتحديث الخزينة والمخزون!');
+      notify.success('تم تسجيل الفاتورة بنجاح!', { description: 'تم تحديث الخزينة والمخزون' });
       onClose(); // إغلاق النافذة بعد النجاح
     } catch (error: any) {
       console.error('Connection Error:', error);
       if (error.response?.data) {
-        alert('❌ خطأ من السيرفر: ' + JSON.stringify(error.response.data));
+        notify.error('خطأ من السيرفر', { description: JSON.stringify(error.response.data) });
       } else {
-        alert('فشل الاتصال بالسيرفر! تأكد من تشغيل Django على بورت 8000');
+        notify.error('فشل الاتصال بالسيرفر', { description: 'تأكد من تشغيل Django على بورت 8000' });
       }
     }
   };
@@ -115,7 +116,7 @@ export function SalesInvoiceModal({ onClose }: SalesInvoiceModalProps) {
 
           <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-100 to-green-200 rounded-xl text-xl font-bold">
             <span>الإجمالي الكلي:</span>
-            <span><DollarSign className="inline-block mr-1" /> {total.toLocaleString()} ج.م</span>
+            <span><CircleDollarSign className="inline-block mr-1" /> {total.toLocaleString()} ج.م</span>
           </div>
         </div>
 

@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Minus, Printer, X, Loader2, ScanLine } from 'lucide-react';
+import { Plus, Minus, Printer, X, Loader2, ScanLine, User, Phone } from 'lucide-react';
 import { CartItem, Product } from '../App';
 import apiClient from '../../api/axiosConfig';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 import { formatCurrency } from '../utils/currency';
+import { notify } from '@/lib/notifications';
+import { useConfirm } from './ConfirmDialog';
 
 interface CartProps {
   cartItems: CartItem[];
@@ -50,6 +52,8 @@ export function Cart({
     due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   });
   const [lastScannedProduct, setLastScannedProduct] = useState<string | null>(null);
+  const [walkInName, setWalkInName] = useState('');
+  const [walkInPhone, setWalkInPhone] = useState('');
 
   // Barcode scan handler
   const handleBarcodeScan = useCallback(async (barcode: string) => {
@@ -70,7 +74,13 @@ export function Cart({
         current_stock: parseFloat(product.current_stock || 0),
         sku: product.sku,
       };
-      
+
+      // Check stock availability before adding to cart
+      if (!mappedProduct.current_stock || mappedProduct.current_stock <= 0) {
+        notify.error(`المنتج "${mappedProduct.name}" غير متوفر في المخزون`);
+        return;
+      }
+
       onAddToCart(mappedProduct);
       setLastScannedProduct(product.name);
       
@@ -78,7 +88,7 @@ export function Cart({
       setTimeout(() => setLastScannedProduct(null), 3000);
     } catch (err) {
       console.error('Barcode scan error:', err);
-      alert(`❌ باركود غير موجود: ${barcode}`);
+      notify.error('باركود غير موجود', { description: `الباركود: ${barcode}` });
     }
   }, [onAddToCart]);
 
@@ -110,7 +120,7 @@ export function Cart({
 
   const handleCheckout = async () => {
     if (cartItems.length === 0) {
-      alert('السلة فارغة!');
+      notify.warning('السلة فارغة!', { description: 'أضف منتجات للسلة قبل إتمام البيع' });
       return;
     }
 
@@ -130,8 +140,23 @@ export function Cart({
           return;
         }
         if (!installmentData.down_payment && installmentData.down_payment !== '0') {
-          alert('⚠️ برجاء إدخال المقدم (يمكن أن يكون صفر)');
+          notify.warning('برجاء إدخال المقدم', { description: 'يمكن أن يكون صفر' });
           setCheckoutLoading(false);
+          return;
+        }
+      }
+
+      // Validate walk-in customer for cash payments
+      const cashPaymentTypes = ['cash', 'vodafone_cash', 'instapay', 'card'];
+      if (cashPaymentTypes.includes(paymentType)) {
+        if (!walkInName.trim() || !walkInPhone.trim()) {
+          notify.error('بيانات العميل مطلوبة', { description: 'يجب إدخال اسم ورقم هاتف العميل قبل إتمام البيع' });
+          return;
+        }
+        // Validate phone format (digits only, 10-15 characters)
+        const phoneDigits = walkInPhone.replace(/\D/g, '');
+        if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+          notify.error('رقم هاتف غير صحيح', { description: 'يجب أن يكون بين 10 و 15 رقم' });
           return;
         }
       }
@@ -157,6 +182,13 @@ export function Cart({
         payload.due_date = installmentData.due_date;
       }
 
+      // Add walk-in customer for cash payments
+      const cashTypes = ['cash', 'vodafone_cash', 'instapay', 'card'];
+      if (cashTypes.includes(paymentType)) {
+        payload.walk_in_name = walkInName.trim();
+        payload.walk_in_phone = walkInPhone.replace(/\D/g, ''); // Remove non-digits
+      }
+
       const res = await apiClient.post('/sales/', payload);
       const paymentMethodNames: Record<string, string> = {
         'cash': 'كاش',
@@ -165,7 +197,12 @@ export function Cart({
         'card': 'بطاقة بنكية',
         'credit': 'آجل'
       };
-      alert(`✅ تم البيع!\nرقم الفاتورة: ${res.data.invoice_number}\nالإجمالي: ${res.data.final_amount} ج.م\nطريقة الدفع: ${paymentMethodNames[paymentType]}`);
+      notify.success('تم البيع بنجاح!', {
+        description: `رقم الفاتورة: ${res.data.invoice_number} | الإجمالي: ${res.data.final_amount} ج.م | طريقة الدفع: ${paymentMethodNames[paymentType]}`,
+      });
+      // Reset walk-in fields after successful sale
+      setWalkInName('');
+      setWalkInPhone('');
       onClearCart();
       if (onSaleComplete) onSaleComplete();
     } catch (err: unknown) {
@@ -175,9 +212,9 @@ export function Cart({
         const errMsg = axiosErr.response?.data
           ? JSON.stringify(axiosErr.response.data, null, 2)
           : 'Error in data';
-        alert('Error:\n' + errMsg);
+        notify.error('خطأ في البيانات', { description: errMsg });
       } else {
-        alert('Failed to complete sale. Please try again.');
+        notify.error('فشل إتمام البيع', { description: 'يرجى المحاولة مرة أخرى' });
       }
     } finally {
       setCheckoutLoading(false);
@@ -186,6 +223,34 @@ export function Cart({
 
   return (
     <div className="h-full bg-white rounded-xl shadow-sm flex flex-col overflow-hidden">
+      {/* Walk-in Customer for Cash Payments */}
+      {['cash', 'vodafone_cash', 'instapay', 'card'].includes(paymentType) && (
+        <div className="p-3 border-b border-gray-200 shrink-0">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            بيانات العميل (مطلوبة)
+          </label>
+          <div className="space-y-2">
+            <input
+              type="text"
+              placeholder="اسم العميل"
+              value={walkInName}
+              onChange={(e) => setWalkInName(e.target.value)}
+              className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+              required
+            />
+            <input
+              type="tel"
+              placeholder="رقم الهاتف (10-15 رقم)"
+              value={walkInPhone}
+              onChange={(e) => setWalkInPhone(e.target.value)}
+              pattern="[0-9]{10,15}"
+              className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+              required
+            />
+          </div>
+        </div>
+      )}
+
       {(paymentType === 'credit' || paymentType === 'installment') && (
       <div className="p-3 border-b border-gray-200 shrink-0">
         <label className="block text-sm font-semibold text-gray-700 mb-2">

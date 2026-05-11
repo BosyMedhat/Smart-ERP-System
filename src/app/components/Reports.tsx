@@ -9,7 +9,9 @@ import {
   BarChart3,
   Users,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  PieChart,
+  CreditCard,
 } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
 import { formatCurrency } from '../utils/currency';
@@ -66,6 +68,7 @@ interface FinancialReport {
   total_revenue: number;
   cash_revenue: number;
   credit_revenue: number;
+  installment_revenue: number;
   total_tax_collected: number;
   total_discount_given: number;
   net_profit_estimate: number;
@@ -75,9 +78,18 @@ interface FinancialReport {
     credit_in: number;
     total: number;
   }>;
+  payment_breakdown: {
+    cash: number;
+    vodafone_cash: number;
+    instapay: number;
+    card: number;
+    credit: number;
+    installment: number;
+  };
   payment_split: {
     cash_percentage: number;
     credit_percentage: number;
+    installment_percentage: number;
   };
 }
 
@@ -98,6 +110,9 @@ export function Reports() {
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [financialLoading, setFinancialLoading] = useState(false);
 
+  // Error state
+  const [reportError, setReportError] = useState<string | null>(null);
+
   // Initialize dates on mount
   useEffect(() => {
     const today = new Date();
@@ -113,11 +128,12 @@ export function Reports() {
     
     try {
       setSalesLoading(true);
+      setReportError(null);
       const response = await apiClient.get(`/reports/sales/?from_date=${fromDate}&to_date=${toDate}`);
       setSalesData(response.data);
     } catch (error) {
       console.error('Error fetching sales report:', error);
-      alert('حدث خطأ أثناء جلب تقرير المبيعات');
+      setReportError('فشل تحميل تقرير المبيعات — تحقق من تشغيل الخادم');
     } finally {
       setSalesLoading(false);
     }
@@ -127,11 +143,12 @@ export function Reports() {
   const fetchInventoryReport = async () => {
     try {
       setInventoryLoading(true);
+      setReportError(null);
       const response = await apiClient.get('/reports/inventory/');
       setInventoryData(response.data);
     } catch (error) {
       console.error('Error fetching inventory report:', error);
-      alert('حدث خطأ أثناء جلب تقرير المخزون');
+      setReportError('فشل تحميل تقرير المخزون — تحقق من تشغيل الخادم');
     } finally {
       setInventoryLoading(false);
     }
@@ -143,11 +160,12 @@ export function Reports() {
     
     try {
       setFinancialLoading(true);
+      setReportError(null);
       const response = await apiClient.get(`/reports/financial/?from_date=${fromDate}&to_date=${toDate}`);
       setFinancialData(response.data);
     } catch (error) {
       console.error('Error fetching financial report:', error);
-      alert('حدث خطأ أثناء جلب التقرير المالي');
+      setReportError('فشل تحميل التقرير المالي — تحقق من تشغيل الخادم');
     } finally {
       setFinancialLoading(false);
     }
@@ -156,8 +174,23 @@ export function Reports() {
   // Download PDF
   const downloadPDF = async (endpoint: string, filename: string) => {
     try {
-      const response = await apiClient.get(endpoint, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const response = await apiClient.get(endpoint, { 
+        responseType: 'blob'
+      });
+      
+      // تحقق إذا Backend أرجع JSON error بدلاً من PDF
+      if (response.data.type === 'application/json') {
+        const text = await (response.data as Blob).text();
+        try {
+          const err = JSON.parse(text);
+          notify.error('خطأ في إنشاء التقرير', { description: err.error || 'خطأ غير معروف' });
+        } catch {
+          notify.error('فشل إنشاء التقرير');
+        }
+        return;
+      }
+      
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', filename);
@@ -167,12 +200,15 @@ export function Reports() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      alert('حدث خطأ أثناء تحميل PDF');
+      notify.error('حدث خطأ أثناء تحميل PDF');
     }
   };
 
   // Fetch report when tab changes or on initial load
   useEffect(() => {
+    // Guard: لا تُطلق الـ fetch إذا التواريخ لم تُضبط بعد
+    if (activeTab !== 'inventory' && (!fromDate || !toDate)) return;
+
     if (activeTab === 'sales') {
       fetchSalesReport();
     } else if (activeTab === 'inventory') {
@@ -637,11 +673,11 @@ export function Reports() {
         <button
           onClick={() => {
             if (activeTab === 'sales') {
-              downloadPDF(`/reports/sales/pdf/?from_date=${fromDate}&to_date=${toDate}`, `sales_report_${fromDate}_to_${toDate}.pdf`);
+              downloadPDF(`reports/sales/pdf/?from_date=${fromDate}&to_date=${toDate}`, `sales_report_${fromDate}_to_${toDate}.pdf`);
             } else if (activeTab === 'inventory') {
-              downloadPDF('/reports/inventory/pdf/', 'inventory_report.pdf');
+              downloadPDF('reports/inventory/pdf/', 'inventory_report.pdf');
             } else if (activeTab === 'financial') {
-              downloadPDF(`/reports/financial/pdf/?from_date=${fromDate}&to_date=${toDate}`, `financial_report_${fromDate}_to_${toDate}.pdf`);
+              downloadPDF(`reports/financial/pdf/?from_date=${fromDate}&to_date=${toDate}`, `financial_report_${fromDate}_to_${toDate}.pdf`);
             }
           }}
           className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
@@ -696,6 +732,18 @@ export function Reports() {
 
       {/* Date Range Picker */}
       <DateRangePicker show={activeTab !== 'inventory'} />
+
+      {/* Error Banner */}
+      {reportError && (
+        <div className="flex items-center gap-3 bg-red-500/20 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl mb-4">
+          <span className="text-lg">⚠️</span>
+          <span>{reportError}</span>
+          <button 
+            onClick={() => setReportError(null)}
+            className="mr-auto text-red-300 hover:text-red-100"
+          >✕</button>
+        </div>
+      )}
 
       {/* Tab Content */}
       <div className="mt-6">

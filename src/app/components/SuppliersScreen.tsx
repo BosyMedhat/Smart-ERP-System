@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, X, Phone, Mail, MapPin, ShoppingCart, DollarSign, Building2, Search } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
 import { formatCurrency } from '../utils/currency';
+import { notify } from '@/lib/notifications';
 
 interface Supplier {
   id: number;
@@ -73,7 +74,10 @@ export function SuppliersScreen() {
   );
 
   const handleSaveSupplier = async () => {
-    if (!supplierForm.name) return alert('برجاء إدخال اسم المورد');
+    if (!supplierForm.name) {
+      notify.warning('برجاء إدخال اسم المورد');
+      return;
+    }
     try {
       if (selectedSupplier) {
         await apiClient.patch(`/suppliers/${selectedSupplier.id}/`, supplierForm);
@@ -84,7 +88,7 @@ export function SuppliersScreen() {
       setShowSupplierModal(false);
       setSupplierForm({ name: '', phone: '', email: '', company: '', address: '' });
       setSelectedSupplier(null);
-    } catch (e) { alert('حدث خطأ'); }
+    } catch (e) { notify.error('حدث خطأ'); }
   };
 
   const handleDeleteSupplier = async (id: number) => {
@@ -92,12 +96,14 @@ export function SuppliersScreen() {
     try {
       await apiClient.delete(`/suppliers/${id}/`);
       fetchAll();
-    } catch (e) { alert('حدث خطأ أثناء الحذف'); }
+    } catch (e) { notify.error('حدث خطأ أثناء الحذف'); }
   };
 
   const handleSavePurchase = async () => {
-    if (!purchaseForm.supplier || !purchaseForm.product || !purchaseForm.quantity || !purchaseForm.cost_price)
-      return alert('برجاء إدخال جميع البيانات المطلوبة');
+    if (!purchaseForm.supplier || !purchaseForm.product || !purchaseForm.quantity || !purchaseForm.cost_price) {
+      notify.warning('برجاء إدخال جميع البيانات المطلوبة');
+      return;
+    }
     try {
       await apiClient.post('/purchases/', {
         supplier: parseInt(purchaseForm.supplier),
@@ -110,7 +116,7 @@ export function SuppliersScreen() {
       fetchAll();
       setShowPurchaseModal(false);
       setPurchaseForm({ supplier: '', product: '', quantity: '', cost_price: '', invoice_number: '', notes: '' });
-    } catch (e) { alert('حدث خطأ'); }
+    } catch (e) { notify.error('حدث خطأ'); }
   };
 
   const handlePayDebt = async () => {
@@ -120,7 +126,7 @@ export function SuppliersScreen() {
       fetchAll();
       setShowPayModal(false);
       setPayAmount('');
-    } catch (e) { alert('حدث خطأ'); }
+    } catch (e) { notify.error('حدث خطأ'); }
   };
 
   const totalDebt = suppliers.reduce((sum, s) => sum + Number(s.balance), 0);

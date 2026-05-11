@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Users, Plus, X, CheckCircle, UserPlus, Shield, LayoutDashboard } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
+import { notify } from '@/lib/notifications';
 
 interface User {
   id: string;
@@ -156,9 +157,9 @@ export function UserManagement() {
           permissions: selectedUser.permissions,
         }
       });
-      alert('تم حفظ الصلاحيات بنجاح ✅');
+      notify.success('تم حفظ الصلاحيات بنجاح');
     } catch (err) {
-      alert('فشل حفظ الصلاحيات ❌');
+      notify.error('فشل حفظ الصلاحيات');
     }
   };
 

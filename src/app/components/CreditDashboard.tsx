@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { notify } from '@/lib/notifications';
 import { DollarSign, Phone, Mail, Search, X, TrendingDown } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
 import { formatCurrency } from '../utils/currency';
@@ -62,7 +63,7 @@ export function CreditDashboard() {
       setShowCollectModal(false);
       setCollectAmount('');
       setSelectedCustomer(null);
-    } catch (e) { alert('حدث خطأ أثناء التحصيل'); }
+    } catch (e) { notify.error('حدث خطأ أثناء التحصيل'); }
   };
 
   if (loading) return <div className="p-20 text-center text-gray-400 font-bold">جاري التحميل...</div>;

@@ -1,6 +1,7 @@
 import { Search, Barcode, Mic, RefreshCw } from 'lucide-react';
 import { Product } from '../App';
 import { formatCurrency } from '../utils/currency';
+import { notify } from '../../lib/notifications';
 
 interface ProductGridProps {
   products: Product[];
@@ -85,26 +86,54 @@ export function ProductGrid({
       {/* Product Grid */}
       <div className="flex-1 bg-white rounded-xl p-3 shadow-sm overflow-y-auto">
         <div className="grid grid-cols-3 gap-2">
-          {products.map((product) => (
-            <button
-              key={product.id}
-              onClick={() => onAddToCart(product)}
-              className="bg-white border-2 border-gray-100 rounded-xl p-3 hover:border-[#3B82F6] hover:bg-blue-50 hover:shadow-md transition-all active:scale-95 text-right"
-            >
-              <div className="font-bold text-gray-800 text-sm leading-tight mb-1 line-clamp-2">
-                {product.name}
-              </div>
-              <div className="text-xs text-gray-400 mb-2">{product.category}</div>
-              <div className="text-base font-bold text-[#3B82F6]">
-                {formatCurrency(product.price)}
-              </div>
-              {product.current_stock !== undefined && (
-                <div className={`text-xs mt-1 font-medium ${product.current_stock <= 5 ? 'text-red-500' : 'text-green-600'}`}>
-                  مخزون: {product.current_stock}
+          {products.map((product) => {
+            const stock = Number(product.current_stock || 0);
+            const minLevel = Number(product.min_stock_level || 5);
+            const isOutOfStock = stock <= 0;
+            const isLowStock = !isOutOfStock && stock <= minLevel;
+
+            return (
+              <button
+                key={product.id}
+                onClick={() => {
+                  if (isOutOfStock) {
+                    notify.error(`المنتج "${product.name}" غير متوفر في المخزون`);
+                    return;
+                  }
+                  onAddToCart(product);
+                }}
+                disabled={isOutOfStock}
+                className={`border-2 rounded-xl p-3 transition-all text-right ${
+                  isOutOfStock
+                    ? 'opacity-50 cursor-not-allowed bg-gray-100 border-gray-200'
+                    : 'bg-white border-gray-100 hover:border-[#3B82F6] hover:bg-blue-50 hover:shadow-md active:scale-95'
+                }`}
+              >
+                <div className="font-bold text-gray-800 text-sm leading-tight mb-1 line-clamp-2">
+                  {product.name}
                 </div>
-              )}
-            </button>
-          ))}
+                <div className="text-xs text-gray-400 mb-2">{product.category}</div>
+                <div className="text-base font-bold text-[#3B82F6]">
+                  {formatCurrency(product.price)}
+                </div>
+                {isOutOfStock && (
+                  <span className="inline-block text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full mt-1 font-medium">
+                    نفدت الكمية
+                  </span>
+                )}
+                {isLowStock && (
+                  <span className="inline-block text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full mt-1 font-medium">
+                    كمية منخفضة ({stock})
+                  </span>
+                )}
+                {!isOutOfStock && !isLowStock && (
+                  <div className="text-xs mt-1 text-green-600 font-medium">
+                    مخزون: {stock}
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
     </>
