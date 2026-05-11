@@ -6,6 +6,7 @@ import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 import { formatCurrency } from '../utils/currency';
 import { notify } from '@/lib/notifications';
 import { useConfirm } from './ConfirmDialog';
+import CustomerInfoModal, { CustomerData } from './CustomerInfoModal';
 
 interface CartProps {
   cartItems: CartItem[];
@@ -52,8 +53,7 @@ export function Cart({
     due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   });
   const [lastScannedProduct, setLastScannedProduct] = useState<string | null>(null);
-  const [walkInName, setWalkInName] = useState('');
-  const [walkInPhone, setWalkInPhone] = useState('');
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
 
   // Barcode scan handler
   const handleBarcodeScan = useCallback(async (barcode: string) => {
@@ -131,32 +131,22 @@ export function Cart({
     }
     setShowCreditWarning(false);
 
+    // For cash payment types: open customer info modal
+    const cashPaymentTypes = ['cash', 'vodafone_cash', 'instapay', 'card'];
+    if (cashPaymentTypes.includes(paymentType)) {
+      setShowCustomerModal(true);
+      return;
+    }
+
     try {
       // Validate installment
       if (paymentType === 'installment') {
         if (!selectedCustomer) {
           setShowCreditWarning(true);
-          setCheckoutLoading(false);
           return;
         }
         if (!installmentData.down_payment && installmentData.down_payment !== '0') {
           notify.warning('برجاء إدخال المقدم', { description: 'يمكن أن يكون صفر' });
-          setCheckoutLoading(false);
-          return;
-        }
-      }
-
-      // Validate walk-in customer for cash payments
-      const cashPaymentTypes = ['cash', 'vodafone_cash', 'instapay', 'card'];
-      if (cashPaymentTypes.includes(paymentType)) {
-        if (!walkInName.trim() || !walkInPhone.trim()) {
-          notify.error('بيانات العميل مطلوبة', { description: 'يجب إدخال اسم ورقم هاتف العميل قبل إتمام البيع' });
-          return;
-        }
-        // Validate phone format (digits only, 10-15 characters)
-        const phoneDigits = walkInPhone.replace(/\D/g, '');
-        if (phoneDigits.length < 10 || phoneDigits.length > 15) {
-          notify.error('رقم هاتف غير صحيح', { description: 'يجب أن يكون بين 10 و 15 رقم' });
           return;
         }
       }
@@ -182,13 +172,6 @@ export function Cart({
         payload.due_date = installmentData.due_date;
       }
 
-      // Add walk-in customer for cash payments
-      const cashTypes = ['cash', 'vodafone_cash', 'instapay', 'card'];
-      if (cashTypes.includes(paymentType)) {
-        payload.walk_in_name = walkInName.trim();
-        payload.walk_in_phone = walkInPhone.replace(/\D/g, ''); // Remove non-digits
-      }
-
       const res = await apiClient.post('/sales/', payload);
       const paymentMethodNames: Record<string, string> = {
         'cash': 'كاش',
@@ -200,9 +183,52 @@ export function Cart({
       notify.success('تم البيع بنجاح!', {
         description: `رقم الفاتورة: ${res.data.invoice_number} | الإجمالي: ${res.data.final_amount} ج.م | طريقة الدفع: ${paymentMethodNames[paymentType]}`,
       });
-      // Reset walk-in fields after successful sale
-      setWalkInName('');
-      setWalkInPhone('');
+      onClearCart();
+      if (onSaleComplete) onSaleComplete();
+    } catch (err: unknown) {
+      console.error('Checkout error:', err);
+      const axiosErr = err as { response?: { status?: number; data?: unknown } };
+      if (axiosErr.response?.status === 400) {
+        const errMsg = axiosErr.response?.data
+          ? JSON.stringify(axiosErr.response.data, null, 2)
+          : 'Error in data';
+        notify.error('خطأ في البيانات', { description: errMsg });
+      } else {
+        notify.error('فشل إتمام البيع', { description: 'يرجى المحاولة مرة أخرى' });
+      }
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const handleCustomerConfirm = async (data: CustomerData) => {
+    setShowCustomerModal(false);
+    setCheckoutLoading(true);
+    try {
+      const payload: Record<string, unknown> = {
+        customer: null,
+        total_amount: subtotal,
+        discount: discount,
+        payment_type: paymentType,
+        items: cartItems.map(item => ({
+          product: parseInt(item.id),
+          product_name: item.name,
+          quantity: item.quantity,
+          unit_price: item.price,
+        })),
+        walk_in_name: data.name,
+        walk_in_phone: data.phone,
+      };
+      const res = await apiClient.post('/sales/', payload);
+      const paymentMethodNames: Record<string, string> = {
+        cash: 'كاش',
+        vodafone_cash: 'فودافون كاش',
+        instapay: 'انستاباي',
+        card: 'بطاقة بنكية',
+      };
+      notify.success('تم البيع بنجاح!', {
+        description: `رقم الفاتورة: ${res.data.invoice_number} | الإجمالي: ${res.data.final_amount} ج.م | طريقة الدفع: ${paymentMethodNames[paymentType] ?? paymentType}`,
+      });
       onClearCart();
       if (onSaleComplete) onSaleComplete();
     } catch (err: unknown) {
@@ -223,34 +249,6 @@ export function Cart({
 
   return (
     <div className="h-full bg-white rounded-xl shadow-sm flex flex-col overflow-hidden">
-      {/* Walk-in Customer for Cash Payments */}
-      {['cash', 'vodafone_cash', 'instapay', 'card'].includes(paymentType) && (
-        <div className="p-3 border-b border-gray-200 shrink-0">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            بيانات العميل (مطلوبة)
-          </label>
-          <div className="space-y-2">
-            <input
-              type="text"
-              placeholder="اسم العميل"
-              value={walkInName}
-              onChange={(e) => setWalkInName(e.target.value)}
-              className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-              required
-            />
-            <input
-              type="tel"
-              placeholder="رقم الهاتف (10-15 رقم)"
-              value={walkInPhone}
-              onChange={(e) => setWalkInPhone(e.target.value)}
-              pattern="[0-9]{10,15}"
-              className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-              required
-            />
-          </div>
-        </div>
-      )}
-
       {(paymentType === 'credit' || paymentType === 'installment') && (
       <div className="p-3 border-b border-gray-200 shrink-0">
         <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -452,6 +450,14 @@ export function Cart({
           </button>
         </div>
       </div>
+
+      <CustomerInfoModal
+        isOpen={showCustomerModal}
+        onClose={() => setShowCustomerModal(false)}
+        onConfirm={handleCustomerConfirm}
+        paymentType={paymentType}
+        totalAmount={total}
+      />
 
       {/* Installment Modal */}
       {showInstallmentModal && (
