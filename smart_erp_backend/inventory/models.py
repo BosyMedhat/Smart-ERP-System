@@ -312,6 +312,14 @@ class UserProfile(models.Model):
         choices=ROLE_CHOICES,
         default='كاشير'
     )
+    role_new = models.ForeignKey(
+        'accounts.Role',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='user_profiles',
+        verbose_name='الدور (جديد)'
+    )
     permissions = models.JSONField(default=dict)
 
     def __str__(self):

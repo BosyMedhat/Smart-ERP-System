@@ -1,4 +1,7 @@
 from django.urls import path
 
-# Phase 1: app skeleton only — لا توجد endpoints بعد.
-urlpatterns = []
+from accounts.views import me_view
+
+urlpatterns = [
+    path('me/', me_view, name='accounts-me'),
+]

@@ -60,6 +60,7 @@ urlpatterns = [
     path('api/audit/', include('audit.urls')),
     path('api/products/barcode/<str:barcode>/', ProductByBarcodeView.as_view()),
     path('api/alerts/', AlertsView.as_view(), name='alerts'),
+    path('api/accounts/', include('accounts.urls')),
 ]
 
 if settings.DEBUG:
