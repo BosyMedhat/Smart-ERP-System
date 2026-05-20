@@ -23,7 +23,8 @@ from inventory.views import (
     SaleViewSet,  # فواتير المبيعات الجديدة
     DashboardView,  # Dashboard API
     ProductByBarcodeView,  # Barcode lookup API
-    SupplierEvaluationViewSet
+    SupplierEvaluationViewSet,
+    AlertsView,  # Smart Alerts API
 )
 
 # إنشاء الـ Router الرئيسي للمشروع
@@ -58,6 +59,7 @@ urlpatterns = [
     path('api/hr/', include('hr.urls')),
     path('api/audit/', include('audit.urls')),
     path('api/products/barcode/<str:barcode>/', ProductByBarcodeView.as_view()),
+    path('api/alerts/', AlertsView.as_view(), name='alerts'),
 ]
 
 if settings.DEBUG:

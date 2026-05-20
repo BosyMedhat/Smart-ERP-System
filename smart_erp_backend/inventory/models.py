@@ -362,6 +362,13 @@ class StoreSettings(models.Model):
         verbose_name='الرصيد الافتتاحي'
     )
 
+    treasury_alert_threshold = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=500,
+        verbose_name='حد تنبيه الخزينة المنخفضة'
+    )
+
     class Meta:
         verbose_name = 'إعدادات المتجر'
         verbose_name_plural = 'إعدادات المتجر'

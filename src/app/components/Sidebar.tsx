@@ -2,6 +2,7 @@ import { Home, Package, ShoppingCart, FileText, Brain, Zap, Users, Settings, Shi
 import { Screen } from '../App';
 import { useTranslation } from 'react-i18next';
 import { canAccessScreen, ROLES } from '../../auth';
+import AlertsBell from './AlertsBell';
 
 interface SidebarProps {
   activeScreen: Screen;
@@ -56,6 +57,9 @@ export function Sidebar({ activeScreen, onScreenChange, currentUser, onLogout }:
             </button>
           );
         })}
+      {/* Alerts Bell */}
+      <AlertsBell />
+
       {/* Logout Button */}
       {onLogout && (
         <button

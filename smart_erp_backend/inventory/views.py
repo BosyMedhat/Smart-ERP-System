@@ -2,10 +2,12 @@ from rest_framework import viewsets, status, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
 from rest_framework.views import APIView
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
+from decimal import Decimal
 from django.db.models import Sum, Count, F as models_F
 from customers.models import Customer
 # استيراد كل الموديلات والسيرياليزر (تأكدي من وجود Employee في الموديلات)
@@ -405,4 +407,164 @@ class DashboardView(APIView):
             'low_stock_alerts': low_stock_alerts,
             'sales_chart': sales_chart,
             'recent_activities': recent_activities,
+        })
+
+
+# ==================== SMART ALERTS API ====================
+class AlertsView(APIView):
+    """
+    GET /api/alerts/
+    يرجع كل التنبيهات الذكية للنظام
+    """
+    authentication_classes = [TokenAuthentication]
+    permission_classes     = [IsAuthenticated]
+
+    def get(self, request):
+        alerts = []
+
+        # ── 1. منتجات منخفضة المخزون ─────────────────
+        try:
+            low_stock_products = Product.objects.filter(
+                current_stock__lte=models_F('min_stock_level'),
+                current_stock__gt=0,
+            ).values('id', 'name', 'current_stock', 'min_stock_level')[:10]
+
+            out_of_stock = Product.objects.filter(
+                current_stock__lte=0
+            ).values('id', 'name')[:10]
+
+            if out_of_stock.exists():
+                alerts.append({
+                    'type':     'out_of_stock',
+                    'severity': 'critical',
+                    'title':    'منتجات نفدت من المخزون',
+                    'message':  f'{out_of_stock.count()} منتج نفد من المخزون',
+                    'count':    out_of_stock.count(),
+                    'data':     list(out_of_stock),
+                })
+
+            if low_stock_products.exists():
+                alerts.append({
+                    'type':     'low_stock',
+                    'severity': 'warning',
+                    'title':    'مخزون منخفض',
+                    'message':  f'{low_stock_products.count()} منتج يحتاج تجديد',
+                    'count':    low_stock_products.count(),
+                    'data':     list(low_stock_products),
+                })
+        except Exception:
+            pass
+
+        # ── 2. أقساط متأخرة ──────────────────────────
+        try:
+            from .models import Installment
+            today = timezone.now().date()
+
+            overdue = Installment.objects.filter(
+                is_paid=False,
+                due_date__lt=today,
+                remaining_amount__gt=0,
+            ).select_related('sale__customer')[:10]
+
+            due_today = Installment.objects.filter(
+                is_paid=False,
+                due_date=today,
+                remaining_amount__gt=0,
+            ).select_related('sale__customer')[:10]
+
+            if overdue.exists():
+                overdue_data = []
+                for inst in overdue:
+                    customer_name = ''
+                    if inst.sale and inst.sale.customer:
+                        customer_name = inst.sale.customer.name
+                    overdue_data.append({
+                        'id':            inst.pk,
+                        'customer':      customer_name,
+                        'remaining':     str(inst.remaining_amount),
+                        'due_date':      str(inst.due_date),
+                        'days_overdue':  (today - inst.due_date).days,
+                    })
+                alerts.append({
+                    'type':     'overdue_installment',
+                    'severity': 'critical',
+                    'title':    'أقساط متأخرة',
+                    'message':  f'{len(overdue_data)} قسط متأخر عن موعده',
+                    'count':    len(overdue_data),
+                    'data':     overdue_data,
+                })
+
+            if due_today.exists():
+                due_data = []
+                for inst in due_today:
+                    customer_name = ''
+                    if inst.sale and inst.sale.customer:
+                        customer_name = inst.sale.customer.name
+                    due_data.append({
+                        'id':        inst.pk,
+                        'customer':  customer_name,
+                        'remaining': str(inst.remaining_amount),
+                    })
+                alerts.append({
+                    'type':     'due_today_installment',
+                    'severity': 'warning',
+                    'title':    'أقساط مستحقة اليوم',
+                    'message':  f'{len(due_data)} قسط مستحق اليوم',
+                    'count':    len(due_data),
+                    'data':     due_data,
+                })
+        except Exception:
+            pass
+
+        # ── 3. رصيد خزينة منخفض ──────────────────────
+        try:
+            from treasury.models import TreasuryAccount
+            from .models import StoreSettings
+
+            settings = StoreSettings.objects.first()
+            threshold = Decimal('500')
+            if settings and hasattr(settings, 'treasury_alert_threshold'):
+                threshold = settings.treasury_alert_threshold
+
+            low_accounts = TreasuryAccount.objects.filter(
+                is_active=True,
+                balance__lt=threshold,
+                balance__gte=0,
+            ).values('id', 'display_name', 'balance')
+
+            if low_accounts.exists():
+                alerts.append({
+                    'type':     'low_treasury',
+                    'severity': 'warning',
+                    'title':    'رصيد خزينة منخفض',
+                    'message':  f'{low_accounts.count()} حساب رصيده منخفض عن {threshold} ج.م',
+                    'count':    low_accounts.count(),
+                    'data':     list(low_accounts),
+                })
+
+            negative_accounts = TreasuryAccount.objects.filter(
+                is_active=True,
+                balance__lt=0,
+            ).values('id', 'display_name', 'balance')
+
+            if negative_accounts.exists():
+                alerts.append({
+                    'type':     'negative_treasury',
+                    'severity': 'critical',
+                    'title':    'رصيد خزينة سالب',
+                    'message':  f'{negative_accounts.count()} حساب رصيده سالب',
+                    'count':    negative_accounts.count(),
+                    'data':     list(negative_accounts),
+                })
+        except Exception:
+            pass
+
+        # ── ترتيب: critical أولاً ─────────────────────
+        severity_order = {'critical': 0, 'warning': 1, 'info': 2}
+        alerts.sort(key=lambda x: severity_order.get(x['severity'], 3))
+
+        return Response({
+            'total':   len(alerts),
+            'alerts':  alerts,
+            'checked_at': timezone.now().isoformat(),
         })
