@@ -1,5 +1,7 @@
-import { Home, Package, ShoppingCart, FileText, Brain, Zap, Users, Settings, Shield, CreditCard, UserCheck, FileCheck, LogOut, Receipt, Briefcase, Truck, HandCoins } from 'lucide-react';
+import { Home, Package, ShoppingCart, FileText, Brain, Zap, Users, Settings, Shield, CreditCard, UserCheck, FileCheck, LogOut, Receipt, Briefcase, Truck, HandCoins, Wallet, TrendingUp } from 'lucide-react';
 import { Screen } from '../App';
+import { useTranslation } from 'react-i18next';
+import { canAccessScreen, ROLES } from '../../auth';
 
 interface SidebarProps {
   activeScreen: Screen;
@@ -8,55 +10,33 @@ interface SidebarProps {
   onLogout?: () => void;
 }
 
-const menuItems: { key: string; icon: typeof Home; label: string; screen: Screen }[] = [
-  { key: 'dashboard', icon: Home, label: 'الرئيسية', screen: 'home' },
-  { key: 'inventory', icon: Package, label: 'المخازن', screen: 'inventory' },
-  { key: 'pos', icon: ShoppingCart, label: 'نقطة البيع', screen: 'pos' },
-  { key: 'sales', icon: Receipt, label: 'سجل المبيعات', screen: 'sales' },
-  { key: 'installments', icon: CreditCard, label: 'التقسيط', screen: 'installments' },
-  { key: 'credit', icon: HandCoins, label: 'الآجل والديون', screen: 'credit' },
-  { key: 'suppliers', icon: Truck, label: 'الموردين', screen: 'suppliers' },
-  { key: 'representatives', icon: UserCheck, label: 'المناديب', screen: 'representatives' },
-  { key: 'quotations', icon: FileCheck, label: 'عروض الأسعار', screen: 'quotations' },
-  { key: 'hr', icon: Briefcase, label: 'الموارد البشرية', screen: 'hr' },
-  { key: 'ai', icon: Brain, label: 'الذكاء الاصطناعي', screen: 'ai' },
-  { key: 'automation', icon: Zap, label: 'الأتمتة', screen: 'automation' },
-  { key: 'user_management', icon: Shield, label: 'الصلاحيات', screen: 'users' },
-  { key: 'settings', icon: Settings, label: 'الإعدادات', screen: 'settings' },
-  { key: 'reports', icon: FileText, label: 'التقارير', screen: 'reports' },
-];
-
 export function Sidebar({ activeScreen, onScreenChange, currentUser, onLogout }: SidebarProps) {
-  const canAccessScreen = (screen: string): boolean => {
-    if (!currentUser) return false;
-    if (currentUser.role === 'مدير') return true;
-    const screenPermissions: Record<string, string[]> = {
-      'home'            : [],
-      'pos'             : ['add_invoice'],
-      'inventory'       : ['add_product', 'inventory_count'],
-      'installments'    : ['add_invoice'],
-      'representatives' : [],
-      'quotations'      : ['add_invoice'],
-      'hr'              : ['employee_report'],
-      'ai'              : [],
-      'automation'      : [],
-      'users'           : ['user_management'],
-      'settings'        : ['system_settings'],
-      'reports'         : ['profit_report', 'daily_sales'],
-      'sales'           : ['daily_sales'],
-    };
-    const required = screenPermissions[screen];
-    if (!required || required.length === 0) return true;
-    const userPerms = currentUser.permissions || {};
-    const allUserPerms = Object.values(userPerms).flat() as string[];
-    return required.some(p => allUserPerms.includes(p));
-  };
+  const { t } = useTranslation();
 
+  const menuItems: { key: string; icon: typeof Home; label: string; screen: Screen }[] = [
+    { key: 'dashboard', icon: Home, label: t('nav.home'), screen: 'home' },
+    { key: 'inventory', icon: Package, label: t('nav.inventory'), screen: 'inventory' },
+    { key: 'pos', icon: ShoppingCart, label: t('nav.pos'), screen: 'pos' },
+    { key: 'sales', icon: Receipt, label: t('nav.sales'), screen: 'sales' },
+    { key: 'installments', icon: CreditCard, label: t('nav.installments'), screen: 'installments' },
+    { key: 'credit', icon: HandCoins, label: t('nav.credit'), screen: 'credit' },
+    { key: 'suppliers', icon: Truck, label: t('nav.suppliers'), screen: 'suppliers' },
+    { key: 'representatives', icon: UserCheck, label: 'المناديب', screen: 'representatives' },
+    { key: 'quotations', icon: FileCheck, label: 'عروض الأسعار', screen: 'quotations' },
+    { key: 'hr', icon: Briefcase, label: t('nav.hr'), screen: 'hr' },
+    { key: 'ai', icon: Brain, label: t('nav.ai'), screen: 'ai' },
+    { key: 'automation', icon: Zap, label: 'الأتمتة', screen: 'automation' },
+    { key: 'user_management', icon: Shield, label: t('nav.users'), screen: 'users' },
+    { key: 'settings', icon: Settings, label: t('nav.settings'), screen: 'settings' },
+    { key: 'reports', icon: FileText, label: t('nav.reports'), screen: 'reports' },
+    { key: 'pl', icon: TrendingUp, label: t('nav.pl') || 'الأرباح والخسائر', screen: 'pl' },
+    { key: 'treasury', icon: Wallet, label: t('nav.treasury'), screen: 'treasury' },
+  ];
   return (
     <div className="w-20 bg-[#1E293B] flex flex-col items-center py-6 gap-4 overflow-y-auto">
       <div className="text-white text-2xl font-bold mb-6">POS</div>
       {menuItems
-        .filter(item => canAccessScreen(item.screen))
+        .filter(item => canAccessScreen(currentUser?.role ?? '', item.screen))
         .map((item) => {
           const Icon = item.icon;
           return (
@@ -80,7 +60,7 @@ export function Sidebar({ activeScreen, onScreenChange, currentUser, onLogout }:
         <button
           onClick={onLogout}
           className="w-14 h-14 rounded-xl flex items-center justify-center transition-all flex-shrink-0 mt-auto text-red-400 hover:bg-red-900/50 hover:text-red-300"
-          title="تسجيل الخروج"
+          title={t('nav.logout')}
         >
           <LogOut size={24} />
         </button>

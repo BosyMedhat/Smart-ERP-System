@@ -126,3 +126,12 @@ def login_view(request):
         {'error': 'بيانات الدخول غير صحيحة'},
         status=status.HTTP_401_UNAUTHORIZED
     )
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout_view(request):
+    try:
+        request.user.auth_token.delete()
+    except Exception:
+        pass
+    return Response({'message': 'تم تسجيل الخروج بنجاح'})

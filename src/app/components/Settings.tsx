@@ -20,6 +20,8 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
+import i18n from '../../i18n/index';
+import { useTranslation } from 'react-i18next';
 
 // Complete StoreSettings interface matching backend model
 interface StoreSettings {
@@ -77,6 +79,7 @@ const defaultSettings: StoreSettings = {
 };
 
 export function Settings() {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<StoreSettings>(defaultSettings);
   const [activeTab, setActiveTab] = useState<TabType>('company');
   const [loading, setLoading] = useState(true);
@@ -100,7 +103,7 @@ export function Settings() {
         document.documentElement.dir = savedLang === 'ar' ? 'rtl' : 'ltr';
         document.documentElement.lang = savedLang;
       } catch (err) {
-        setError('تعذر تحميل الإعدادات');
+        setError(t('errors.loadFailed'));
         console.error('Error fetching settings:', err);
       } finally {
         setLoading(false);
@@ -114,9 +117,9 @@ export function Settings() {
     const newLang = settings.language === 'ar' ? 'en' : 'ar';
     setSettings(prev => ({ ...prev, language: newLang }));
     localStorage.setItem('lang', newLang);
+    i18n.changeLanguage(newLang);
     document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.lang = newLang;
-    setNeedsReload(true);
   };
 
   const handleSave = async () => {
@@ -144,7 +147,7 @@ export function Settings() {
         window.location.reload();
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'فشل حفظ الإعدادات');
+      setError(err.response?.data?.detail || t('errors.saveFailed'));
       console.error('Error saving settings:', err);
     } finally {
       setSaving(false);
@@ -161,14 +164,14 @@ export function Settings() {
   const tabs: { id: TabType; label: string; icon: typeof Store }[] = [
     { id: 'company', label: 'معلومات الشركة', icon: Building2 },
     { id: 'invoices', label: 'الفواتير والمبيعات', icon: FileText },
-    { id: 'security', label: 'الأمان', icon: Shield },
-    { id: 'appearance', label: 'المظهر واللغة', icon: Palette },
+    { id: 'security', label: t('settings.security'), icon: Shield },
+    { id: 'appearance', label: t('settings.appearance'), icon: Palette },
   ];
 
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-gray-500">جاري تحميل الإعدادات...</div>
+        <div className="text-gray-500">{t('common.loading')}</div>
       </div>
     );
   }
@@ -177,7 +180,7 @@ export function Settings() {
     <div className="h-full overflow-y-auto bg-gray-50 p-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-[#1E293B] mb-2">إعدادات النظام</h1>
+        <h1 className="text-3xl font-bold text-[#1E293B] mb-2">{t('settings.title')}</h1>
         <p className="text-gray-600">إدارة إعدادات النظام والمتجر والأمان</p>
       </div>
 
@@ -214,7 +217,7 @@ export function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    اسم المتجر / الشركة
+                    {t('settings.storeName')}
                   </label>
                   <input
                     type="text"
@@ -240,7 +243,7 @@ export function Settings() {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    العملة
+                    {t('settings.currency')}
                   </label>
                   <select
                     value={settings.currency}
@@ -256,7 +259,7 @@ export function Settings() {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    نسبة الضريبة (%)
+                    {t('settings.taxRate')}
                   </label>
                   <input
                     type="number"
@@ -300,7 +303,7 @@ export function Settings() {
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                     <MapPin size={16} />
-                    العنوان
+                    {t('common.address')}
                   </label>
                   <textarea
                     value={settings.address}
@@ -405,7 +408,7 @@ export function Settings() {
             <div className="space-y-6">
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <Shield className="text-[#3B82F6]" />
-                إعدادات الأمان
+                {t('settings.security')}
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -477,14 +480,14 @@ export function Settings() {
             <div className="space-y-6">
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <Palette className="text-[#3B82F6]" />
-                المظهر واللغة
+                {t('settings.appearance')}
               </h3>
 
               {/* Language Section */}
               <div className="p-6 bg-gray-50 rounded-xl">
                 <h4 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
                   <Globe size={18} />
-                  اللغة والاتجاه
+                  {t('settings.language')}
                 </h4>
                 <div className="flex items-center gap-4">
                   <div className="text-4xl">
@@ -492,7 +495,7 @@ export function Settings() {
                   </div>
                   <div className="flex-1">
                     <p className="font-semibold text-gray-800">
-                      {settings.language === 'ar' ? 'اللغة العربية (RTL)' : 'English (LTR)'}
+                      {settings.language === 'ar' ? t('settings.languageAr') + ' (RTL)' : t('settings.languageEn') + ' (LTR)'}
                     </p>
                     <p className="text-sm text-gray-500">
                       {settings.language === 'ar' ? 'تخطيط من اليمين لليسار' : 'Left-to-Right layout'}
@@ -502,7 +505,7 @@ export function Settings() {
                     onClick={toggleLanguage}
                     className="px-6 py-3 rounded-xl font-bold transition-all bg-[#3B82F6] hover:bg-[#2563EB] text-white"
                   >
-                    {settings.language === 'ar' ? '🌐 Switch to English' : '🌐 التحول للعربية'}
+                    {settings.language === 'ar' ? '🌐 ' + t('settings.languageEn') : '🌐 ' + t('settings.languageAr')}
                   </button>
                 </div>
                 {needsReload && (
@@ -581,7 +584,7 @@ export function Settings() {
           {success && (
             <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-600 flex items-center gap-2">
               <CheckCircle size={20} />
-              تم حفظ الإعدادات بنجاح!
+              {t('settings.saved')}
             </div>
           )}
 
@@ -593,11 +596,11 @@ export function Settings() {
               className="flex items-center gap-2 px-8 py-3 bg-[#10B981] hover:bg-[#059669] text-white font-bold rounded-xl transition-colors disabled:opacity-50"
             >
               {saving ? (
-                <>جاري الحفظ...</>
+                <>{t('common.loading')}</>
               ) : (
                 <>
                   <Save size={20} />
-                  حفظ الإعدادات
+                  {t('settings.save')}
                 </>
               )}
             </button>

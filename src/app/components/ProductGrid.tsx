@@ -1,4 +1,5 @@
 import { Search, Barcode, Mic, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Product } from '../App';
 import { formatCurrency } from '../utils/currency';
 import { notify } from '../../lib/notifications';
@@ -26,6 +27,7 @@ export function ProductGrid({
   onRefresh,
   isLoading,
 }: ProductGridProps) {
+  const { t } = useTranslation();
   return (
     <>
       {/* Search Bar with Refresh Button */}
@@ -37,7 +39,7 @@ export function ProductGrid({
             </div>
             <input
               type="text"
-              placeholder="ابحث عن منتج أو امسح الباركود..."
+              placeholder={t('pos.searchProduct')}
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               className="w-full pr-12 pl-24 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
@@ -118,12 +120,12 @@ export function ProductGrid({
                 </div>
                 {isOutOfStock && (
                   <span className="inline-block text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full mt-1 font-medium">
-                    نفدت الكمية
+                    {t('inventory.outOfStock')}
                   </span>
                 )}
                 {isLowStock && (
                   <span className="inline-block text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full mt-1 font-medium">
-                    كمية منخفضة ({stock})
+                    {t('inventory.lowStock')} ({stock})
                   </span>
                 )}
                 {!isOutOfStock && !isLowStock && (

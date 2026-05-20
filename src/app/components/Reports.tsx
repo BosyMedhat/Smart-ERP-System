@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { 
   FileText, 
   Download, 
@@ -96,6 +97,7 @@ interface FinancialReport {
 type ReportType = 'sales' | 'inventory' | 'financial';
 
 export function Reports() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<ReportType>('sales');
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
@@ -310,7 +312,7 @@ export function Reports() {
             color="bg-blue-500"
           />
           <SummaryCard
-            title="إجمالي الإيرادات"
+            title={t('reports.totalRevenue')}
             value={formatCurrency(salesData.total_revenue)}
             icon={TrendingUp}
             color="bg-green-500"
@@ -395,7 +397,7 @@ export function Reports() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-700">
-                  <th className="text-right py-2 text-slate-400">التاريخ</th>
+                  <th className="text-right py-2 text-slate-400">{t('common.date')}</th>
                   <th className="text-center py-2 text-slate-400">الفواتير</th>
                   <th className="text-left py-2 text-slate-400">الإيرادات</th>
                 </tr>
@@ -557,7 +559,7 @@ export function Reports() {
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <SummaryCard
-            title="إجمالي الإيرادات"
+            title={t('reports.totalRevenue')}
             value={formatCurrency(financialData.total_revenue)}
             icon={DollarSign}
             color="bg-green-500"
@@ -624,7 +626,7 @@ export function Reports() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-700">
-                    <th className="text-right py-2 text-slate-400">التاريخ</th>
+                    <th className="text-right py-2 text-slate-400">{t('common.date')}</th>
                     <th className="text-center py-2 text-slate-400">كاش</th>
                     <th className="text-center py-2 text-slate-400">آجل</th>
                     <th className="text-left py-2 text-slate-400">الإجمالي</th>
@@ -666,7 +668,7 @@ export function Reports() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-3">
           <BarChart3 className="w-8 h-8 text-indigo-500" />
-          التقارير
+          {t('reports.title')}
         </h1>
         
         {/* PDF Download Button */}

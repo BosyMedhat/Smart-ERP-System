@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import apiClient from '../../api/axiosConfig';
 import { CreditCard, Calendar, DollarSign, CheckCircle, AlertTriangle, X } from 'lucide-react';
 
@@ -18,6 +19,7 @@ interface Installment {
 }
 
 export function InstallmentsManagement() {
+  const { t } = useTranslation();
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCollectModal, setShowCollectModal] = useState(false);
@@ -75,19 +77,19 @@ export function InstallmentsManagement() {
 
   const getStatusBadge = (item: Installment) => {
     const isLate = new Date(item.due_date) < new Date() && !item.is_paid;
-    if (item.is_paid || item.remaining_amount <= 0) return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg border bg-blue-100 text-blue-700 border-blue-300"><CheckCircle size={14} /> مكتمل</span>;
-    if (isLate) return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg border bg-red-100 text-red-700 border-red-300"><AlertTriangle size={14} /> متأخر</span>;
-    return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg border bg-green-100 text-green-700 border-green-300"><CheckCircle size={14} /> منتظم</span>;
+    if (item.is_paid || item.remaining_amount <= 0) return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg border bg-blue-100 text-blue-700 border-blue-300"><CheckCircle size={14} /> {t('installments.paid')}</span>;
+    if (isLate) return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg border bg-red-100 text-red-700 border-red-300"><AlertTriangle size={14} /> {t('installments.overdue')}</span>;
+    return <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-lg border bg-green-100 text-green-700 border-green-300"><CheckCircle size={14} /> {t('installments.pending')}</span>;
   };
 
-  if (loading) return <div className="p-20 text-center font-bold">جاري تحميل الأقساط...</div>;
+  if (loading) return <div className="p-20 text-center font-bold">{t('common.loading')}</div>;
 
   return (
     <div className="h-full overflow-y-auto bg-gray-50 p-6 space-y-6 text-right font-sans" dir="rtl">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-[#1E293B] mb-2">إدارة عمليات التقسيط</h1>
+          <h1 className="text-3xl font-bold text-[#1E293B] mb-2">{t('installments.title')}</h1>
           <p className="text-gray-600">تتبع شامل لمديونيات العملاء</p>
         </div>
         <div className="px-4 py-3 bg-purple-100 text-purple-700 font-bold rounded-xl text-sm text-center">
@@ -114,16 +116,16 @@ export function InstallmentsManagement() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b-2 border-gray-200 text-sm font-bold text-gray-700">
               <tr>
-                <th className="px-4 py-3 text-right">العميل</th>
+                <th className="px-4 py-3 text-right">{t('sales.customer')}</th>
                 <th className="px-4 py-3 text-right">رقم الفاتورة</th>
                 <th className="px-4 py-3 text-right">إجمالي الفاتورة</th>
-                <th className="px-4 py-3 text-right">المقدم</th>
+                <th className="px-4 py-3 text-right">{t('installments.downPayment')}</th>
                 <th className="px-4 py-3 text-right">القسط الشهري</th>
-                <th className="px-4 py-3 text-right">المتبقي</th>
-                <th className="px-4 py-3 text-right">الأشهر</th>
-                <th className="px-4 py-3 text-right">تاريخ أول قسط</th>
-                <th className="px-4 py-3 text-right">الحالة</th>
-                <th className="px-4 py-3 text-center">الإجراءات</th>
+                <th className="px-4 py-3 text-right">{t('installments.remainingAmount')}</th>
+                <th className="px-4 py-3 text-right">{t('installments.monthsCount')}</th>
+                <th className="px-4 py-3 text-right">{t('installments.dueDate')}</th>
+                <th className="px-4 py-3 text-right">{t('common.status')}</th>
+                <th className="px-4 py-3 text-center">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -162,7 +164,7 @@ export function InstallmentsManagement() {
             </div>
             <div className="p-6 space-y-4">
                 <p className="font-bold">العميل: {selectedInstallment.customer_name}</p>
-                <input type="number" placeholder="المبلغ" className="w-full px-4 py-4 border-2 border-emerald-100 rounded-xl text-center text-2xl font-bold" value={collectAmount} onChange={(e)=>setCollectAmount(e.target.value)} />
+                <input type="number" placeholder={t('common.amount')} className="w-full px-4 py-4 border-2 border-emerald-100 rounded-xl text-center text-2xl font-bold" value={collectAmount} onChange={(e)=>setCollectAmount(e.target.value)} />
                 <button onClick={handleCollect} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold">تأكيد التحصيل</button>
             </div>
           </div>

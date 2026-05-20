@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Users, Plus, X, CheckCircle, UserPlus, Shield, LayoutDashboard } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
 import { notify } from '@/lib/notifications';
@@ -72,6 +73,7 @@ const permissionCategories = {
 };
 
 export function UserManagement() {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -191,7 +193,7 @@ export function UserManagement() {
 
           {loading && (
             <div className="text-center py-8 text-gray-500">
-              جاري التحميل...
+              {t('common.loading')}
             </div>
           )}
           {error && (
@@ -365,7 +367,7 @@ export function UserManagement() {
               {/* Save Button */}
               <div className="mt-6 flex justify-end gap-3">
                 <button className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl transition-colors">
-                  إعادة تعيين
+                  {t('common.reset')}
                 </button>
                 <button
                   onClick={savePermissions}
@@ -438,11 +440,11 @@ export function UserManagement() {
                 onClick={() => setShowAddUserModal(false)}
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-xl transition-colors"
               >
-                إلغاء
+                {t('common.cancel')}
               </button>
               <button className="flex-1 bg-[#10B981] hover:bg-[#059669] text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg">
                 <UserPlus size={20} />
-                إضافة
+                {t('common.add')}
               </button>
             </div>
           </div>

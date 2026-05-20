@@ -1,4 +1,5 @@
 import { useState, useEffect, Fragment } from 'react';
+import { Users } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
 import FloatingAIAssistant from './components/FloatingAIAssistant';
 import { notify } from '../lib/notifications';
@@ -17,12 +18,17 @@ import { InstallmentsManagement } from './components/InstallmentsManagement';
 import { SalesRepresentatives } from './components/SalesRepresentatives';
 import { SalesHistory } from './components/SalesHistory';
 import { Reports } from './components/Reports';
+import PLReport from './components/PLReport';
+import TreasuryDashboard from './components/treasury/TreasuryDashboard';
 import { EmployeeProfile } from './components/EmployeeProfile';
 import { SuppliersScreen } from './components/SuppliersScreen';
 import { HRModule } from './components/HRModule';
 import { CreditDashboard } from './components/CreditDashboard';
 import apiClient from '../api/axiosConfig';
-
+import { useTranslation } from 'react-i18next';
+import '../i18n/index';
+import { useAuth, getStoredUser, clearUser } from '../auth';
+import { AdminLoginScreen } from './components/AdminLoginScreen';
 
 
 // Product interface matching backend API
@@ -42,15 +48,14 @@ export interface CartItem extends Product {
   quantity: number;
 }
 
-export type Screen = 'pos' | 'inventory' | 'home' | 'reports' | 'ai' | 'automation' | 'hr' | 'settings' | 'users' | 'suppliers' | 'installments' | 'representatives' | 'quotations' | 'sales' | 'profile' | 'credit';
+export type Screen = 'pos' | 'inventory' | 'home' | 'reports' | 'pl' | 'ai' | 'automation' | 'hr' | 'settings' | 'users' | 'suppliers' | 'installments' | 'representatives' | 'quotations' | 'sales' | 'profile' | 'credit' | 'treasury';
 
 export default function App() {
-  const savedUser = localStorage.getItem('erp_user');
-  const [currentUser, setCurrentUser] = useState(
-    savedUser ? JSON.parse(savedUser) : null
-  );
+  const [currentUser, setCurrentUser] = useState(getStoredUser);
   const isLoggedIn = currentUser !== null;
   const [activeScreen, setActiveScreen] = useState<Screen>('pos');
+  type LoginPortal = 'admin' | 'employee' | null;
+  const [loginPortal, setLoginPortal] = useState<LoginPortal>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('الكل');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -59,7 +64,20 @@ export default function App() {
   const [authScreen, setAuthScreen] = useState<'login' | 'signup'>('login');
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  
+  const { i18n } = useTranslation();
+
+  // Secret admin route detection
+  useEffect(() => {
+    const checkSecretPath = () => {
+      if (window.location.pathname === '/adminGamal') {
+        setLoginPortal('admin');
+      }
+    };
+    checkSecretPath();
+    window.addEventListener('popstate', checkSecretPath);
+    return () => window.removeEventListener('popstate', checkSecretPath);
+  }, []);
+
   // Products state - fetched from API
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
@@ -92,7 +110,10 @@ export default function App() {
     const lang = localStorage.getItem('lang') || 'ar';
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.lang = lang;
-  }, []);
+    if (i18n.language !== lang) {
+      i18n.changeLanguage(lang);
+    }
+  }, [i18n]);
 
   // Fetch products from API - standalone function for reuse
   const fetchProducts = async () => {
@@ -152,36 +173,12 @@ export default function App() {
   }, [isLoggedIn]);
 
   const handleLogout = () => {
-    localStorage.removeItem('erp_user');
+    clearUser();
     setCurrentUser(null);
+    setLoginPortal(null);
   };
 
-  const hasPermission = (screen: string): boolean => {
-    if (!currentUser) return false;
-    // المدير له وصول كامل
-    if (currentUser.role === 'مدير') return true;
-    // mapping بين الـ screens والـ permissions
-    const screenPermissions: Record<string, string[]> = {
-      'home'            : [],
-      'pos'             : ['add_invoice'],
-      'inventory'       : ['add_product', 'inventory_count'],
-      'installments'    : ['add_invoice'],
-      'representatives' : [],
-      'quotations'      : ['add_invoice'],
-      'hr'              : ['employee_report'],
-      'ai'              : [],
-      'automation'      : [],
-      'users'           : ['user_management'],
-      'settings'        : ['system_settings'],
-      'reports'         : ['profit_report', 'daily_sales'],
-      'sales'           : ['daily_sales'],
-    };
-    const required = screenPermissions[screen];
-    if (!required || required.length === 0) return true;
-    const userPerms = currentUser.permissions || {};
-    const allUserPerms = Object.values(userPerms).flat() as string[];
-    return required.some(p => allUserPerms.includes(p));
-  };
+  const { hasPermission } = useAuth(currentUser);
 
   const UnauthorizedScreen = () => (
     <div className="flex flex-col items-center justify-center h-full gap-4">
@@ -195,24 +192,65 @@ export default function App() {
     </div>
   );
 
-  if (!isLoggedIn) {
-  if (authScreen === 'login') {
-    return (
-      <LoginScreen
-        onLogin={(userData) => setCurrentUser(userData)}
-        onGoToSignUp={() => setAuthScreen('signup')}
-      />
-    );
-  }
+  if (!currentUser) {
+    if (!loginPortal) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" dir="rtl">
+          <div className="text-center max-w-lg w-full">
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Smart ERP</h1>
+            <p className="text-gray-500 mb-10">اختر بوابة الدخول المناسبة</p>
+            <div className="flex flex-col sm:flex-row gap-6 justify-center">
+              {/* Employee Card */}
+              <button
+                onClick={() => setLoginPortal('employee')}
+                className="flex-1 bg-white rounded-2xl p-8 border border-emerald-100 shadow-lg hover:shadow-xl hover:border-emerald-300 transition-all text-center group"
+              >
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-50 rounded-2xl mb-4 group-hover:bg-emerald-100 transition-colors">
+                  <Users className="w-8 h-8 text-emerald-700" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-800 mb-1">بوابة الموظفين</h2>
+                <p className="text-sm text-gray-500">الكاشير والمحاسب والمخزن</p>
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
-  if (authScreen === 'signup') {
-    return (
-      <SignUpScreen
-        onBackToLogin={() => setAuthScreen('login')}
-      />
-    );
+    if (loginPortal === 'admin') {
+      return (
+        <AdminLoginScreen
+          onLogin={(user) => {
+            setCurrentUser(user);
+            setLoginPortal(null);
+            window.history.pushState({}, '', '/');
+          }}
+          onGoToEmployeeLogin={() => setLoginPortal('employee')}
+        />
+      );
+    }
+
+    if (authScreen === 'login') {
+      return (
+        <LoginScreen
+          onLogin={(user: any) => {
+            setCurrentUser(user);
+            setLoginPortal(null);
+          }}
+          onGoToSignUp={() => setAuthScreen('signup')}
+          onBack={() => setLoginPortal(null)}
+        />
+      );
+    }
+
+    if (authScreen === 'signup') {
+      return (
+        <SignUpScreen
+          onBackToLogin={() => setAuthScreen('login')}
+        />
+      );
+    }
   }
-}
 
   const addToCart = (product: Product) => {
     const stock = Number(product.current_stock || 0);
@@ -280,41 +318,47 @@ export default function App() {
 
   return (
     <>
-      <div dir="rtl" className="h-screen flex bg-gray-50" style={{ fontFamily: 'Cairo, sans-serif' }}>
+      <div dir={i18n.language === 'ar' ? 'rtl' : 'ltr'} className="h-screen flex bg-gray-50" style={{ fontFamily: 'Cairo, sans-serif' }}>
         {/* Right Sidebar */}
         <Sidebar activeScreen={activeScreen} onScreenChange={setActiveScreen} currentUser={currentUser} onLogout={handleLogout} />
 
         {/* Main Content */}
         {activeScreen === 'pos' && (
           <div className="flex-1 flex gap-4 p-4">
-            {/* Right Side - Products (60%) */}
-            <div className="flex-[60] flex flex-col gap-4">
-              <ProductGrid
-                products={filteredProducts}
-                categories={categories}
-                selectedCategory={selectedCategory}
-                onCategoryChange={setSelectedCategory}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                onAddToCart={addToCart}
-                onRefresh={fetchProducts}
-                isLoading={productsLoading}
-              />
-            </div>
+            {hasPermission('pos') ? (
+              <>
+                {/* Right Side - Products (60%) */}
+                <div className="flex-[60] flex flex-col gap-4">
+                  <ProductGrid
+                    products={filteredProducts}
+                    categories={categories}
+                    selectedCategory={selectedCategory}
+                    onCategoryChange={setSelectedCategory}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    onAddToCart={addToCart}
+                    onRefresh={fetchProducts}
+                    isLoading={productsLoading}
+                  />
+                </div>
 
-            {/* Left Side - Cart (40%) */}
-            <div className="flex-[40] min-h-0 h-full">
-              <Cart
-                cartItems={cartItems}
-                selectedCustomer={selectedCustomer}
-                onCustomerChange={setSelectedCustomer}
-                discount={discount}
-                onDiscountChange={setDiscount}
-                onUpdateQuantity={updateQuantity}
-                onClearCart={clearCart}
-                onAddToCart={addToCart}
-              />
-            </div>
+                {/* Left Side - Cart (40%) */}
+                <div className="flex-[40] min-h-0 h-full">
+                  <Cart
+                    cartItems={cartItems}
+                    selectedCustomer={selectedCustomer}
+                    onCustomerChange={setSelectedCustomer}
+                    discount={discount}
+                    onDiscountChange={setDiscount}
+                    onUpdateQuantity={updateQuantity}
+                    onClearCart={clearCart}
+                    onAddToCart={addToCart}
+                  />
+                </div>
+              </>
+            ) : (
+              <UnauthorizedScreen />
+            )}
           </div>
         )}
 
@@ -356,19 +400,19 @@ export default function App() {
 
         {activeScreen === 'home' && (
           <div className="flex-1">
-            <Dashboard />
+            {hasPermission('home') ? <Dashboard /> : <UnauthorizedScreen />}
           </div>
         )}
 
         {activeScreen === 'suppliers' && (
           <div className="flex-1">
-            <SuppliersScreen />
+            {hasPermission('suppliers') ? <SuppliersScreen /> : <UnauthorizedScreen />}
           </div>
         )}
 
         {activeScreen === 'credit' && (
           <div className="flex-1">
-            <CreditDashboard />
+            {hasPermission('credit') ? <CreditDashboard /> : <UnauthorizedScreen />}
           </div>
         )}
 
@@ -387,6 +431,18 @@ export default function App() {
         {activeScreen === 'reports' && (
           <div className="flex-1">
             {hasPermission('reports') ? <Reports /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'pl' && (
+          <div className="flex-1">
+            {hasPermission('pl') ? <PLReport /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'treasury' && (
+          <div className="flex-1">
+            {hasPermission('treasury') ? <TreasuryDashboard /> : <UnauthorizedScreen />}
           </div>
         )}
 
@@ -411,7 +467,7 @@ export default function App() {
 
         {activeScreen === 'profile' && (
           <div className="flex-1">
-            <EmployeeProfile onLogout={handleLogout} />
+            {hasPermission('profile') ? <EmployeeProfile onLogout={handleLogout} /> : <UnauthorizedScreen />}
           </div>
         )}
       </div>

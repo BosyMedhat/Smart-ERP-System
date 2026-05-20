@@ -9,6 +9,7 @@ from .views import (
     SalesReportPDFView,
     InventoryReportPDFView,
     FinancialReportPDFView,
+    PLReportView,
 )
 
 urlpatterns = [
@@ -18,4 +19,5 @@ urlpatterns = [
     path('inventory/pdf/', InventoryReportPDFView.as_view(), name='inventory_report_pdf'),
     path('financial/', FinancialReportView.as_view(), name='financial_report'),
     path('financial/pdf/', FinancialReportPDFView.as_view(), name='financial_report_pdf'),
+    path('pl/', PLReportView.as_view(), name='pl_report'),
 ]

@@ -11,8 +11,12 @@ from django.contrib.auth.models import User
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
+
+from rest_framework.authentication import TokenAuthentication
+from inventory.permissions import CanViewReports
+from hr.models import PayrollRun
 
 # ReportLab imports for PDF generation
 from reportlab.lib import colors
@@ -47,7 +51,7 @@ try:
 except ImportError:
     ARABIC_SUPPORT = False
 
-from inventory.models import Sale, SaleItem, Product, StoreSettings
+from inventory.models import Sale, SaleItem, Product, StoreSettings, Purchase, Expense
 
 
 def reshape_arabic(text):
@@ -886,3 +890,232 @@ class FinancialReportPDFView(APIView):
     def options(self, request, *args, **kwargs):
         response = HttpResponse()
         return add_cors_headers(response)
+
+
+# ==================== P&L REPORT VIEW ====================
+
+
+def get_date_range(request):
+    """استخراج نطاق التاريخ من الـ request"""
+    date_from = request.query_params.get('date_from')
+    date_to   = request.query_params.get('date_to')
+
+    if date_from:
+        date_from = date.fromisoformat(date_from)
+    else:
+        today = date.today()
+        date_from = today.replace(day=1)
+
+    if date_to:
+        date_to = date.fromisoformat(date_to)
+    else:
+        date_to = date.today()
+
+    return date_from, date_to
+
+
+def get_previous_period(date_from, date_to):
+    """حساب الفترة السابقة بنفس المدة"""
+    delta = date_to - date_from
+    prev_to   = date_from - timedelta(days=1)
+    prev_from = prev_to - delta
+    return prev_from, prev_to
+
+
+def calculate_pl(date_from, date_to):
+    """حساب P&L لفترة معينة"""
+
+    # ── الإيرادات ──────────────────────────────
+    sales_qs = Sale.objects.filter(
+        created_at__date__gte=date_from,
+        created_at__date__lte=date_to,
+    )
+
+    revenue_cash = sales_qs.filter(
+        payment_type='cash'
+    ).aggregate(t=Sum('final_amount'))['t'] or Decimal('0')
+
+    revenue_electronic = sales_qs.filter(
+        payment_type__in=['vodafone_cash', 'instapay', 'card']
+    ).aggregate(t=Sum('final_amount'))['t'] or Decimal('0')
+
+    revenue_credit = sales_qs.filter(
+        payment_type='credit'
+    ).aggregate(t=Sum('final_amount'))['t'] or Decimal('0')
+
+    revenue_installment = sales_qs.filter(
+        payment_type='installment'
+    ).aggregate(t=Sum('final_amount'))['t'] or Decimal('0')
+
+    total_revenue = (
+        revenue_cash + revenue_electronic +
+        revenue_credit + revenue_installment
+    )
+
+    total_discount = sales_qs.aggregate(
+        t=Sum('discount')
+    )['t'] or Decimal('0')
+
+    total_tax = sales_qs.aggregate(
+        t=Sum('tax_amount')
+    )['t'] or Decimal('0')
+
+    # ── COGS ────────────────────────────────────
+    items_qs = SaleItem.objects.filter(
+        sale__created_at__date__gte=date_from,
+        sale__created_at__date__lte=date_to,
+    )
+
+    cogs = Decimal('0')
+    for item in items_qs:
+        cost = item.cost_price_at_sale or Decimal('0')
+        cogs += cost * item.quantity
+
+    # ── مجمل الربح ──────────────────────────────
+    gross_profit = total_revenue - cogs
+    gross_margin = (
+        (gross_profit / total_revenue * 100)
+        if total_revenue > 0 else Decimal('0')
+    )
+
+    # ── المصروفات ───────────────────────────────
+    expenses_qs = Expense.objects.filter(
+        date__gte=date_from,
+        date__lte=date_to,
+    )
+
+    exp_rent = expenses_qs.filter(
+        category='rent'
+    ).aggregate(t=Sum('amount'))['t'] or Decimal('0')
+
+    exp_electricity = expenses_qs.filter(
+        category='electricity'
+    ).aggregate(t=Sum('amount'))['t'] or Decimal('0')
+
+    exp_maintenance = expenses_qs.filter(
+        category='maintenance'
+    ).aggregate(t=Sum('amount'))['t'] or Decimal('0')
+
+    exp_other = expenses_qs.filter(
+        category='other'
+    ).aggregate(t=Sum('amount'))['t'] or Decimal('0')
+
+    total_expenses_operational = (
+        exp_rent + exp_electricity +
+        exp_maintenance + exp_other
+    )
+
+    # ── الرواتب ─────────────────────────────────
+    payroll_qs = PayrollRun.objects.filter(
+        status='paid',
+        paid_at__date__gte=date_from,
+        paid_at__date__lte=date_to,
+    )
+
+    total_salaries = payroll_qs.aggregate(
+        t=Sum('total_net')
+    )['t'] or Decimal('0')
+
+    total_expenses = total_expenses_operational + total_salaries
+
+    # ── صافي الربح ──────────────────────────────
+    net_profit = gross_profit - total_expenses
+    net_margin = (
+        (net_profit / total_revenue * 100)
+        if total_revenue > 0 else Decimal('0')
+    )
+
+    # ── إحصائيات إضافية ─────────────────────────
+    total_invoices = sales_qs.count()
+    avg_invoice    = (
+        total_revenue / total_invoices
+        if total_invoices > 0 else Decimal('0')
+    )
+
+    return {
+        'period': {
+            'date_from': str(date_from),
+            'date_to':   str(date_to),
+        },
+        'revenue': {
+            'cash':        str(revenue_cash),
+            'electronic':  str(revenue_electronic),
+            'credit':      str(revenue_credit),
+            'installment': str(revenue_installment),
+            'total':       str(total_revenue),
+            'discount':    str(total_discount),
+            'tax':         str(total_tax),
+        },
+        'cogs': str(cogs),
+        'gross_profit': str(gross_profit),
+        'gross_margin': str(gross_margin.quantize(Decimal('0.01'))),
+        'expenses': {
+            'rent':         str(exp_rent),
+            'electricity':  str(exp_electricity),
+            'maintenance':  str(exp_maintenance),
+            'other':        str(exp_other),
+            'salaries':     str(total_salaries),
+            'total':        str(total_expenses),
+        },
+        'net_profit': str(net_profit),
+        'net_margin': str(net_margin.quantize(Decimal('0.01'))),
+        'stats': {
+            'total_invoices': total_invoices,
+            'avg_invoice':    str(avg_invoice.quantize(Decimal('0.01'))),
+        },
+    }
+
+
+class PLReportView(APIView):
+    """
+    GET /api/reports/pl/
+    params: date_from (YYYY-MM-DD), date_to (YYYY-MM-DD)
+    يرجع P&L كامل مع مقارنة بالفترة السابقة
+    """
+    authentication_classes = [TokenAuthentication]
+    permission_classes     = [IsAuthenticated, CanViewReports]
+
+    def get(self, request):
+        date_from, date_to = get_date_range(request)
+        prev_from, prev_to = get_previous_period(date_from, date_to)
+
+        current  = calculate_pl(date_from, date_to)
+        previous = calculate_pl(prev_from, prev_to)
+
+        # حساب نسب التغيير
+        def pct_change(curr, prev):
+            c = Decimal(str(curr))
+            p = Decimal(str(prev))
+            if p == 0:
+                return '0.00'
+            change = ((c - p) / abs(p) * 100).quantize(Decimal('0.01'))
+            return str(change)
+
+        comparison = {
+            'revenue_change':     pct_change(
+                current['revenue']['total'],
+                previous['revenue']['total']
+            ),
+            'cogs_change':        pct_change(
+                current['cogs'],
+                previous['cogs']
+            ),
+            'gross_profit_change': pct_change(
+                current['gross_profit'],
+                previous['gross_profit']
+            ),
+            'expenses_change':    pct_change(
+                current['expenses']['total'],
+                previous['expenses']['total']
+            ),
+            'net_profit_change':  pct_change(
+                current['net_profit'],
+                previous['net_profit']
+            ),
+        }
+
+        return Response({
+            'current':    current,
+            'previous':   previous,
+            'comparison': comparison,
+        })

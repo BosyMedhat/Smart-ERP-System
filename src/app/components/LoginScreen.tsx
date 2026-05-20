@@ -301,15 +301,19 @@
 
 import { useState } from 'react';
 import logo from '../../assets/logo.png';
-import { User, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, LogIn, Users } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
+import { storeUser } from '../../auth';
+import { useTranslation } from 'react-i18next';
 
 interface LoginScreenProps {
   onLogin: (userData?: any) => void;
   onGoToSignUp: () => void;
+  onBack?: () => void;
 }
 
-export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
+export function LoginScreen({ onLogin, onGoToSignUp, onBack }: LoginScreenProps) {
+  const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -433,38 +437,30 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
         const response = await apiClient.post('/login/', { username, password });
         const data = response.data;
         if (data.token) {
-          localStorage.setItem('erp_user', JSON.stringify({
-            token: data.token,
-            id: data.id,
-            username: data.username,
-            role: data.role,
-            permissions: data.permissions,
-          }));
+          storeUser(data);
           onLogin(data);
         } else {
-          setLoginError(data.error || 'بيانات الدخول غير صحيحة');
+          setLoginError(data.error || t('auth.loginError'));
         }
       } catch {
-        setLoginError('تعذر الاتصال بالخادم');
+        setLoginError(t('errors.networkError'));
       }
     }
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#334155] flex items-center justify-center p-4">
+    <div className="min-h-screen w-full bg-gradient-to-br from-emerald-50 to-teal-100 flex items-center justify-center p-4">
       <div className="relative w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
+        <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
 
           {/* Brand Section */}
           {step === 'login' && (
-            <div className="flex items-center justify-center mb-4 gap-2">
-              <div className="w-24 h-24">
-                <img src={logo} alt="Smart ERP Logo" className="w-full h-full object-contain" />
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-emerald-100 rounded-2xl mb-4">
+                <Users className="w-10 h-10 text-emerald-700" />
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-[#1E293B]">SMART ERP</h1>
-                <p className="text-gray-600 text-sm">نظام إدارة الأعمال المتكامل</p>
-              </div>
+              <h1 className="text-2xl font-bold text-gray-800 mb-1">بوابة الموظفين</h1>
+              <p className="text-gray-500 text-sm">Employee Portal — تسجيل الدخول كموظف</p>
             </div>
           )}
 
@@ -473,7 +469,7 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
             <form onSubmit={handleSubmit} className="space-y-5">
 
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">اسم المستخدم</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">{t('auth.username')}</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -490,7 +486,7 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">كلمة المرور</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">{t('auth.password')}</label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -531,7 +527,7 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
 
                 <button
                   type="button"
-                  className="text-sm text-[#3B82F6]"
+                  className="text-sm text-emerald-600 hover:text-emerald-700"
                   onClick={() => setStep('email')}
                 >
                   نسيت كلمة المرور؟
@@ -540,10 +536,10 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
 
               <button
                 type="submit"
-                className="w-full bg-[#1E293B] text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors"
               >
                 <LogIn size={20} />
-                تسجيل الدخول
+                {t('auth.login')}
               </button>
 
               {/* Sign Up */}
@@ -551,7 +547,7 @@ export function LoginScreen({ onLogin, onGoToSignUp }: LoginScreenProps) {
 
                 <button
                   type="button"
-                  className="text-[#3B82F6] font-bold hover:underline"
+                  className="text-emerald-600 font-bold hover:underline"
                   onClick={onGoToSignUp}
                 >
                   تسجيل جديد

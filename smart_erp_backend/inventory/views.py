@@ -35,6 +35,9 @@ from .permissions import (
     CanManageUsers,
     IsManagerOrHasPermission,
     IsManager,
+    CanMakeSales,
+    CanViewDashboard,
+    IsManagerRole,
 )
 
 # 1. المنتجات
@@ -177,7 +180,7 @@ class PurchaseViewSet(viewsets.ModelViewSet):
 # 9.5. تقييمات الموردين
 class SupplierEvaluationViewSet(viewsets.ModelViewSet):
     serializer_class = SupplierEvaluationSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanManageSuppliers]
     http_method_names = ['get', 'post', 'delete']
 
     def get_queryset(self):
@@ -206,7 +209,7 @@ class StoreSettingsSerializer(serializers.ModelSerializer):
 class StoreSettingsViewSet(viewsets.ModelViewSet):
     queryset = StoreSettings.objects.all()
     serializer_class = StoreSettingsSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated, IsManagerRole]
 
     def get_object(self):
         obj, _ = StoreSettings.objects.get_or_create(pk=1)
@@ -217,7 +220,11 @@ class StoreSettingsViewSet(viewsets.ModelViewSet):
 # 13. فواتير المبيعات (POS Sales)
 class SaleViewSet(viewsets.ModelViewSet):
     queryset = Sale.objects.all().prefetch_related('items__product')
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [IsAuthenticated(), CanMakeSales()]
+        return [IsAuthenticated(), CanViewDashboard()]
 
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
@@ -330,7 +337,7 @@ class ProductByBarcodeView(APIView):
 
 # ==================== DASHBOARD API ====================
 class DashboardView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanViewDashboard]
 
     def get(self, request):
         today = timezone.now().date()

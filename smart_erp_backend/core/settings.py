@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'customers',
     'ai_assistant',
     'hr',
+    'treasury',
 
 ]
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/axiosConfig';
 import { formatCurrency } from '../utils/currency';
+import { useTranslation } from 'react-i18next';
 import {
   TrendingUp,
   Bell,
@@ -44,6 +45,8 @@ interface DashboardData {
 }
 
 export function Dashboard() {
+  const { t } = useTranslation();
+
   // Modals state
   const [showShiftClosingModal, setShowShiftClosingModal] = useState(false);
   const [showSalesInvoiceModal, setShowSalesInvoiceModal] = useState(false);
@@ -68,7 +71,7 @@ export function Dashboard() {
       const res = await apiClient.get('/dashboard/');
       setData(res.data);
     } catch {
-      setError('تعذر تحميل بيانات لوحة التحكم');
+      setError(t('errors.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -134,8 +137,7 @@ export function Dashboard() {
               <div className="text-left">
                 <div className="text-sm font-bold text-gray-800">{displayName}</div>
                 <div className="text-xs text-gray-600">
-                  {currentUser?.role === 'admin' ? 'مدير النظام' :
-                   currentUser?.role === 'manager' ? 'مشرف' : 'كاشير'}
+                  {currentUser?.role === 'مدير' ? 'مدير النظام' : 'كاشير'}
                 </div>
               </div>
               <div className="w-10 h-10 bg-gradient-to-br from-[#3B82F6] to-[#1E293B] rounded-full flex items-center justify-center text-white font-bold">
@@ -300,7 +302,7 @@ export function Dashboard() {
                   </div>
                   <div className="space-y-3 max-h-96 overflow-y-auto">
                     {data?.recent_activities.length === 0 ? (
-                      <p className="text-gray-400 text-center py-4">لا توجد أنشطة بعد</p>
+                      <p className="text-gray-400 text-center py-4">{t('common.noData')}</p>
                     ) : (
                       data?.recent_activities.map((activity, index) => (
                         <div

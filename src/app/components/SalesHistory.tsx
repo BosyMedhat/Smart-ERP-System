@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, ChevronLeft, ChevronRight, Receipt, Calendar, User, CreditCard, Package } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import apiClient from '../../api/axiosConfig';
 import { formatCurrency } from '../utils/currency';
 
@@ -29,6 +30,7 @@ interface Sale {
 }
 
 export function SalesHistory() {
+  const { t } = useTranslation();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -90,7 +92,7 @@ export function SalesHistory() {
       <div className="h-full flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3B82F6] mx-auto mb-4"></div>
-          <div className="text-gray-500">جاري تحميل المبيعات...</div>
+          <div className="text-gray-500">{t('common.loading')}</div>
         </div>
       </div>
     );
@@ -112,7 +114,7 @@ export function SalesHistory() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">سجل المبيعات</h1>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">{t('sales.title')}</h1>
           <p className="text-gray-500">عرض وتتبع جميع فواتير المبيعات</p>
         </div>
 
@@ -139,14 +141,14 @@ export function SalesHistory() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">رقم الفاتورة</th>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">العميل</th>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الكاشير</th>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الإجمالي</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">{t('sales.invoiceNumber')}</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">{t('sales.customer')}</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">{t('sales.cashier')}</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">{t('common.total')}</th>
                   <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الخصم</th>
                   <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الصافي</th>
                   <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الدفع</th>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">التاريخ</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">{t('common.date')}</th>
                   <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">تفاصيل</th>
                 </tr>
               </thead>
@@ -155,7 +157,7 @@ export function SalesHistory() {
                   <tr>
                     <td colSpan={9} className="px-4 py-12 text-center text-gray-500">
                       <div className="text-4xl mb-2">📋</div>
-                      <div>لا توجد فواتير مطابقة للبحث</div>
+                      <div>{t('common.noResults')}</div>
                     </td>
                   </tr>
                 ) : (
@@ -255,14 +257,14 @@ export function SalesHistory() {
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-gray-500 mb-1">
                       <User size={16} />
-                      <span className="text-sm">العميل</span>
+                      <span className="text-sm">{t('sales.customer')}</span>
                     </div>
                     <div className="font-medium text-gray-800">{selectedSale.customer_name || 'عميل نقدي'}</div>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-gray-500 mb-1">
                       <CreditCard size={16} />
-                      <span className="text-sm">طريقة الدفع</span>
+                      <span className="text-sm">{t('sales.paymentType')}</span>
                     </div>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentTypeColor(selectedSale.payment_type)}`}>
                       {getPaymentTypeLabel(selectedSale.payment_type)}
@@ -271,14 +273,14 @@ export function SalesHistory() {
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-gray-500 mb-1">
                       <Calendar size={16} />
-                      <span className="text-sm">التاريخ</span>
+                      <span className="text-sm">{t('common.date')}</span>
                     </div>
                     <div className="font-medium text-gray-800">{formatDate(selectedSale.created_at)}</div>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-gray-500 mb-1">
                       <Receipt size={16} />
-                      <span className="text-sm">الكاشير</span>
+                      <span className="text-sm">{t('sales.cashier')}</span>
                     </div>
                     <div className="font-medium text-gray-800">{selectedSale.cashier_name}</div>
                   </div>
@@ -317,7 +319,7 @@ export function SalesHistory() {
 
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-600">الإجمالي:</span>
+                    <span className="text-gray-600">{t('common.total')}:</span>
                     <span className="font-medium">{formatCurrency(selectedSale.total_amount)}</span>
                   </div>
                   <div className="flex justify-between items-center mb-2">

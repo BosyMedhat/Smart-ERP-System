@@ -37,7 +37,7 @@ apiClient.interceptors.response.use(
             localStorage.removeItem('erp_user');
             // Dispatch custom event for notification
             window.dispatchEvent(new CustomEvent('sessionExpired'));
-            window.location.href = '/login';
+            window.location.href = '/';
         } else if (error.response?.status === 403) {
             // Forbidden - no permission
             console.error('403 Forbidden:', error.response.data);

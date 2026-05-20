@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Search, Edit2, Trash2, Users, ScanLine, Package, AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { notify } from '@/lib/notifications';
 import { ConfirmDialog, useConfirm } from './ConfirmDialog';
 import { ProductModal } from './ProductModal';
@@ -8,6 +9,7 @@ import apiClient from '../../api/axiosConfig';
 import { formatCurrency } from '../utils/currency';
 
 export function InventoryScreen() {
+  const { t } = useTranslation();
   const [products, setProducts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('الكل');
@@ -137,8 +139,8 @@ export function InventoryScreen() {
       title: 'تأكيد الحذف',
       description: 'هل أنت متأكد من حذف هذا المنتج؟ لا يمكن التراجع عن هذا الإجراء.',
       variant: 'destructive',
-      confirmLabel: 'حذف',
-      cancelLabel: 'إلغاء',
+      confirmLabel: t('common.delete'),
+      cancelLabel: t('common.cancel'),
     });
     if (confirmed) {
       try {
@@ -154,9 +156,9 @@ export function InventoryScreen() {
   return (
     <div className="h-full flex flex-col p-6 gap-6" dir="rtl">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-800">إدارة المخازن والمنتجات</h1>
+        <h1 className="text-3xl font-bold text-gray-800">{t('inventory.title')}</h1>
         <button onClick={() => { setEditingProduct(null); setIsModalOpen(true); }} className="px-6 py-3 bg-[#3B82F6] text-white font-semibold rounded-xl flex items-center gap-2 shadow-lg hover:bg-blue-700 transition-all">
-          <Plus size={20} /> إضافة منتج جديد
+          <Plus size={20} /> {t('inventory.addProduct')}
         </button>
       </div>
 
@@ -184,7 +186,7 @@ export function InventoryScreen() {
             disabled={!barcodeInput.trim()}
             className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
           >
-            بحث
+            {t('common.search')}
           </button>
         </form>
         
@@ -233,13 +235,13 @@ export function InventoryScreen() {
             <thead className="bg-[#1E293B] text-white sticky top-0">
               <tr>
                 <th className="px-4 py-4">الكود</th>
-                <th className="px-4 py-4">اسم المنتج</th>
+                <th className="px-4 py-4">{t('inventory.productName')}</th>
                 <th className="px-4 py-4">المورد</th>
                 <th className="px-4 py-4">الكمية</th>
                 <th className="px-4 py-4">سعر التكلفة</th>
                 <th className="px-4 py-4">سعر البيع</th>
-                <th className="px-4 py-4">الحالة</th>
-                <th className="px-4 py-4 text-center">الإجراءات</th>
+                <th className="px-4 py-4">{t('common.status')}</th>
+                <th className="px-4 py-4 text-center">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -335,7 +337,7 @@ export function InventoryScreen() {
                 onClick={() => setShowStockModal(false)}
                 className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
               >
-                إلغاء
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleUpdateStock}

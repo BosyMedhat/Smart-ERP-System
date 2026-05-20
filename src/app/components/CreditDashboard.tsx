@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { notify } from '@/lib/notifications';
 import { DollarSign, Phone, Mail, Search, X, TrendingDown } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
@@ -21,6 +22,7 @@ interface CreditSale {
 }
 
 export function CreditDashboard() {
+  const { t } = useTranslation();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [creditSales, setCreditSales] = useState<CreditSale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +68,7 @@ export function CreditDashboard() {
     } catch (e) { notify.error('حدث خطأ أثناء التحصيل'); }
   };
 
-  if (loading) return <div className="p-20 text-center text-gray-400 font-bold">جاري التحميل...</div>;
+  if (loading) return <div className="p-20 text-center text-gray-400 font-bold">{t('common.loading')}</div>;
 
   return (
     <div className="h-full overflow-y-auto bg-gray-50 p-6 space-y-6 text-right font-sans" dir="rtl">
@@ -154,8 +156,8 @@ export function CreditDashboard() {
                 <tr>
                   <th className="px-4 py-3 text-right">رقم الفاتورة</th>
                   <th className="px-4 py-3 text-right">العميل</th>
-                  <th className="px-4 py-3 text-right">المبلغ</th>
-                  <th className="px-4 py-3 text-right">التاريخ</th>
+                  <th className="px-4 py-3 text-right">{t('sales.amount')}</th>
+                  <th className="px-4 py-3 text-right">{t('common.date')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

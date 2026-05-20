@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Minus, Printer, X, Loader2, ScanLine, User, Phone } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { CartItem, Product } from '../App';
 import apiClient from '../../api/axiosConfig';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
@@ -40,6 +41,7 @@ export function Cart({
   onSaleComplete,
   onAddToCart,
 }: CartProps) {
+  const { t } = useTranslation();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -300,7 +302,7 @@ export function Cart({
           <div className="h-full flex items-center justify-center text-gray-400">
             <div className="text-center">
               <div className="text-4xl mb-2">🛒</div>
-              <div>السلة فارغة</div>
+              <div>{t('pos.cartEmpty')}</div>
             </div>
           </div>
         ) : (
@@ -354,7 +356,7 @@ export function Cart({
         {/* Payment Type Selection */}
         <div className="mb-4">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
-            طريقة الدفع
+            {t('pos.paymentMethod')}
           </label>
           <div className="grid grid-cols-2 gap-1">
             <button
@@ -365,7 +367,7 @@ export function Cart({
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              💵 كاش
+              💵 {t('pos.cash')}
             </button>
             <button
               onClick={() => { setPaymentType('vodafone_cash'); setShowCreditWarning(false); }}
@@ -375,7 +377,7 @@ export function Cart({
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              📱 فودافون كاش
+              📱 {t('pos.vodafone')}
             </button>
             <button
               onClick={() => { setPaymentType('instapay'); setShowCreditWarning(false); }}
@@ -385,7 +387,7 @@ export function Cart({
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              📲 انستاباي
+              📲 {t('pos.instapay')}
             </button>
             <button
               onClick={() => { setPaymentType('card'); setShowCreditWarning(false); }}
@@ -395,7 +397,7 @@ export function Cart({
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              💳 بطاقة بنكية
+              💳 {t('pos.card')}
             </button>
             <button
               onClick={() => setPaymentType('credit')}
@@ -405,7 +407,7 @@ export function Cart({
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              📋 آجل
+              📋 {t('pos.credit')}
             </button>
             <button
               onClick={() => { setPaymentType('installment'); setShowInstallmentModal(true); }}
@@ -415,7 +417,7 @@ export function Cart({
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              📅 تقسيط
+              📅 {t('pos.installment')}
             </button>
           </div>
           {/* Credit Warning */}

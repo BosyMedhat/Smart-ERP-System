@@ -85,3 +85,49 @@ class CanManageTreasury(IsManager):
 class CanManageUsers(IsManager):
     """إدارة المستخدمين للمدير فقط"""
     pass
+
+
+def get_user_role(user):
+    """Helper مركزي للحصول على الـ role"""
+    try:
+        return user.userprofile.role
+    except Exception:
+        return None
+
+MANAGER_ROLE = 'مدير'
+CASHIER_ROLE = 'كاشير'
+ACCOUNTANT_ROLE = 'محاسب'
+WAREHOUSE_ROLE = 'أمين مخزن'
+
+
+class CanMakeSales(BasePermission):
+    """كاشير + مدير فقط يقدروا يبيعوا"""
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_user_role(request.user)
+        return role in [MANAGER_ROLE, CASHIER_ROLE]
+
+
+class CanViewDashboard(BasePermission):
+    """كل الـ roles المصرح لهم يشوفوا الداشبورد"""
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_user_role(request.user)
+        return role in [MANAGER_ROLE, CASHIER_ROLE, ACCOUNTANT_ROLE, WAREHOUSE_ROLE]
+
+
+class IsManagerRole(BasePermission):
+    """مدير فقط — يستخدم role بدلاً من is_staff"""
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = get_user_role(request.user)
+        return role == MANAGER_ROLE

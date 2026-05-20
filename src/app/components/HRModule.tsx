@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import apiClient from '../../api/axiosConfig';
 import { notify } from '@/lib/notifications';
 import {
@@ -85,6 +86,7 @@ const PAYROLL_STATUS: Record<string, { label: string; color: string; bg: string 
 };
 
 export function HRModule() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabType>('employees');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -266,7 +268,7 @@ export function HRModule() {
       {/* Page Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-[#1E293B] mb-2 font-sans">إدارة الموارد البشرية</h1>
+          <h1 className="text-3xl font-bold text-[#1E293B] mb-2 font-sans">{t('hr.title')}</h1>
           <p className="text-gray-600 font-sans">الحضور، الرواتب، ومسيرات الدفع</p>
         </div>
         <button
@@ -283,9 +285,9 @@ export function HRModule() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="flex gap-1 p-2 border-b">
           {[
-            { key: 'employees', label: 'الموظفون', icon: Users },
-            { key: 'attendance', label: 'الحضور', icon: Clock },
-            { key: 'payroll', label: 'مسير الرواتب', icon: DollarSign },
+            { key: 'employees', label: t('hr.employees'), icon: Users },
+            { key: 'attendance', label: t('hr.attendance'), icon: Clock },
+            { key: 'payroll', label: t('hr.payroll'), icon: DollarSign },
             { key: 'slips', label: 'قسائم الرواتب', icon: FileText },
           ].map(({ key, label, icon: Icon }) => (
             <button
@@ -308,12 +310,12 @@ export function HRModule() {
               <table className="w-full text-right font-sans">
                 <thead className="bg-gray-50 border-b-2 border-gray-200 font-bold">
                   <tr>
-                    <th className="px-4 py-3">الاسم</th>
+                    <th className="px-4 py-3">{t('common.name')}</th>
                     <th className="px-4 py-3 text-center">المسمى الوظيفي</th>
-                    <th className="px-4 py-3 text-center">الراتب الأساسي</th>
-                    <th className="px-4 py-3 text-center">السلف</th>
-                    <th className="px-4 py-3 text-center">الحوافز</th>
-                    <th className="px-4 py-3 text-center">صافي الراتب</th>
+                    <th className="px-4 py-3 text-center">{t('hr.baseSalary')}</th>
+                    <th className="px-4 py-3 text-center">{t('hr.advances')}</th>
+                    <th className="px-4 py-3 text-center">{t('hr.incentives')}</th>
+                    <th className="px-4 py-3 text-center">{t('hr.netSalary')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -330,7 +332,7 @@ export function HRModule() {
                 </tbody>
               </table>
               {employees.length === 0 && !loading && (
-                <div className="text-center py-8 text-gray-500">لا يوجد موظفين</div>
+                <div className="text-center py-8 text-gray-500">{t('common.noData')}</div>
               )}
             </div>
           )}
@@ -391,7 +393,7 @@ export function HRModule() {
               </div>
 
               {employees.length === 0 && !loading && (
-                <div className="text-center py-8 text-gray-500">لا يوجد موظفين</div>
+                <div className="text-center py-8 text-gray-500">{t('common.noData')}</div>
               )}
             </div>
           )}
@@ -416,11 +418,11 @@ export function HRModule() {
                   <thead className="bg-gray-50 border-b-2 border-gray-200 font-bold">
                     <tr>
                       <th className="px-4 py-3">الشهر/السنة</th>
-                      <th className="px-4 py-3 text-center">الحالة</th>
+                      <th className="px-4 py-3 text-center">{t('common.status')}</th>
                       <th className="px-4 py-3 text-center">الإجمالي</th>
                       <th className="px-4 py-3 text-center">الخصومات</th>
                       <th className="px-4 py-3 text-center">الصافي</th>
-                      <th className="px-4 py-3 text-center">الإجراءات</th>
+                      <th className="px-4 py-3 text-center">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -473,7 +475,7 @@ export function HRModule() {
                   </tbody>
                 </table>
                 {payrollRuns.length === 0 && !loading && (
-                  <div className="text-center py-8 text-gray-500">لا يوجد مسيرات رواتب</div>
+                  <div className="text-center py-8 text-gray-500">{t('common.noData')}</div>
                 )}
               </div>
             </div>
@@ -508,12 +510,12 @@ export function HRModule() {
                     <tr>
                       <th className="px-4 py-3">الموظف</th>
                       <th className="px-4 py-3 text-center">الأساسي</th>
-                      <th className="px-4 py-3 text-center">الحوافز</th>
-                      <th className="px-4 py-3 text-center">السلف</th>
+                      <th className="px-4 py-3 text-center">{t('hr.incentives')}</th>
+                      <th className="px-4 py-3 text-center">{t('hr.advances')}</th>
                       <th className="px-4 py-3 text-center">أيام الغياب</th>
                       <th className="px-4 py-3 text-center">خصم التأخير</th>
                       <th className="px-4 py-3 text-center">الصافي</th>
-                      <th className="px-4 py-3 text-center">الحالة</th>
+                      <th className="px-4 py-3 text-center">{t('common.status')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -541,7 +543,7 @@ export function HRModule() {
                   </tbody>
                 </table>
                 {salarySlips.length === 0 && !loading && (
-                  <div className="text-center py-8 text-gray-500">لا توجد قسائم رواتب لهذا المسير</div>
+                  <div className="text-center py-8 text-gray-500">{t('common.noData')}</div>
                 )}
               </div>
 
@@ -550,7 +552,7 @@ export function HRModule() {
                 <div className="flex justify-end gap-2">
                   <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200">
                     <Printer size={18} />
-                    طباعة
+                    {t('common.print')}
                   </button>
                   <button className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-100">
                     <Download size={18} />
@@ -596,7 +598,7 @@ export function HRModule() {
                 </div>
               </div>
               <div>
-                <label className="block mb-2 text-gray-700">ملاحظات</label>
+                <label className="block mb-2 text-gray-700">{t('common.notes')}</label>
                 <textarea
                   value={payrollForm.notes}
                   onChange={(e) => setPayrollForm({ ...payrollForm, notes: e.target.value })}
@@ -610,7 +612,7 @@ export function HRModule() {
                   onClick={() => setShowPayrollModal(false)}
                   className="flex-1 bg-gray-100 py-3 rounded-xl hover:bg-gray-200"
                 >
-                  إلغاء
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={createPayrollRun}

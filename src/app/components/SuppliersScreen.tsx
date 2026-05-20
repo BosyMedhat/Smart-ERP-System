@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, X, Phone, Mail, MapPin, ShoppingCart, DollarSign, Building2, Search, Star } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import apiClient from '../../api/axiosConfig';
 import { formatCurrency } from '../utils/currency';
 import { notify } from '@/lib/notifications';
@@ -61,6 +62,7 @@ interface Purchase {
 }
 
 export function SuppliersScreen() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'suppliers' | 'purchases' | 'debts' | 'evaluations'>('suppliers');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -253,7 +255,7 @@ export function SuppliersScreen() {
   const totalDebt = suppliers.reduce((sum, s) => sum + Number(s.balance), 0);
   const suppliersWithDebt = suppliers.filter(s => Number(s.balance) > 0).length;
 
-  if (loading) return <div className="p-20 text-center font-bold text-gray-500">جاري التحميل...</div>;
+  if (loading) return <div className="p-20 text-center font-bold text-gray-500">{t('common.loading')}</div>;
 
   return (
     <div className="h-full overflow-y-auto bg-gray-50 p-6 space-y-6 text-right font-sans" dir="rtl">
@@ -376,16 +378,16 @@ export function SuppliersScreen() {
                           </button>
                         )}
                         <button onClick={() => { setSelectedSupplier(s); setSupplierForm({ name: s.name, phone: s.phone || '', email: s.email || '', company: s.company || '', address: s.address || '' }); setShowSupplierModal(true); }}
-                          className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-lg hover:bg-blue-200 transition">تعديل</button>
+                          className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-lg hover:bg-blue-200 transition">{t('common.edit')}</button>
                         <button onClick={() => handleDeleteSupplier(s.id)}
-                          className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-lg hover:bg-red-200 transition">حذف</button>
+                          className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-lg hover:bg-red-200 transition">{t('common.delete')}</button>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {filteredSuppliers.length === 0 && <div className="py-16 text-center text-gray-400">لا يوجد موردين</div>}
+            {filteredSuppliers.length === 0 && <div className="py-16 text-center text-gray-400">{t('suppliers.noSuppliers')}</div>}
           </div>
         </div>
       )}
@@ -457,7 +459,7 @@ export function SuppliersScreen() {
       {activeTab === 'evaluations' && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           {evalLoading && (
-            <div className="p-16 text-center text-gray-400">جاري التحميل...</div>
+            <div className="p-16 text-center text-gray-400">{t('common.loading')}</div>
           )}
           {!evalLoading && evaluations.length === 0 && (
             <div className="p-16 text-center text-gray-400">لا توجد تقييمات بعد</div>
@@ -518,11 +520,11 @@ export function SuppliersScreen() {
             </div>
             <div className="p-5 space-y-3">
               {[
-                { label: 'اسم المورد *', key: 'name', type: 'text' },
-                { label: 'رقم الهاتف', key: 'phone', type: 'text' },
-                { label: 'البريد الإلكتروني', key: 'email', type: 'email' },
+                { label: t('common.name') + ' *', key: 'name', type: 'text' },
+                { label: t('common.phone'), key: 'phone', type: 'text' },
+                { label: t('common.email'), key: 'email', type: 'email' },
                 { label: 'الشركة', key: 'company', type: 'text' },
-                { label: 'العنوان', key: 'address', type: 'text' },
+                { label: t('common.address'), key: 'address', type: 'text' },
               ].map(field => (
                 <div key={field.key}>
                   <label className="block text-sm font-bold text-gray-700 mb-1">{field.label}</label>
@@ -588,7 +590,7 @@ export function SuppliersScreen() {
                   value={purchaseForm.invoice_number} onChange={e => setPurchaseForm({ ...purchaseForm, invoice_number: e.target.value })} />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">ملاحظات</label>
+                <label className="block text-sm font-bold text-gray-700 mb-1">{t('common.notes')}</label>
                 <textarea className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none text-sm" rows={2}
                   value={purchaseForm.notes} onChange={e => setPurchaseForm({ ...purchaseForm, notes: e.target.value })} />
               </div>
@@ -727,7 +729,7 @@ export function SuppliersScreen() {
                   setInvoicePreview(null);
                   setGoodsPreview(null);
                 }} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition">
-                  إلغاء
+                  {t('common.cancel')}
                 </button>
               </div>
             </div>

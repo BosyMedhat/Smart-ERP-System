@@ -1,0 +1,11 @@
+cd F:\What_i_Made\New\Final_Year_4\Graduation_Project\ERP3Windsurf\Smart-ERP-System
+venv\Scripts\activate   
+
+
+ cd smart_erp_backend
+
+
+python manage.py runserver
+
+
+npm run dev

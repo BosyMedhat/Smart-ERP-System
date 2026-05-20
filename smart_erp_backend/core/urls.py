@@ -5,7 +5,7 @@ from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 
 # 1. استيراد موديول العملاء والـ login
-from customers.views import CustomerViewSet, login_view, UserViewSet
+from customers.views import CustomerViewSet, login_view, logout_view, UserViewSet
 
 # 2. استيراد موديول المخازن والموظفين 
 from inventory.views import (
@@ -49,6 +49,8 @@ router.register(r'supplier-evaluations', SupplierEvaluationViewSet, basename='su
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/login/', login_view, name='login'),
+    path('api/logout/', logout_view, name='logout'),
+    path('api/treasury/', include('treasury.urls')),
     path('api/', include(router.urls)), # كدة الرابط هيبقى http://127.0.0.1:8000/api/employees/
     path('api/ai/', include('ai_assistant.urls')),
     path('api/dashboard/', DashboardView.as_view()),

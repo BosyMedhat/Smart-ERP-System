@@ -1,3 +1,5 @@
+import datetime
+
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
@@ -257,7 +259,10 @@ class Expense(models.Model):
     category = models.CharField("الفئة", max_length=20, choices=CATEGORIES, default='other')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     notes = models.TextField("ملاحظات", null=True, blank=True)
-    date = models.DateField(auto_now_add=True)
+    date = models.DateField(
+        default=datetime.date.today,
+        verbose_name='تاريخ المصروف'
+    )
 
 # 10. الخزينة
 class Treasury(models.Model):
@@ -349,6 +354,13 @@ class StoreSettings(models.Model):
 
     # الحالة (Status)
     is_configured = models.BooleanField(default=False, verbose_name='تم الإعداد')
+
+    opening_balance = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name='الرصيد الافتتاحي'
+    )
 
     class Meta:
         verbose_name = 'إعدادات المتجر'
@@ -451,6 +463,12 @@ class SaleItem(models.Model):
         max_digits=10, decimal_places=2,
         verbose_name='سعر الوحدة'
     )
+    cost_price_at_sale = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name='تكلفة الوحدة وقت البيع'
+    )
     subtotal = models.DecimalField(
         max_digits=10, decimal_places=2,
         verbose_name='الإجمالي'
@@ -461,6 +479,12 @@ class SaleItem(models.Model):
         # حفظ اسم المنتج عند الإنشاء
         if self.product and not self.product_name:
             self.product_name = self.product.name
+        # حفظ تكلفة المنتج وقت البيع كـ snapshot
+        if self.pk is None and self.product:
+            try:
+                self.cost_price_at_sale = self.product.cost_price
+            except Exception:
+                self.cost_price_at_sale = 0
         super().save(*args, **kwargs)
 
     class Meta:
