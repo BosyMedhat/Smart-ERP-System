@@ -15,7 +15,6 @@ class Role(models.Model):
     name = models.CharField(
         max_length=50,
         unique=True,
-        choices=ROLE_CHOICES,
         verbose_name='اسم الدور',
     )
     name_en = models.CharField(
