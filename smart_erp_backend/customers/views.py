@@ -115,6 +115,18 @@ def login_view(request):
         except:
             role = 'كاشير'
             permissions = {}
+        # تسجيل عملية الدخول في Audit Log
+        from audit.utils import log_action, get_client_ip
+        log_action(
+            user=user,
+            action='LOGIN',
+            model_name='User',
+            object_id=user.id,
+            object_repr=f'{user.username} — {role}',
+            ip_address=get_client_ip(request),
+            extra_data={'role': role},
+        )
+
         return Response({
             'token': token.key,
             'id': user.id,
@@ -130,6 +142,16 @@ def login_view(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout_view(request):
+    # تسجيل عملية الخروج في Audit Log
+    from audit.utils import log_action, get_client_ip
+    log_action(
+        user=request.user,
+        action='LOGOUT',
+        model_name='User',
+        object_id=request.user.id,
+        object_repr=request.user.username,
+        ip_address=get_client_ip(request),
+    )
     try:
         request.user.auth_token.delete()
     except Exception:

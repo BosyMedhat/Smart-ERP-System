@@ -27,6 +27,7 @@ export const SCREEN_PERMISSIONS: Record<string, Role[] | ['*']> = {
   'automation':   [ROLES.MANAGER],
   'quotations':   [ROLES.MANAGER, ROLES.CASHIER],
   'representatives': [ROLES.MANAGER],
+  'audit':         [ROLES.MANAGER],
 };
 
 export function canAccessScreen(role: Role | string, screen: string): boolean {

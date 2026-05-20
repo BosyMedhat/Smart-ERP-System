@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'ai_assistant',
     'hr',
     'treasury',
+    'audit',
 
 ]
 

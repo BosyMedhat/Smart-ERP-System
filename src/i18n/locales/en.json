@@ -58,6 +58,7 @@
     "users": "Users",
     "credit": "Credit",
     "pl": "P&L Report",
+    "audit": "Audit Log",
     "logout": "Logout"
   },
   "auth": {

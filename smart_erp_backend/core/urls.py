@@ -56,6 +56,7 @@ urlpatterns = [
     path('api/dashboard/', DashboardView.as_view()),
     path('api/reports/', include('reports.urls')),
     path('api/hr/', include('hr.urls')),
+    path('api/audit/', include('audit.urls')),
     path('api/products/barcode/<str:barcode>/', ProductByBarcodeView.as_view()),
 ]
 

@@ -19,6 +19,7 @@ import { SalesRepresentatives } from './components/SalesRepresentatives';
 import { SalesHistory } from './components/SalesHistory';
 import { Reports } from './components/Reports';
 import PLReport from './components/PLReport';
+import AuditLog from './components/AuditLog';
 import TreasuryDashboard from './components/treasury/TreasuryDashboard';
 import { EmployeeProfile } from './components/EmployeeProfile';
 import { SuppliersScreen } from './components/SuppliersScreen';
@@ -48,7 +49,7 @@ export interface CartItem extends Product {
   quantity: number;
 }
 
-export type Screen = 'pos' | 'inventory' | 'home' | 'reports' | 'pl' | 'ai' | 'automation' | 'hr' | 'settings' | 'users' | 'suppliers' | 'installments' | 'representatives' | 'quotations' | 'sales' | 'profile' | 'credit' | 'treasury';
+export type Screen = 'pos' | 'inventory' | 'home' | 'reports' | 'pl' | 'ai' | 'automation' | 'hr' | 'settings' | 'users' | 'suppliers' | 'installments' | 'representatives' | 'quotations' | 'sales' | 'profile' | 'credit' | 'treasury' | 'audit';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(getStoredUser);
@@ -443,6 +444,12 @@ export default function App() {
         {activeScreen === 'treasury' && (
           <div className="flex-1">
             {hasPermission('treasury') ? <TreasuryDashboard /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'audit' && (
+          <div className="flex-1">
+            {hasPermission('audit') ? <AuditLog /> : <UnauthorizedScreen />}
           </div>
         )}
 

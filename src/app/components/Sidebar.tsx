@@ -1,4 +1,4 @@
-import { Home, Package, ShoppingCart, FileText, Brain, Zap, Users, Settings, Shield, CreditCard, UserCheck, FileCheck, LogOut, Receipt, Briefcase, Truck, HandCoins, Wallet, TrendingUp } from 'lucide-react';
+import { Home, Package, ShoppingCart, FileText, Brain, Zap, Users, Settings, Shield, CreditCard, UserCheck, FileCheck, LogOut, Receipt, Briefcase, Truck, HandCoins, Wallet, TrendingUp, ClipboardList } from 'lucide-react';
 import { Screen } from '../App';
 import { useTranslation } from 'react-i18next';
 import { canAccessScreen, ROLES } from '../../auth';
@@ -30,6 +30,7 @@ export function Sidebar({ activeScreen, onScreenChange, currentUser, onLogout }:
     { key: 'settings', icon: Settings, label: t('nav.settings'), screen: 'settings' },
     { key: 'reports', icon: FileText, label: t('nav.reports'), screen: 'reports' },
     { key: 'pl', icon: TrendingUp, label: t('nav.pl') || 'الأرباح والخسائر', screen: 'pl' },
+    { key: 'audit', icon: ClipboardList, label: t('nav.audit') || 'سجل التدقيق', screen: 'audit' },
     { key: 'treasury', icon: Wallet, label: t('nav.treasury'), screen: 'treasury' },
   ];
   return (
