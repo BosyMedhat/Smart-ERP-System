@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Bell, X, AlertTriangle, AlertCircle, Info,
          Package, CreditCard, Wallet } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
@@ -109,7 +110,10 @@ export default function AlertsBell() {
   const [data, setData]       = useState<AlertsResponse | null>(null);
   const [open, setOpen]       = useState(false);
   const [loading, setLoading] = useState(false);
+  const [coords, setCoords]   = useState<{ top: number; left: number } | null>(null);
   const dropdownRef           = useRef<HTMLDivElement>(null);
+  const bellRef               = useRef<HTMLButtonElement>(null);
+  const popupRef              = useRef<HTMLDivElement>(null);
 
   const fetchAlerts = useCallback(async () => {
     setLoading(true);
@@ -130,16 +134,44 @@ export default function AlertsBell() {
     return () => clearInterval(interval);
   }, [fetchAlerts]);
 
-  // إغلاق عند الضغط خارج الـ dropdown
+  // إغلاق عند الضغط خارج الـ dropdown (مع مراعاة أن الـ popup مُصيَّر عبر portal)
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const insideBell = dropdownRef.current?.contains(target);
+      const insidePopup = popupRef.current?.contains(target);
+      if (!insideBell && !insidePopup) {
         setOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // حساب موقع الـ popup عند الفتح + إعادة الحساب عند تغيير حجم النافذة
+  useEffect(() => {
+    if (!open) return;
+    const updatePosition = () => {
+      const rect = bellRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      // ضع الـ popup أسفل الجرس وعلى يساره (للـ RTL سيظهر بجوار Sidebar اليمنى)
+      const popupWidth = 320; // w-80
+      const top = rect.bottom + 8;
+      let left = rect.right + 8; // يخرج إلى يمين الجرس (داخل المحتوى عند RTL لأن Sidebar على اليمين)
+      // تأكد من عدم الخروج من الشاشة
+      if (left + popupWidth > window.innerWidth - 8) {
+        left = Math.max(8, window.innerWidth - popupWidth - 8);
+      }
+      setCoords({ top, left });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open]);
 
   const totalAlerts    = data?.total ?? 0;
   const criticalCount  = data?.alerts.filter(a => a.severity === 'critical').length ?? 0;
@@ -150,6 +182,7 @@ export default function AlertsBell() {
 
       {/* Bell Button */}
       <button
+        ref={bellRef}
         onClick={() => setOpen(!open)}
         className="relative p-2 rounded-xl hover:bg-white/10 transition-colors">
         <Bell className={`w-5 h-5 ${totalAlerts > 0 ? 'text-yellow-300' : 'text-white/60'}`} />
@@ -164,10 +197,13 @@ export default function AlertsBell() {
         )}
       </button>
 
-      {/* Dropdown */}
-      {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl
-          shadow-2xl border border-gray-200 z-50 overflow-hidden">
+      {/* Dropdown — مُصيَّر عبر portal لتجنّب clipping من Sidebar */}
+      {open && coords && createPortal(
+        <div
+          ref={popupRef}
+          dir="rtl"
+          style={{ position: 'fixed', top: coords.top, left: coords.left, zIndex: 9999 }}
+          className="w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
 
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3
@@ -229,7 +265,8 @@ export default function AlertsBell() {
               </button>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
