@@ -1,4 +1,4 @@
-import { Home, Package, ShoppingCart, FileText, Brain, Zap, Users, Settings, Shield, CreditCard, UserCheck, FileCheck, LogOut, Receipt, Briefcase, Truck, HandCoins, Wallet, TrendingUp, ClipboardList } from 'lucide-react';
+import { Home, Package, ShoppingCart, FileText, Brain, Zap, Users, Settings, Shield, CreditCard, UserCheck, FileCheck, LogOut, Receipt, Briefcase, Truck, HandCoins, Wallet, TrendingUp, ClipboardList, UserRound } from 'lucide-react';
 import { Screen } from '../App';
 import { useTranslation } from 'react-i18next';
 import { hasScreenPermission } from '../../auth';
@@ -23,11 +23,11 @@ export function Sidebar({ activeScreen, onScreenChange, currentUser, onLogout }:
     { key: 'credit', icon: HandCoins, label: t('nav.credit'), screen: 'credit' },
     { key: 'suppliers', icon: Truck, label: t('nav.suppliers'), screen: 'suppliers' },
     { key: 'representatives', icon: UserCheck, label: 'المناديب', screen: 'representatives' },
+    { key: 'customers_pos', icon: UserRound, label: 'عملاء POS', screen: 'customers_pos' },
     { key: 'quotations', icon: FileCheck, label: 'عروض الأسعار', screen: 'quotations' },
     { key: 'hr', icon: Briefcase, label: t('nav.hr'), screen: 'hr' },
     { key: 'ai', icon: Brain, label: t('nav.ai'), screen: 'ai' },
     { key: 'automation', icon: Zap, label: 'الأتمتة', screen: 'automation' },
-    { key: 'user_management', icon: Shield, label: t('nav.users'), screen: 'users' },
     { key: 'roles', icon: Shield, label: 'الأدوار والصلاحيات', screen: 'roles' },
     { key: 'settings', icon: Settings, label: t('nav.settings'), screen: 'settings' },
     { key: 'reports', icon: FileText, label: t('nav.reports'), screen: 'reports' },

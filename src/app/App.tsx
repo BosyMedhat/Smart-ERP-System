@@ -10,7 +10,7 @@ import { InventoryScreen } from './components/InventoryScreen';
 import { AICenter } from './components/AICenter';
 import { AutomationEngine } from './components/AutomationEngine';
 import { Settings } from './components/Settings';
-import { UserManagement } from './components/UserManagement';
+import POSCustomers from './components/POSCustomers';
 import { LoginScreen } from './components/LoginScreen';
 import { SignUpScreen } from './components/SignUpScreen';
 import { Dashboard } from './components/Dashboard';
@@ -50,7 +50,7 @@ export interface CartItem extends Product {
   quantity: number;
 }
 
-export type Screen = 'pos' | 'inventory' | 'home' | 'reports' | 'pl' | 'ai' | 'automation' | 'hr' | 'settings' | 'users' | 'roles' | 'suppliers' | 'installments' | 'representatives' | 'quotations' | 'sales' | 'profile' | 'credit' | 'treasury' | 'audit';
+export type Screen = 'pos' | 'inventory' | 'home' | 'reports' | 'pl' | 'ai' | 'automation' | 'hr' | 'settings' | 'roles' | 'suppliers' | 'installments' | 'representatives' | 'quotations' | 'sales' | 'profile' | 'credit' | 'treasury' | 'audit' | 'customers_pos';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(getStoredUser);
@@ -428,9 +428,9 @@ export default function App() {
           </div>
         )}
 
-        {activeScreen === 'users' && (
+        {activeScreen === 'customers_pos' && (
           <div className="flex-1">
-            {hasPermission('users') ? <UserManagement /> : <UnauthorizedScreen />}
+            {hasPermission('customers') ? <POSCustomers /> : <UnauthorizedScreen />}
           </div>
         )}
 
