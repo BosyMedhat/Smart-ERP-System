@@ -127,12 +127,32 @@ def login_view(request):
             extra_data={'role': role},
         )
 
+        # Build permissions list for RBAC (Phase 4)
+        from accounts.permissions import resolve_user_permissions
+        permissions_set = resolve_user_permissions(user)
+        permissions_list = sorted(list(permissions_set))
+
+        # Get role info (FK-based, Phase 3 bridge)
+        role_info = None
+        try:
+            role_obj = user.userprofile.role_new
+            if role_obj:
+                role_info = {
+                    'id':    role_obj.id,
+                    'name':  role_obj.name,
+                    'level': role_obj.level,
+                }
+        except Exception:
+            pass
+
         return Response({
             'token': token.key,
             'id': user.id,
             'username': user.username,
             'role': role,
-            'permissions': permissions
+            'permissions': permissions,
+            'permission_list': permissions_list,
+            'role_obj':        role_info,
         })
     return Response(
         {'error': 'بيانات الدخول غير صحيحة'},

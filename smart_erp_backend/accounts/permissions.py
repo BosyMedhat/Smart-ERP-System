@@ -16,10 +16,8 @@ def resolve_user_permissions(user):
     # Superuser bypass
     if user.is_superuser:
         from accounts.models import Permission
-        return set(
-            Permission.objects.values_list('module', 'action')
-            .values_list('module', 'action')
-        )
+        all_perms = Permission.objects.values_list('module', 'action')
+        return {f"{m}:{a}" for m, a in all_perms}
 
     permissions = set()
 

@@ -7,6 +7,12 @@ export interface AuthUser {
   username: string;
   role: Role | string;
   permissions: Record<string, string[]>;
+  permission_list?: string[];
+  role_obj?: {
+    id: number;
+    name: string;
+    level: number;
+  } | null;
 }
 
 export function getStoredUser(): AuthUser | null {
