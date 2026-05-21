@@ -154,15 +154,31 @@ export default function AlertsBell() {
     const updatePosition = () => {
       const rect = bellRef.current?.getBoundingClientRect();
       if (!rect) return;
-      // ضع الـ popup أسفل الجرس وعلى يساره (للـ RTL سيظهر بجوار Sidebar اليمنى)
       const popupWidth = 320; // w-80
-      const top = rect.bottom + 8;
-      let left = rect.right + 8; // يخرج إلى يمين الجرس (داخل المحتوى عند RTL لأن Sidebar على اليمين)
-      // تأكد من عدم الخروج من الشاشة
+      const dropdownHeight = 480; // max expected height
+
+      // ── Smart vertical positioning ──
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      let topPos: number;
+      if (spaceBelow >= dropdownHeight) {
+        // مساحة كافية أسفل الجرس → افتح للأسفل
+        topPos = rect.bottom + 8;
+      } else if (spaceAbove >= dropdownHeight) {
+        // لا توجد مساحة أسفل → افتح للأعلى
+        topPos = rect.top - dropdownHeight - 8;
+      } else {
+        // لا يوجد مكان كافٍ → وسّطه عمودياً
+        topPos = Math.max(8, (window.innerHeight - dropdownHeight) / 2);
+      }
+
+      // ── Horizontal positioning (يخرج بجوار Sidebar اليمنى عند RTL) ──
+      let left = rect.right + 8;
       if (left + popupWidth > window.innerWidth - 8) {
         left = Math.max(8, window.innerWidth - popupWidth - 8);
       }
-      setCoords({ top, left });
+
+      setCoords({ top: topPos, left });
     };
     updatePosition();
     window.addEventListener('resize', updatePosition);
@@ -202,8 +218,15 @@ export default function AlertsBell() {
         <div
           ref={popupRef}
           dir="rtl"
-          style={{ position: 'fixed', top: coords.top, left: coords.left, zIndex: 9999 }}
-          className="w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+          style={{
+            position: 'fixed',
+            top: coords.top,
+            left: coords.left,
+            zIndex: 9999,
+            maxHeight: '80vh',
+            overflowY: 'auto',
+          }}
+          className="w-80 bg-white rounded-2xl shadow-2xl border border-gray-200">
 
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3
