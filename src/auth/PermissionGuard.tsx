@@ -1,9 +1,12 @@
 import React from 'react';
-import { canAccessScreen, Role } from './roles';
+import { Role } from './roles';
+import { hasScreenPermission } from './systemPermissions';
 
 interface PermissionGuardProps {
   role: Role | string | null;
   screen: string;
+  permissionList?: string[];
+  roleLevel?: number;
   children: React.ReactNode;
   fallback?: React.ReactNode;
 }
@@ -11,11 +14,15 @@ interface PermissionGuardProps {
 export function PermissionGuard({
   role,
   screen,
+  permissionList = [],
+  roleLevel,
   children,
   fallback = null,
 }: PermissionGuardProps) {
   if (!role) return <>{fallback}</>;
-  if (!canAccessScreen(role, screen)) return <>{fallback}</>;
+  if (!hasScreenPermission(permissionList, screen, roleLevel)) {
+    return <>{fallback}</>;
+  }
   return <>{children}</>;
 }
 

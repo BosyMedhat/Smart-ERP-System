@@ -105,8 +105,36 @@ class UserViewSet(viewsets.ModelViewSet):
 def login_view(request):
     username = request.data.get('username')
     password = request.data.get('password')
+
+    # Brute-force check: look up user object first to check lock state
+    user_obj = User.objects.filter(username=username).first()
+    if user_obj:
+        from django.utils import timezone
+        try:
+            profile = user_obj.userprofile
+            if profile.locked_until and profile.locked_until > timezone.now():
+                remaining = int(
+                    (profile.locked_until - timezone.now()).total_seconds() / 60
+                )
+                return Response(
+                    {'error': f'الحساب محظور. حاول بعد {remaining} دقيقة'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        except Exception:
+            pass
+
     user = authenticate(username=username, password=password)
     if user:
+        # Reset login attempts on success
+        try:
+            profile = user.userprofile
+            if profile.login_attempts > 0 or profile.locked_until:
+                profile.login_attempts = 0
+                profile.locked_until = None
+                profile.save(update_fields=['login_attempts', 'locked_until'])
+        except Exception:
+            pass
+
         token, _ = Token.objects.get_or_create(user=user)
         try:
             profile = user.userprofile
@@ -154,6 +182,35 @@ def login_view(request):
             'permission_list': permissions_list,
             'role_obj':        role_info,
         })
+    # Increment login attempts on failure
+    if user_obj:
+        try:
+            from django.utils import timezone
+            from datetime import timedelta
+            profile = user_obj.userprofile
+            profile.login_attempts += 1
+
+            try:
+                from inventory.models import StoreSettings
+                settings_obj = StoreSettings.objects.first()
+                max_attempts = settings_obj.max_login_attempts if settings_obj else 5
+                lockout_minutes = settings_obj.lockout_duration_minutes if settings_obj else 30
+            except Exception:
+                max_attempts = 5
+                lockout_minutes = 30
+
+            if profile.login_attempts >= max_attempts:
+                profile.locked_until = timezone.now() + timedelta(minutes=lockout_minutes)
+                profile.login_attempts = 0
+                profile.save(update_fields=['login_attempts', 'locked_until'])
+                return Response(
+                    {'error': f'تم تجاوز الحد المسموح. الحساب محظور لـ {lockout_minutes} دقيقة'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            profile.save(update_fields=['login_attempts'])
+        except Exception:
+            pass
+
     return Response(
         {'error': 'بيانات الدخول غير صحيحة'},
         status=status.HTTP_401_UNAUTHORIZED

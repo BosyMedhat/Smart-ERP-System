@@ -1,7 +1,7 @@
 import { Home, Package, ShoppingCart, FileText, Brain, Zap, Users, Settings, Shield, CreditCard, UserCheck, FileCheck, LogOut, Receipt, Briefcase, Truck, HandCoins, Wallet, TrendingUp, ClipboardList } from 'lucide-react';
 import { Screen } from '../App';
 import { useTranslation } from 'react-i18next';
-import { canAccessScreen, ROLES } from '../../auth';
+import { hasScreenPermission } from '../../auth';
 import AlertsBell from './AlertsBell';
 
 interface SidebarProps {
@@ -28,6 +28,7 @@ export function Sidebar({ activeScreen, onScreenChange, currentUser, onLogout }:
     { key: 'ai', icon: Brain, label: t('nav.ai'), screen: 'ai' },
     { key: 'automation', icon: Zap, label: 'الأتمتة', screen: 'automation' },
     { key: 'user_management', icon: Shield, label: t('nav.users'), screen: 'users' },
+    { key: 'roles', icon: Shield, label: 'الأدوار والصلاحيات', screen: 'roles' },
     { key: 'settings', icon: Settings, label: t('nav.settings'), screen: 'settings' },
     { key: 'reports', icon: FileText, label: t('nav.reports'), screen: 'reports' },
     { key: 'pl', icon: TrendingUp, label: t('nav.pl') || 'الأرباح والخسائر', screen: 'pl' },
@@ -38,7 +39,11 @@ export function Sidebar({ activeScreen, onScreenChange, currentUser, onLogout }:
     <div className="w-20 bg-[#1E293B] flex flex-col items-center py-6 gap-4 overflow-y-auto">
       <div className="text-white text-2xl font-bold mb-6">POS</div>
       {menuItems
-        .filter(item => canAccessScreen(currentUser?.role ?? '', item.screen))
+        .filter(item => hasScreenPermission(
+          currentUser?.permission_list ?? [],
+          item.screen,
+          currentUser?.role_obj?.level
+        ))
         .map((item) => {
           const Icon = item.icon;
           return (

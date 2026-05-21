@@ -321,6 +321,15 @@ class UserProfile(models.Model):
         verbose_name='الدور (جديد)'
     )
     permissions = models.JSONField(default=dict)
+    login_attempts = models.IntegerField(
+        default=0,
+        verbose_name='محاولات الدخول الفاشلة'
+    )
+    locked_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='محظور حتى'
+    )
 
     def __str__(self):
         return f"{self.user.username} — {self.role}"

@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { ROLES, Role, canAccessScreen, isManager } from './roles';
+import { ROLES, Role, isManager } from './roles';
+import { hasScreenPermission, can } from './systemPermissions';
 
 export interface AuthUser {
   token: string;
@@ -12,6 +13,7 @@ export interface AuthUser {
     id: number;
     name: string;
     level: number;
+    user_count?: number;
   } | null;
 }
 
@@ -35,12 +37,15 @@ export function clearUser(): void {
 }
 
 export function useAuth(currentUser: AuthUser | null) {
+  const perms = currentUser?.permission_list ?? Object.values(currentUser?.permissions ?? {}).flat();
+  const roleLevel = currentUser?.role_obj?.level;
+
   const hasPermission = useCallback(
     (screen: string): boolean => {
       if (!currentUser) return false;
-      return canAccessScreen(currentUser.role, screen);
+      return hasScreenPermission(perms, screen, roleLevel);
     },
-    [currentUser]
+    [currentUser, perms, roleLevel]
   );
 
   const checkIsManager = useCallback(
@@ -54,11 +59,9 @@ export function useAuth(currentUser: AuthUser | null) {
   const hasSpecificPermission = useCallback(
     (permission: string): boolean => {
       if (!currentUser) return false;
-      if (isManager(currentUser.role)) return true;
-      const allPerms = Object.values(currentUser.permissions || {}).flat();
-      return allPerms.includes(permission);
+      return can(perms, permission.split(':')[0], permission.split(':')[1] ?? 'view', roleLevel);
     },
-    [currentUser]
+    [currentUser, perms, roleLevel]
   );
 
   return {

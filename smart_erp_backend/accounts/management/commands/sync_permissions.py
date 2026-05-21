@@ -163,4 +163,77 @@ class Command(BaseCommand):
         except Role.DoesNotExist:
             self.stdout.write(self.style.ERROR('✗  مدير role not found!'))
 
+        # ── Default permissions for other roles ──
+        DEFAULT_ROLE_PERMISSIONS = {
+            'كاشير': [
+                'dashboard:view',
+                'pos:view', 'pos:create',
+                'sales:view',
+                'customers:view', 'customers:create', 'customers:edit',
+                'installments:view', 'installments:create', 'installments:edit',
+                'credit:view', 'credit:create',
+                'inventory:view',
+                'ai:view',
+                'profile:view',
+            ],
+            'محاسب': [
+                'dashboard:view',
+                'sales:view', 'sales:export',
+                'customers:view', 'customers:create', 'customers:edit',
+                'installments:view', 'installments:create', 'installments:edit',
+                'credit:view', 'credit:create', 'credit:edit',
+                'reports:view', 'reports:export',
+                'pl:view', 'pl:export',
+                'treasury:view', 'treasury:create',
+                'suppliers:view',
+                'ai:view',
+                'profile:view',
+            ],
+            'أمين مخزن': [
+                'dashboard:view',
+                'inventory:view', 'inventory:create', 'inventory:edit',
+                'suppliers:view', 'suppliers:create', 'suppliers:edit',
+                'sales:view',
+                'ai:view',
+                'profile:view',
+            ],
+        }
+
+        self.stdout.write('⟳  Assigning default permissions to other roles...')
+        for role_name, perm_codes in DEFAULT_ROLE_PERMISSIONS.items():
+            try:
+                role = Role.objects.get(name=role_name)
+            except Role.DoesNotExist:
+                self.stdout.write(
+                    self.style.WARNING(f'  ⚠ Role [{role_name}] not found')
+                )
+                continue
+
+            added = 0
+            for code in perm_codes:
+                parts = code.split(':')
+                if len(parts) != 2:
+                    continue
+                module, action = parts
+                try:
+                    perm = Permission.objects.get(module=module, action=action)
+                    _, created = RolePermission.objects.get_or_create(
+                        role=role, permission=perm
+                    )
+                    if created:
+                        added += 1
+                except Permission.DoesNotExist:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f'    ⚠ Permission [{code}] not found'
+                        )
+                    )
+
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f'  ✓ [{role_name}]: {added} new permissions assigned '
+                    f'(total: {role.role_permissions.count()})'
+                )
+            )
+
         self.stdout.write(self.style.SUCCESS('✓  sync_permissions completed successfully'))

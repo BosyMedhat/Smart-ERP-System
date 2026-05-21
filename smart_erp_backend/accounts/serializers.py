@@ -15,17 +15,21 @@ class PermissionSerializer(serializers.ModelSerializer):
 
 class RoleSerializer(serializers.ModelSerializer):
     permissions = serializers.SerializerMethodField()
+    user_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Role
         fields = ['id', 'name', 'name_en', 'description',
-                  'level', 'is_system', 'permissions']
+                  'level', 'is_system', 'permissions', 'user_count']
 
     def get_permissions(self, obj):
         perms = Permission.objects.filter(
             role_permissions__role=obj
         )
         return PermissionSerializer(perms, many=True).data
+
+    def get_user_count(self, obj):
+        return obj.user_profiles.count()
 
 
 class UserPermissionSerializer(serializers.ModelSerializer):

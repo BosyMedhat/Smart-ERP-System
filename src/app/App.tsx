@@ -22,13 +22,14 @@ import PLReport from './components/PLReport';
 import AuditLog from './components/AuditLog';
 import TreasuryDashboard from './components/treasury/TreasuryDashboard';
 import { EmployeeProfile } from './components/EmployeeProfile';
+import RBACManagement from './components/RBACManagement';
 import { SuppliersScreen } from './components/SuppliersScreen';
 import { HRModule } from './components/HRModule';
 import { CreditDashboard } from './components/CreditDashboard';
 import apiClient from '../api/axiosConfig';
 import { useTranslation } from 'react-i18next';
 import '../i18n/index';
-import { useAuth, getStoredUser, clearUser } from '../auth';
+import { useAuth, getStoredUser, storeUser, clearUser } from '../auth';
 import { AdminLoginScreen } from './components/AdminLoginScreen';
 
 
@@ -49,7 +50,7 @@ export interface CartItem extends Product {
   quantity: number;
 }
 
-export type Screen = 'pos' | 'inventory' | 'home' | 'reports' | 'pl' | 'ai' | 'automation' | 'hr' | 'settings' | 'users' | 'suppliers' | 'installments' | 'representatives' | 'quotations' | 'sales' | 'profile' | 'credit' | 'treasury' | 'audit';
+export type Screen = 'pos' | 'inventory' | 'home' | 'reports' | 'pl' | 'ai' | 'automation' | 'hr' | 'settings' | 'users' | 'roles' | 'suppliers' | 'installments' | 'representatives' | 'quotations' | 'sales' | 'profile' | 'credit' | 'treasury' | 'audit';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(getStoredUser);
@@ -178,6 +179,40 @@ export default function App() {
     setCurrentUser(null);
     setLoginPortal(null);
   };
+
+  // Session polling every 5 minutes
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const pollSession = async () => {
+      try {
+        const response = await apiClient.get('/accounts/me/');
+        if (response.status === 200) {
+          const data = response.data;
+          if (data.permissions && currentUser) {
+            const updated = {
+              ...currentUser,
+              permission_list: data.permissions,
+              role_obj: data.role ?? currentUser.role_obj,
+            };
+            const current = JSON.stringify(currentUser.permission_list);
+            const incoming = JSON.stringify(data.permissions);
+            if (current !== incoming) {
+              storeUser(updated);
+              setCurrentUser(updated);
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err?.response?.status === 401) {
+          handleLogout();
+        }
+      }
+    };
+
+    const interval = setInterval(pollSession, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [isLoggedIn, currentUser]);
 
   const { hasPermission } = useAuth(currentUser);
 
@@ -396,6 +431,12 @@ export default function App() {
         {activeScreen === 'users' && (
           <div className="flex-1">
             {hasPermission('users') ? <UserManagement /> : <UnauthorizedScreen />}
+          </div>
+        )}
+
+        {activeScreen === 'roles' && (
+          <div className="flex-1 p-4 overflow-auto">
+            {hasPermission('roles') ? <RBACManagement /> : <UnauthorizedScreen />}
           </div>
         )}
 
