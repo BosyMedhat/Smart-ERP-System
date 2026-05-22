@@ -4,7 +4,9 @@ node_modules
 # Environment variables - DO NOT COMMIT
 .env
 *.env
-.env.*
+.env.local
+.env.development
+.env.production
 
 # Python
 __pycache__/
