@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status, serializers, viewsets
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
@@ -218,6 +218,31 @@ class StoreSettingsViewSet(viewsets.ModelViewSet):
         return obj
 
 
+# ==================== DYNAMIC PRICING CONFIG ====================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_pricing_config(request):
+    """
+    Returns dynamic pricing config for frontend Cart.
+    GET /api/pricing-config/
+    """
+    settings = StoreSettings.objects.first()
+    return Response({
+        'installment_markup_pct': str(
+            settings.installment_markup_pct
+            if settings else Decimal('0')
+        ),
+        'credit_markup_pct': str(
+            settings.credit_markup_pct
+            if settings else Decimal('0')
+        ),
+        'tax_rate': str(
+            settings.tax_rate
+            if settings else Decimal('14')
+        ),
+    })
+
+
 # ==================== SALE MODULE (NEW) ====================
 # 13. فواتير المبيعات (POS Sales)
 class SaleViewSet(viewsets.ModelViewSet):
@@ -272,11 +297,31 @@ class SaleViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             settings = StoreSettings.objects.first()
-            tax_rate = settings.tax_rate if settings else 14.00
-            total = serializer.validated_data.get('total_amount', 0)
-            discount = serializer.validated_data.get('discount', 0)
-            after_discount = Decimal(str(total)) - Decimal(str(discount))
-            tax_amount = after_discount * (Decimal(str(tax_rate)) / Decimal('100'))
+            tax_rate = Decimal(str(settings.tax_rate)) \
+                       if settings else Decimal('14.00')
+
+            # Dynamic pricing markup based on payment type
+            markup_pct = Decimal('0')
+            if settings:
+                if payment_type == 'installment':
+                    markup_pct = Decimal(str(settings.installment_markup_pct))
+                elif payment_type == 'credit':
+                    markup_pct = Decimal(str(settings.credit_markup_pct))
+
+            total = Decimal(str(
+                serializer.validated_data.get('total_amount', 0)
+            ))
+            discount = Decimal(str(
+                serializer.validated_data.get('discount', 0)
+            ))
+
+            # Apply markup BEFORE discount and tax
+            if markup_pct > Decimal('0'):
+                markup_amount = total * (markup_pct / Decimal('100'))
+                total = total + markup_amount
+
+            after_discount = total - discount
+            tax_amount = after_discount * (tax_rate / Decimal('100'))
             final_amount = after_discount + tax_amount
 
             sale = serializer.save(

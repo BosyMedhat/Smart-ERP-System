@@ -31,6 +31,8 @@ interface StoreSettings {
   system_name: string;
   currency: string;
   tax_rate: number;
+  installment_markup_pct: number;
+  credit_markup_pct: number;
   phone: string;
   address: string;
   email: string;
@@ -60,6 +62,8 @@ const defaultSettings: StoreSettings = {
   system_name: 'Smart ERP',
   currency: 'EGP',
   tax_rate: 14.00,
+  installment_markup_pct: 0,
+  credit_markup_pct: 0,
   phone: '',
   address: '',
   email: '',
@@ -270,6 +274,40 @@ export function Settings() {
                     onChange={(e) => updateSetting('tax_rate', parseFloat(e.target.value) || 0)}
                     className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                   />
+                </div>
+
+                {/* نسبة زيادة التقسيط */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    نسبة زيادة سعر التقسيط %
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={settings.installment_markup_pct ?? 0}
+                    onChange={(e) => updateSetting('installment_markup_pct', parseFloat(e.target.value) || 0)}
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                  />
+                  <span className="text-xs text-gray-400">0 = بدون زيادة</span>
+                </div>
+
+                {/* نسبة زيادة الآجل */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    نسبة زيادة سعر الآجل %
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={settings.credit_markup_pct ?? 0}
+                    onChange={(e) => updateSetting('credit_markup_pct', parseFloat(e.target.value) || 0)}
+                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                  />
+                  <span className="text-xs text-gray-400">0 = بدون زيادة</span>
                 </div>
 
                 <div>

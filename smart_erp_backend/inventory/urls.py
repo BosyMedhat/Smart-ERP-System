@@ -10,7 +10,8 @@ from .views import (
     TreasuryViewSet, 
     StockMovementViewSet,
     InstallmentViewSet,
-    EmployeeViewSet  # 1. تم إضافة الموظفين هنا 
+    EmployeeViewSet,  # 1. تم إضافة الموظفين هنا
+    get_pricing_config,
 )
 
 # إنشاء الراوتر الخاص بالنظام
@@ -30,4 +31,5 @@ router.register(r'employees', EmployeeViewSet) # 3. تسجيل مسار المو
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('pricing-config/', get_pricing_config, name='pricing-config'),
 ]

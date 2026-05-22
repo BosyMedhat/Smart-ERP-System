@@ -386,6 +386,20 @@ class StoreSettings(models.Model):
         verbose_name='حد تنبيه الخزينة المنخفضة'
     )
 
+    # التسعير الديناميكي (Dynamic Pricing)
+    installment_markup_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name='نسبة زيادة سعر التقسيط %'
+    )
+    credit_markup_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name='نسبة زيادة سعر الآجل %'
+    )
+
     class Meta:
         verbose_name = 'إعدادات المتجر'
         verbose_name_plural = 'إعدادات المتجر'

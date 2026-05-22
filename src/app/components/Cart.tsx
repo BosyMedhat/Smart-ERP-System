@@ -56,6 +56,11 @@ export function Cart({
   });
   const [lastScannedProduct, setLastScannedProduct] = useState<string | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [pricingConfig, setPricingConfig] = useState({
+    installment_markup_pct: '0',
+    credit_markup_pct: '0',
+    tax_rate: '14',
+  });
 
   // Barcode scan handler
   const handleBarcodeScan = useCallback(async (barcode: string) => {
@@ -115,9 +120,34 @@ export function Cart({
     fetchCustomers();
   }, []);
 
+  // Fetch dynamic pricing config (markup percentages by payment type)
+  useEffect(() => {
+    apiClient.get('/pricing-config/')
+      .then(res => setPricingConfig(res.data))
+      .catch(() => {}); // silent fail — use defaults
+  }, []);
+
+  // Effective price = base price + markup based on selected payment type
+  const getEffectivePrice = (basePrice: number): number => {
+    let markupPct = 0;
+    if (paymentType === 'installment') {
+      markupPct = parseFloat(pricingConfig.installment_markup_pct) || 0;
+    } else if (paymentType === 'credit') {
+      markupPct = parseFloat(pricingConfig.credit_markup_pct) || 0;
+    }
+    if (markupPct === 0) return basePrice;
+    return basePrice * (1 + markupPct / 100);
+  };
+
+  // Base subtotal (sent to backend; backend re-applies markup server-side)
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const tax = subtotal * 0.14;
-  const total = subtotal + tax - discount;
+  // Display subtotal/total reflect the markup the customer actually pays
+  const displaySubtotal = cartItems.reduce(
+    (sum, item) => sum + getEffectivePrice(item.price) * item.quantity,
+    0
+  );
+  const tax = displaySubtotal * 0.14;
+  const total = displaySubtotal + tax - discount;
   const finalAmount = total > 0 ? total : 0;
 
   const handleCheckout = async () => {
@@ -315,7 +345,7 @@ export function Cart({
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-gray-800 text-sm truncate">{item.name}</div>
-                    <div className="text-[#3B82F6] font-bold text-xs">{formatCurrency(item.price)}</div>
+                    <div className="text-[#3B82F6] font-bold text-xs">{formatCurrency(getEffectivePrice(item.price))}</div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
@@ -333,7 +363,7 @@ export function Cart({
                     </button>
                   </div>
                   <div className="font-bold text-gray-800 text-sm shrink-0 w-16 text-left">
-                    {formatCurrency(item.price * item.quantity)}
+                    {formatCurrency(getEffectivePrice(item.price) * item.quantity)}
                   </div>
                 </div>
               </div>
@@ -351,6 +381,18 @@ export function Cart({
               {formatCurrency(total)}
             </span>
           </div>
+          {paymentType === 'installment' &&
+           parseFloat(pricingConfig.installment_markup_pct) > 0 && (
+            <div className="text-xs text-orange-500 text-right mt-1">
+              * يشمل زيادة التقسيط {pricingConfig.installment_markup_pct}%
+            </div>
+          )}
+          {paymentType === 'credit' &&
+           parseFloat(pricingConfig.credit_markup_pct) > 0 && (
+            <div className="text-xs text-orange-500 text-right mt-1">
+              * يشمل زيادة الآجل {pricingConfig.credit_markup_pct}%
+            </div>
+          )}
         </div>
 
         {/* Payment Type Selection */}
