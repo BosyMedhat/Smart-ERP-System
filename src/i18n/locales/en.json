@@ -141,7 +141,20 @@
     "title": "Suppliers",
     "addSupplier": "Add Supplier",
     "balance": "Outstanding Balance",
-    "noSuppliers": "No suppliers found"
+    "noSuppliers": "No suppliers found",
+    "intelligence": "Supplier Intelligence",
+    "bestOverall": "Best Overall Supplier",
+    "bestQuality": "Best Quality Supplier",
+    "bestPrice": "Best Price Supplier",
+    "bestDelivery": "Best Delivery Supplier",
+    "recommended": "Recommended",
+    "good": "Good",
+    "risky": "Risky",
+    "new": "New",
+    "recommendationReason": "Recommendation Reason",
+    "sortByRecommended": "Sort: Best",
+    "sortByScore": "Sort: Score",
+    "sortByPurchases": "Sort: Purchases"
   },
   "hr": {
     "title": "Human Resources",

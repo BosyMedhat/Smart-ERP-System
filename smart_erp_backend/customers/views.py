@@ -77,7 +77,27 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def debtors(self, request):
-        debtors = Customer.objects.filter(balance__gt=0).order_by('-balance')
+        from django.db.models import Sum, Q, Value, F, DecimalField
+        from django.db.models.functions import Coalesce
+
+        # DASH-DEBTORS-001: include both credit balance and unpaid installment debt
+        # Customer.balance tracks credit (آجل) sales only.
+        # Installments have their own remaining_amount; we aggregate it per customer.
+        debtors = Customer.objects.annotate(
+            installment_debt=Coalesce(
+                Sum(
+                    'sale__installments__remaining_amount',
+                    filter=Q(sale__installments__is_paid=False),
+                ),
+                Value(0, output_field=DecimalField(max_digits=12, decimal_places=2)),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            )
+        ).annotate(
+            total_debt=F('balance') + F('installment_debt')
+        ).filter(
+            Q(balance__gt=0) | Q(installment_debt__gt=0)
+        ).order_by('-total_debt')
+
         serializer = self.get_serializer(debtors, many=True)
         return Response(serializer.data)
 

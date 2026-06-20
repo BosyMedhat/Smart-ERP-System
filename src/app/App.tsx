@@ -1,8 +1,12 @@
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, Fragment, useRef, useCallback } from 'react';
 import { Users } from 'lucide-react';
 import { Toaster } from './components/ui/sonner';
 import FloatingAIAssistant from './components/FloatingAIAssistant';
+import type { FloatingAIAssistantHandle } from './components/FloatingAIAssistant';
+import { AIDemoControls } from './components/AIDemoControls';
+import { useAIDemoMode } from './hooks/useAIDemoMode';
 import { notify } from '../lib/notifications';
+import { ThemeProvider } from './providers/ThemeProvider';
 import { Sidebar } from './components/Sidebar';
 import { ProductGrid } from './components/ProductGrid';
 import { Cart } from './components/Cart';
@@ -15,7 +19,6 @@ import { LoginScreen } from './components/LoginScreen';
 import { SignUpScreen } from './components/SignUpScreen';
 import { Dashboard } from './components/Dashboard';
 import { InstallmentsManagement } from './components/InstallmentsManagement';
-import { SalesRepresentatives } from './components/SalesRepresentatives';
 import { SalesHistory } from './components/SalesHistory';
 import { Reports } from './components/Reports';
 import PLReport from './components/PLReport';
@@ -27,11 +30,32 @@ import { SuppliersScreen } from './components/SuppliersScreen';
 import { HRModule } from './components/HRModule';
 import { CreditDashboard } from './components/CreditDashboard';
 import apiClient from '../api/axiosConfig';
+import { fetchCurrencyFromAPI } from './utils/currency';
 import { useTranslation } from 'react-i18next';
 import '../i18n/index';
 import { useAuth, getStoredUser, storeUser, clearUser } from '../auth';
+import { hasScreenPermission } from '../auth/systemPermissions';
+import type { AuthUser } from '../auth/useAuth';
 import { AdminLoginScreen } from './components/AdminLoginScreen';
 
+
+// Ordered list of screens to try when picking a safe landing screen.
+// Mirrors the sidebar order so the user lands on the first thing they see.
+const SCREEN_PRIORITY: Screen[] = [
+  'pos', 'home', 'inventory', 'sales', 'treasury', 'reports',
+  'pl', 'hr', 'credit', 'installments', 'suppliers',
+  'customers_pos', 'ai', 'automation',
+  'roles', 'settings', 'audit', 'quotations', 'profile',
+];
+
+function getDefaultScreenForUser(user: AuthUser): Screen {
+  const perms = user.permission_list ?? [];
+  const level = user.role_obj?.level;
+  for (const screen of SCREEN_PRIORITY) {
+    if (hasScreenPermission(perms, screen, level)) return screen;
+  }
+  return 'profile'; // always accessible — final safety net
+}
 
 // Product interface matching backend API
 export interface Product {
@@ -50,12 +74,13 @@ export interface CartItem extends Product {
   quantity: number;
 }
 
-export type Screen = 'pos' | 'inventory' | 'home' | 'reports' | 'pl' | 'ai' | 'automation' | 'hr' | 'settings' | 'roles' | 'suppliers' | 'installments' | 'representatives' | 'quotations' | 'sales' | 'profile' | 'credit' | 'treasury' | 'audit' | 'customers_pos';
+export type Screen = 'pos' | 'inventory' | 'home' | 'reports' | 'pl' | 'ai' | 'automation' | 'hr' | 'settings' | 'roles' | 'suppliers' | 'installments' | 'quotations' | 'sales' | 'profile' | 'credit' | 'treasury' | 'audit' | 'customers_pos';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(getStoredUser);
   const isLoggedIn = currentUser !== null;
   const [activeScreen, setActiveScreen] = useState<Screen>('pos');
+  const fabRef = useRef<FloatingAIAssistantHandle>(null);
   type LoginPortal = 'admin' | 'employee' | null;
   const [loginPortal, setLoginPortal] = useState<LoginPortal>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -63,6 +88,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [discount, setDiscount] = useState<number>(0);
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [authScreen, setAuthScreen] = useState<'login' | 'signup'>('login');
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -84,7 +110,7 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
 
-  // Initialize theme color from localStorage or API
+  // Initialize theme color and branding from localStorage or API
   useEffect(() => {
     const savedColor = localStorage.getItem('primaryColor');
     if (savedColor) {
@@ -97,6 +123,18 @@ export default function App() {
         if (response.data.primary_color) {
           document.documentElement.style.setProperty('--primary-color', response.data.primary_color);
           localStorage.setItem('primaryColor', response.data.primary_color);
+        }
+        // Update document title from system_name
+        if (response.data.system_name) {
+          document.title = response.data.system_name;
+          localStorage.setItem('systemName', response.data.system_name);
+        }
+        // Cache settings for Sidebar and other components
+        localStorage.setItem('storeSettings', JSON.stringify(response.data));
+        
+        // Fetch currency from API (source of truth) - triggers currencyChanged event
+        if (response.data.currency) {
+          await fetchCurrencyFromAPI();
         }
       } catch (err) {
         console.error('Error fetching theme:', err);
@@ -216,6 +254,25 @@ export default function App() {
 
   const { hasPermission } = useAuth(currentUser);
 
+  const handleDemoAssistantMessage = useCallback((content: string) => {
+    fabRef.current?.addDemoMessage(content);
+  }, []);
+
+  const handleDemoActionMessage = useCallback((content: string) => {
+    fabRef.current?.addDemoActionMessage(content);
+  }, []);
+
+  const handleDemoOpenPanel = useCallback(() => {
+    fabRef.current?.openPanel();
+  }, []);
+
+  const { demoState, start: startDemo, pause: pauseDemo, resume: resumeDemo, stop: stopDemo } = useAIDemoMode({
+    onNavigate: setActiveScreen,
+    onAssistantMessage: handleDemoAssistantMessage,
+    onActionMessage: handleDemoActionMessage,
+    onOpenPanel: handleDemoOpenPanel,
+  });
+
   const UnauthorizedScreen = () => (
     <div className="flex flex-col items-center justify-center h-full gap-4">
       <div className="text-6xl">🚫</div>
@@ -258,6 +315,7 @@ export default function App() {
         <AdminLoginScreen
           onLogin={(user) => {
             setCurrentUser(user);
+            setActiveScreen(getDefaultScreenForUser(user));
             setLoginPortal(null);
             window.history.pushState({}, '', '/');
           }}
@@ -271,6 +329,7 @@ export default function App() {
         <LoginScreen
           onLogin={(user: any) => {
             setCurrentUser(user);
+            setActiveScreen(getDefaultScreenForUser(user as AuthUser));
             setLoginPortal(null);
           }}
           onGoToSignUp={() => setAuthScreen('signup')}
@@ -338,6 +397,7 @@ export default function App() {
     setCartItems([]);
     setSelectedCustomer('');
     setDiscount(0);
+    setDiscountType('percentage');
   };
 
   const filteredProducts = products.filter((product) => {
@@ -353,8 +413,8 @@ export default function App() {
   const categories = ['الكل', ...Array.from(new Set(products.map((p: Product) => p.category).filter((c): c is string => !!c)))];
 
   return (
-    <>
-      <div dir={i18n.language === 'ar' ? 'rtl' : 'ltr'} className="h-screen flex bg-gray-50" style={{ fontFamily: 'Cairo, sans-serif' }}>
+    <ThemeProvider>
+      <div dir={i18n.language === 'ar' ? 'rtl' : 'ltr'} className="h-screen flex bg-background" style={{ fontFamily: 'Cairo, sans-serif' }}>
         {/* Right Sidebar */}
         <Sidebar activeScreen={activeScreen} onScreenChange={setActiveScreen} currentUser={currentUser} onLogout={handleLogout} />
 
@@ -364,7 +424,7 @@ export default function App() {
             {hasPermission('pos') ? (
               <>
                 {/* Right Side - Products (60%) */}
-                <div className="flex-[60] flex flex-col gap-4">
+                <div data-demo-id="pos-product-grid" className="flex-[60] flex flex-col gap-4">
                   <ProductGrid
                     products={filteredProducts}
                     categories={categories}
@@ -379,13 +439,15 @@ export default function App() {
                 </div>
 
                 {/* Left Side - Cart (40%) */}
-                <div className="flex-[40] min-h-0 h-full">
+                <div data-demo-id="pos-cart" className="flex-[40] min-h-0 h-full">
                   <Cart
                     cartItems={cartItems}
                     selectedCustomer={selectedCustomer}
                     onCustomerChange={setSelectedCustomer}
                     discount={discount}
                     onDiscountChange={setDiscount}
+                    discountType={discountType}
+                    onDiscountTypeChange={setDiscountType}
                     onUpdateQuantity={updateQuantity}
                     onClearCart={clearCart}
                     onAddToCart={addToCart}
@@ -442,7 +504,7 @@ export default function App() {
 
         {activeScreen === 'home' && (
           <div className="flex-1">
-            {hasPermission('home') ? <Dashboard /> : <UnauthorizedScreen />}
+            {hasPermission('home') ? <Dashboard onStartDemo={startDemo} /> : <UnauthorizedScreen />}
           </div>
         )}
 
@@ -461,12 +523,6 @@ export default function App() {
         {activeScreen === 'installments' && (
           <div className="flex-1">
             {hasPermission('installments') ? <InstallmentsManagement /> : <UnauthorizedScreen />}
-          </div>
-        )}
-
-        {activeScreen === 'representatives' && (
-          <div className="flex-1">
-            {hasPermission('representatives') ? <SalesRepresentatives /> : <UnauthorizedScreen />}
           </div>
         )}
 
@@ -520,8 +576,17 @@ export default function App() {
         )}
       </div>
       <FloatingAIAssistant
+        ref={fabRef}
         onScreenChange={setActiveScreen}
         currentUser={currentUser}
+        onStartDemo={startDemo}
+        isDemoRunning={demoState.status === 'running' || demoState.status === 'paused'}
+      />
+      <AIDemoControls
+        demoState={demoState}
+        onPause={pauseDemo}
+        onResume={resumeDemo}
+        onStop={stopDemo}
       />
       <Toaster
         position="top-center"
@@ -534,6 +599,6 @@ export default function App() {
           },
         }}
       />
-    </>
+    </ThemeProvider>
   );
 }

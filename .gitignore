@@ -42,3 +42,18 @@ generate_erp_final.py
 smart_erp_backend/temp_test.py
 smart_erp_backend/test_purchase.py
 Smart_ERP_Final_Presentation.pdf
+
+# Local IDE / agent files
+.cursor/
+.devin/
+
+# Local validation scripts
+smart_erp_backend/*validation*.py
+smart_erp_backend/api_test.py
+smart_erp_backend/api_validation.py
+smart_erp_backend/db_validation.py
+smart_erp_backend/fix_encoding.py
+smart_erp_backend/kpi_validation.py
+smart_erp_backend/test_*.py
+smart_erp_backend/treasury_analysis.py
+smart_erp_backend/validate_fix.py

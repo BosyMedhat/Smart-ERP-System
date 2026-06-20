@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import apiClient from '../../api/axiosConfig';
 import { useTranslation } from 'react-i18next';
 import {
@@ -7,7 +7,7 @@ import {
   ArrowUpRight, ArrowDownRight, Minus
 } from 'lucide-react';
 
-/* ─── Types ────────────────────────────────── */
+/* ─── Types ───────────────────────────────── */
 interface RevenueData {
   cash: string; electronic: string;
   credit: string; installment: string;
@@ -44,7 +44,7 @@ interface PLData {
   };
 }
 
-/* ─── Helpers ──────────────────────────────── */
+/* ─── Helpers ───────────────────────────── */
 function fmt(value: string): string {
   const n = parseFloat(value);
   return n.toLocaleString('ar-EG', { minimumFractionDigits: 2 });
@@ -63,13 +63,13 @@ function ChangeBadge({ value }: { value: string }) {
     </span>
   );
   return (
-    <span className="inline-flex items-center gap-1 text-gray-400 text-xs font-semibold bg-gray-50 px-2 py-0.5 rounded-full">
+    <span className="inline-flex items-center gap-1 text-gray-400 text-xs font-semibold bg-muted px-2 py-0.5 rounded-full">
       <Minus className="w-3 h-3" />0%
     </span>
   );
 }
 
-/* ─── KPI Card ─────────────────────────────── */
+/* ─── KPI Card ─────────────────────────── */
 function KPICard({
   title, value, currency = true, change, icon: Icon, color
 }: {
@@ -78,22 +78,22 @@ function KPICard({
 }) {
   const isPositive = parseFloat(value) >= 0;
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+    <div className="bg-card rounded-2xl shadow-sm border border-border p-5">
       <div className="flex items-start justify-between mb-3">
         <div className={`p-2 rounded-xl ${color}`}>
           <Icon className="w-5 h-5 text-white" />
         </div>
         {change && <ChangeBadge value={change} />}
       </div>
-      <p className="text-xs text-gray-500 mb-1">{title}</p>
-      <p className={`text-2xl font-bold ${isPositive ? 'text-gray-800' : 'text-red-600'}`}>
+      <p className="text-xs text-muted-foreground mb-1">{title}</p>
+      <p className={`text-2xl font-bold ${isPositive ? 'text-card-foreground' : 'text-red-600'}`}>
         {fmt(value)} {currency && <span className="text-sm font-normal text-gray-400">ج.م</span>}
       </p>
     </div>
   );
 }
 
-/* ─── Row في جدول التفاصيل ─────────────────── */
+/* ─── Row في جدول التفاصيل ─────────────── */
 function DetailRow({
   label, value, sub = false, bold = false, negative = false
 }: {
@@ -103,12 +103,12 @@ function DetailRow({
   const n = parseFloat(value);
   const colorClass = negative
     ? 'text-red-600'
-    : n < 0 ? 'text-red-600' : 'text-gray-800';
+    : n < 0 ? 'text-red-600' : 'text-card-foreground';
 
   return (
     <div className={`flex items-center justify-between py-2
-      ${sub ? 'pr-4 text-sm text-gray-500' : ''}
-      ${bold ? 'font-bold border-t border-gray-200 mt-1 pt-3' : ''}
+      ${sub ? 'pr-4 text-sm text-muted-foreground' : ''}
+      ${bold ? 'font-bold border-t border-border mt-1 pt-3' : ''}
     `}>
       <span>{label}</span>
       <span className={`font-mono ${colorClass} ${bold ? 'text-base' : 'text-sm'}`}>
@@ -118,7 +118,7 @@ function DetailRow({
   );
 }
 
-/* ─── Main Component ───────────────────────── */
+/* ─── Main Component ───────────────────── */
 export default function PLReport() {
   const { t } = useTranslation();
   const [data, setData]       = useState<PLData | null>(null);
@@ -189,10 +189,10 @@ export default function PLReport() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">
+          <h1 className="text-2xl font-bold text-card-foreground">
             تقرير الأرباح والخسائر
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             {c.period.date_from} — {c.period.date_to}
           </p>
         </div>
@@ -210,7 +210,7 @@ export default function PLReport() {
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all
                 ${preset === p.key
                   ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                  : 'bg-card text-muted-foreground border border-border hover:bg-muted'
                 }`}>
               {p.label}
             </button>
@@ -220,16 +220,16 @@ export default function PLReport() {
 
       {/* Date picker for custom */}
       {preset === 'custom' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4
+        <div className="bg-card rounded-xl border border-border p-4
           flex flex-wrap gap-4 items-end">
           <div>
-            <label className="text-xs text-gray-500 block mb-1">من تاريخ</label>
+            <label className="text-xs text-muted-foreground block mb-1">من تاريخ</label>
             <input type="date" value={dateFrom}
               onChange={e => setDateFrom(e.target.value)}
               className="border rounded-lg px-3 py-2 text-sm" />
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-1">إلى تاريخ</label>
+            <label className="text-xs text-muted-foreground block mb-1">إلى تاريخ</label>
             <input type="date" value={dateTo}
               onChange={e => setDateTo(e.target.value)}
               className="border rounded-lg px-3 py-2 text-sm" />
@@ -282,9 +282,9 @@ export default function PLReport() {
           { label: 'متوسط الفاتورة', value: c.stats.avg_invoice + ' ج.م' },
         ].map(item => (
           <div key={item.label}
-            className="bg-white rounded-xl border border-gray-100 p-4 text-center">
-            <p className="text-xs text-gray-500 mb-1">{item.label}</p>
-            <p className="text-xl font-bold text-gray-800">{item.value}</p>
+            className="bg-card rounded-xl border border-border p-4 text-center">
+            <p className="text-xs text-muted-foreground mb-1">{item.label}</p>
+            <p className="text-xl font-bold text-card-foreground">{item.value}</p>
           </div>
         ))}
       </div>
@@ -293,8 +293,8 @@ export default function PLReport() {
       <div className="grid md:grid-cols-2 gap-6">
 
         {/* الإيرادات */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h3 className="font-bold text-gray-700 mb-4 pb-2 border-b">
+        <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+          <h3 className="font-bold text-card-foreground mb-4 pb-2 border-b">
             الإيرادات
           </h3>
           <DetailRow label="مبيعات كاش"        value={c.revenue.cash}        sub />
@@ -311,8 +311,8 @@ export default function PLReport() {
         </div>
 
         {/* المصروفات */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h3 className="font-bold text-gray-700 mb-4 pb-2 border-b">
+        <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+          <h3 className="font-bold text-card-foreground mb-4 pb-2 border-b">
             المصروفات التشغيلية
           </h3>
           <DetailRow label="إيجار"              value={c.expenses.rent}        sub negative />
@@ -321,7 +321,7 @@ export default function PLReport() {
           <DetailRow label="مصروفات أخرى"       value={c.expenses.other}       sub negative />
           <DetailRow label="رواتب الموظفين"     value={c.expenses.salaries}    sub negative />
           <DetailRow label="إجمالي المصروفات"   value={c.expenses.total}       bold negative />
-          <div className="mt-6 pt-4 border-t-2 border-gray-300">
+          <div className="mt-6 pt-4 border-t-2 border-input">
             <DetailRow
               label="صافي الربح النهائي"
               value={c.net_profit}
@@ -333,8 +333,8 @@ export default function PLReport() {
       </div>
 
       {/* مقارنة بالفترة السابقة */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h3 className="font-bold text-gray-700 mb-4 pb-2 border-b">
+      <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+        <h3 className="font-bold text-card-foreground mb-4 pb-2 border-b">
           مقارنة بالفترة السابقة
           <span className="text-xs text-gray-400 font-normal mr-2">
             ({data.previous.period.date_from} — {data.previous.period.date_to})
@@ -354,8 +354,8 @@ export default function PLReport() {
               prev: data.previous.net_profit },
           ].map(item => (
             <div key={item.label}
-              className="bg-gray-50 rounded-xl p-3 text-center">
-              <p className="text-xs text-gray-500 mb-2">{item.label}</p>
+              className="bg-muted rounded-xl p-3 text-center">
+              <p className="text-xs text-muted-foreground mb-2">{item.label}</p>
               <ChangeBadge value={item.change} />
               <p className="text-xs text-gray-400 mt-2">
                 سابق: {fmt(item.prev)} ج.م
@@ -368,3 +368,4 @@ export default function PLReport() {
     </div>
   );
 }
+

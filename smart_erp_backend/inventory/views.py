@@ -4,11 +4,12 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from decimal import Decimal
-from django.db.models import Sum, Count, F as models_F
+from django.db.models import Sum, Count, F as models_F, Q as models_Q
 from customers.models import Customer
 # استيراد كل الموديلات والسيرياليزر (تأكدي من وجود Employee في الموديلات)
 from .models import (
@@ -17,7 +18,7 @@ from .models import (
     Employee,  # تم إضافة الموظفين
     StoreSettings,  # إعدادات المتجر
     Sale, SaleItem,  # فواتير المبيعات الجديدة
-    SupplierEvaluation
+    SupplierEvaluation, SupplierProductRanking
 )
 from .serializers import (
     ProductSerializer, InvoiceSerializer, WorkShiftSerializer, InstallmentSerializer,
@@ -25,13 +26,14 @@ from .serializers import (
     StockMovementSerializer,
     EmployeeSerializer, # تم إضافة السيرياليزر للموظفين
     SaleItemSerializer, SaleSerializer, SaleItemWriteSerializer, SaleWriteSerializer,
-    SupplierEvaluationSerializer
+    SupplierEvaluationSerializer, SupplierProductRankingSerializer
 )
 from .permissions import (
     CanManageProducts,
     CanManageInvoices,
     CanManageEmployees,
     CanManageSuppliers,
+    CanAccessSuppliers,
     CanViewReports,
     CanManageTreasury,
     CanManageUsers,
@@ -89,6 +91,14 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 )
 
                 return Response({"message": "تمت العملية بنجاح"}, status=status.HTTP_201_CREATED)
+        except WorkShift.DoesNotExist:
+            # ERP-P1-013: Specific error handling for missing shift
+            return Response(
+                {
+                    "error": "لا يوجد شيفت صالح لهذه الفاتورة. افتح شيفت أولاً أو استخدم مسار البيع الحالي /api/sales/."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -126,6 +136,164 @@ class WorkShiftViewSet(viewsets.ModelViewSet):
     serializer_class = WorkShiftSerializer
     permission_classes = [IsManagerOrHasPermission]
 
+    @action(detail=False, methods=['post'])
+    def open(self, request):
+        """
+        Open a new shift for the current user.
+        POST /api/shifts/open/
+        Request body: {"starting_cash": 2000, "notes": "optional"}
+        Prevents opening if user already has an open shift.
+        """
+        try:
+            # Check if user already has an open shift
+            existing_open = WorkShift.objects.filter(
+                user=request.user,
+                status='open'
+            ).first()
+
+            if existing_open:
+                return Response(
+                    {
+                        'error': 'توجد وردية مفتوحة بالفعل',
+                        'detail': 'يجب إغلاق الوردية الحالية قبل فتح وردية جديدة',
+                        'existing_shift': {
+                            'id': existing_open.id,
+                            'shift_date': existing_open.shift_date,
+                            'start_time': existing_open.start_time,
+                        }
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Validate starting_cash
+            starting_cash = request.data.get('starting_cash')
+            if starting_cash is None:
+                return Response(
+                    {'error': 'رصيد أول الوردية مطلوب', 'detail': 'يرجى إدخال المبلغ الافتتاحي'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                starting_cash = Decimal(str(starting_cash))
+                if starting_cash < 0:
+                    raise ValueError('المبلغ لا يمكن أن يكون سالباً')
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': 'المبلغ غير صالح', 'detail': 'رصيد أول الوردية يجب أن يكون رقماً موجباً'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Get optional notes
+            notes = request.data.get('notes', '')
+
+            # Create new shift
+            from django.utils import timezone
+            shift = WorkShift.objects.create(
+                user=request.user,
+                shift_date=timezone.now().date(),
+                starting_cash=starting_cash,
+                expected_cash=starting_cash,  # Initially same as starting
+                total_sales=Decimal('0'),
+                status='open',
+                notes=notes
+            )
+
+            serializer = self.get_serializer(shift)
+            return Response({
+                'message': 'تم فتح الوردية بنجاح',
+                'shift': serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response(
+                {'error': 'حدث خطأ أثناء فتح الوردية', 'detail': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'])
+    def close(self, request, pk=None):
+        """
+        Close a shift with actual cash amount.
+        POST /api/shifts/{id}/close/
+        Request body: {"actual_cash": 1000, "notes": "optional"}
+        """
+        try:
+            shift = self.get_object()
+
+            # Validate shift is not already closed
+            if shift.status == 'closed':
+                return Response(
+                    {'error': 'الوردية مغلقة بالفعل', 'detail': 'لا يمكن إغلاق الوردية مرتين'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Validate actual_cash is provided
+            actual_cash = request.data.get('actual_cash')
+            if actual_cash is None:
+                return Response(
+                    {'error': 'المبلغ الفعلي مطلوب', 'detail': 'يرجى إدخال المبلغ الفعلي المستلم'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Validate actual_cash is numeric
+            try:
+                actual_cash = Decimal(str(actual_cash))
+                if actual_cash < 0:
+                    raise ValueError('المبلغ لا يمكن أن يكون سالباً')
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': 'المبلغ غير صالح', 'detail': 'المبلغ الفعلي يجب أن يكون رقماً موجباً'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Get optional notes
+            notes = request.data.get('notes', '')
+
+            # Close the shift using model method
+            shift.close_shift(actual_cash, notes)
+
+            # Serialize and return updated shift
+            serializer = self.get_serializer(shift)
+            return Response({
+                'message': 'تم إغلاق الوردية بنجاح',
+                'shift': serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {'error': 'حدث خطأ أثناء إغلاق الوردية', 'detail': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        """
+        Get the current open shift for the logged-in user.
+        GET /api/shifts/current/
+        Returns 404 if no open shift exists.
+        """
+        try:
+            # Find open shift for current user
+            shift = WorkShift.objects.filter(
+                user=request.user,
+                status='open'
+            ).order_by('-start_time').first()
+
+            if not shift:
+                return Response(
+                    {'message': 'لا توجد وردية مفتوحة', 'detail': 'يرجى فتح وردية جديدة'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            serializer = self.get_serializer(shift)
+            return Response(serializer.data)
+
+        except Exception as e:
+            return Response(
+                {'error': 'حدث خطأ أثناء جلب بيانات الوردية', 'detail': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 class InstallmentViewSet(viewsets.ModelViewSet):
     queryset = Installment.objects.all().select_related('sale__customer')
     serializer_class = InstallmentSerializer
@@ -133,36 +301,174 @@ class InstallmentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def pay(self, request, pk=None):
+        from django.db import transaction as db_transaction
+        from decimal import Decimal
+        from treasury.models import TreasuryAccount, TreasuryTransaction
+
         installment = self.get_object()
         amount = float(request.data.get('amount', 0))
         if amount <= 0:
             return Response({'error': 'المبلغ يجب أن يكون أكبر من صفر'}, status=400)
+
+        actual_paid = min(amount, float(installment.remaining_amount))
         new_remaining = max(0, float(installment.remaining_amount) - amount)
-        installment.remaining_amount = new_remaining
-        installment.is_paid = new_remaining <= 0
-        installment.save()
+
+        with db_transaction.atomic():
+            installment.remaining_amount = new_remaining
+            installment.is_paid = new_remaining <= 0
+            installment.save()
+
+            # ISS-07 FIX: record installment collection in Treasury Ledger
+            if actual_paid > 0:
+                acc, _ = TreasuryAccount.objects.get_or_create(
+                    name='CASH',
+                    defaults={'display_name': 'CASH', 'balance': Decimal('0')}
+                )
+                acc_locked = TreasuryAccount.objects.select_for_update().get(pk=acc.pk)
+                acc_locked.balance += Decimal(str(actual_paid))
+                acc_locked.save()
+                invoice_num = installment.sale.invoice_number if installment.sale else str(installment.pk)
+                TreasuryTransaction.objects.create(
+                    account=acc_locked,
+                    transaction_type='INCOME',
+                    category='INSTALLMENT',
+                    amount=Decimal(str(actual_paid)),
+                    balance_after=acc_locked.balance,
+                    description=f'تحصيل قسط — فاتورة {invoice_num}',
+                    reference_type='installment',
+                    reference_id=installment.pk,
+                    created_by=request.user,
+                    is_auto=True,
+                )
+
         return Response({
             'success': True,
             'remaining_amount': installment.remaining_amount,
             'is_paid': installment.is_paid
         })
 
+    @action(detail=True, methods=['get'], url_path='payment-history')
+    def payment_history(self, request, pk=None):
+        """
+        GET /api/installments/{id}/payment-history/
+        Returns complete payment history for an installment using TreasuryTransaction records.
+        """
+        from decimal import Decimal
+        from treasury.models import TreasuryTransaction
+
+        installment = self.get_object()
+
+        # Query TreasuryTransaction for all payments related to this installment
+        payments_qs = TreasuryTransaction.objects.filter(
+            reference_type='installment',
+            reference_id=installment.pk
+        ).order_by('created_at')
+
+        # Build payments list
+        payments = []
+        total_paid = Decimal('0')
+
+        for txn in payments_qs:
+            payment_amount = Decimal(str(txn.amount))
+            total_paid += payment_amount
+
+            payments.append({
+                'id': txn.id,
+                'amount': str(payment_amount),
+                'paid_at': txn.created_at.isoformat(),
+                'recorded_by': txn.created_by.username if txn.created_by else None,
+                'recorded_by_name': txn.created_by.get_full_name() if txn.created_by else None,
+                'description': txn.description,
+                'transaction_type': txn.transaction_type,
+            })
+
+        # Calculate summary
+        original_amount = Decimal(str(installment.amount))
+        down_payment = Decimal(str(installment.down_payment))
+        current_remaining = Decimal(str(installment.remaining_amount))
+
+        # Customer info
+        customer_name = None
+        if installment.sale and installment.sale.customer:
+            customer_name = installment.sale.customer.name
+
+        # Invoice number
+        invoice_number = None
+        if installment.sale:
+            invoice_number = installment.sale.invoice_number
+
+        return Response({
+            'installment_id': installment.id,
+            'invoice_number': invoice_number,
+            'customer_name': customer_name,
+            'total_amount': str(original_amount + down_payment),  # Full invoice amount
+            'installment_amount': str(original_amount),
+            'down_payment': str(down_payment),
+            'current_remaining': str(current_remaining),
+            'is_paid': installment.is_paid,
+            'payments': payments,
+            'payment_summary': {
+                'total_paid': str(total_paid),
+                'remaining': str(current_remaining),
+                'payments_count': len(payments),
+            }
+        })
+
 # 9. الموردين
 class SupplierViewSet(viewsets.ModelViewSet):
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
-    permission_classes = [CanManageSuppliers]
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated, CanAccessSuppliers]
 
     @action(detail=True, methods=['post'])
     def pay_debt(self, request, pk=None):
+        from django.db import transaction as db_transaction
+        from treasury.models import TreasuryAccount, TreasuryTransaction
+
         supplier = self.get_object()
         amount = float(request.data.get('amount', 0))
         if amount <= 0:
             return Response({'error': 'المبلغ يجب أن يكون أكبر من صفر'}, status=400)
-        new_balance = max(0, float(supplier.balance) - amount)
-        supplier.balance = new_balance
-        supplier.save()
-        return Response({'success': True, 'balance': supplier.balance})
+
+        with db_transaction.atomic():
+            supplier_locked = Supplier.objects.select_for_update().get(pk=supplier.pk)
+            actual_payment = min(amount, float(supplier_locked.balance))
+            new_balance = max(0, float(supplier_locked.balance) - actual_payment)
+            supplier_locked.balance = new_balance
+            supplier_locked.save()
+
+            # Financial Integrity: record supplier payment in Treasury Ledger
+            if actual_payment > 0:
+                acc, _ = TreasuryAccount.objects.get_or_create(
+                    name='CASH',
+                    defaults={
+                        'display_name': 'الخزينة النقدية',
+                        'balance': Decimal('0')
+                    }
+                )
+                acc_locked = TreasuryAccount.objects.select_for_update().get(pk=acc.pk)
+                acc_locked.balance -= Decimal(str(actual_payment))
+                acc_locked.save()
+
+                TreasuryTransaction.objects.create(
+                    account=acc_locked,
+                    transaction_type='EXPENSE',
+                    category='PURCHASE',
+                    amount=Decimal(str(actual_payment)),
+                    balance_after=acc_locked.balance,
+                    description=f'سداد دين مورد: {supplier.name}',
+                    reference_type='supplier_payment',
+                    reference_id=supplier.pk,
+                    created_by=request.user,
+                    is_auto=True,
+                )
+
+        return Response({
+            'success': True,
+            'balance': supplier_locked.balance,
+            'paid_amount': actual_payment,
+        })
 
     @action(detail=True, methods=['get'], url_path='evaluations')
     def evaluations(self, request, pk=None):
@@ -173,16 +479,36 @@ class SupplierViewSet(viewsets.ModelViewSet):
         serializer = SupplierEvaluationSerializer(evals, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['get'], url_path='insights')
+    def insights(self, request, pk=None):
+        from .services import SupplierIntelligenceService
+        supplier = self.get_object()
+        data = SupplierIntelligenceService.enrich_supplier(supplier)
+        data['supplier_id'] = supplier.id
+        data['supplier_name'] = supplier.name
+        return Response(data)
+
+    @action(detail=False, methods=['get'], url_path='recommendations')
+    def recommendations(self, request):
+        from .services import SupplierIntelligenceService
+        top = SupplierIntelligenceService.get_top_suppliers()
+        return Response({
+            'top_suppliers': top,
+            'all_rankings': SupplierIntelligenceService.calculate_recommendations(),
+        })
+
 # 10. المشتريات
 class PurchaseViewSet(viewsets.ModelViewSet):
     queryset = Purchase.objects.all()
     serializer_class = PurchaseSerializer
-    permission_classes = [CanManageSuppliers]
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated, CanAccessSuppliers]
 
 # 9.5. تقييمات الموردين
 class SupplierEvaluationViewSet(viewsets.ModelViewSet):
     serializer_class = SupplierEvaluationSerializer
-    permission_classes = [IsAuthenticated, CanManageSuppliers]
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated, CanAccessSuppliers]
     http_method_names = ['get', 'post', 'delete']
 
     def get_queryset(self):
@@ -197,6 +523,27 @@ class SupplierEvaluationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(evaluated_by=self.request.user)
 
+
+# 9.6. ترتيب الموردين لكل منتج (Future: Best Supplier Per Product)
+class SupplierProductRankingViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only API for future Best Supplier Per Product rankings.
+    Current release: structure is ready; data is populated only if present.
+    """
+    queryset = SupplierProductRanking.objects.select_related(
+        'product', 'supplier'
+    ).order_by('product', 'rank')
+    serializer_class = SupplierProductRankingSerializer
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated, CanAccessSuppliers]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        product_id = self.request.query_params.get('product')
+        if product_id:
+            qs = qs.filter(product_id=product_id)
+        return qs
+
 # 11. حركات المخزن
 class StockMovementViewSet(viewsets.ModelViewSet):
     queryset = StockMovement.objects.all()
@@ -205,13 +552,17 @@ class StockMovementViewSet(viewsets.ModelViewSet):
 
 # 12. إعدادات المتجر
 class StoreSettingsSerializer(serializers.ModelSerializer):
+    store_logo = serializers.ImageField(use_url=True, required=False, allow_null=True)
+
     class Meta:
         model = StoreSettings
         fields = '__all__'
+
 class StoreSettingsViewSet(viewsets.ModelViewSet):
     queryset = StoreSettings.objects.all()
     serializer_class = StoreSettingsSerializer
     permission_classes = [IsAuthenticated, IsManagerRole]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_object(self):
         obj, _ = StoreSettings.objects.get_or_create(pk=1)
@@ -240,6 +591,7 @@ def get_pricing_config(request):
             settings.tax_rate
             if settings else Decimal('14')
         ),
+        'enable_tax': bool(settings.enable_tax) if settings else False,
     })
 
 
@@ -297,8 +649,11 @@ class SaleViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             settings = StoreSettings.objects.first()
-            tax_rate = Decimal(str(settings.tax_rate)) \
-                       if settings else Decimal('14.00')
+            # Respect enable_tax flag — only apply if explicitly enabled
+            if settings and settings.enable_tax:
+                tax_rate = Decimal(str(settings.tax_rate))
+            else:
+                tax_rate = Decimal('0.00')
 
             # Dynamic pricing markup based on payment type
             markup_pct = Decimal('0')
@@ -311,7 +666,8 @@ class SaleViewSet(viewsets.ModelViewSet):
             total = Decimal(str(
                 serializer.validated_data.get('total_amount', 0)
             ))
-            discount = Decimal(str(
+            discount_type = serializer.validated_data.get('discount_type', 'percentage')
+            discount_value = Decimal(str(
                 serializer.validated_data.get('discount', 0)
             ))
 
@@ -320,7 +676,29 @@ class SaleViewSet(viewsets.ModelViewSet):
                 markup_amount = total * (markup_pct / Decimal('100'))
                 total = total + markup_amount
 
-            after_discount = total - discount
+            # Calculate discount amount based on type
+            if discount_type == 'percentage':
+                # Validation: percentage must be between 0 and 100
+                if discount_value < Decimal('0') or discount_value > Decimal('100'):
+                    raise ValidationError(
+                        {'discount': 'الخصم بالنسبة يجب أن يكون بين 0 و 100%'}
+                    )
+                discount_amount = total * (discount_value / Decimal('100'))
+            elif discount_type == 'fixed':
+                # Validation: fixed discount cannot exceed subtotal
+                if discount_value < Decimal('0'):
+                    raise ValidationError(
+                        {'discount': 'قيمة الخصم لا يمكن أن تكون سالبة'}
+                    )
+                if discount_value > total:
+                    raise ValidationError(
+                        {'discount': 'قيمة الخصم لا يمكن أن تتجاوي الإجمالي'}
+                    )
+                discount_amount = discount_value
+            else:  # legacy or any other value - treat as fixed for safety
+                discount_amount = discount_value
+
+            after_discount = total - discount_amount
             tax_amount = after_discount * (tax_rate / Decimal('100'))
             final_amount = after_discount + tax_amount
 
@@ -348,22 +726,73 @@ class SaleViewSet(viewsets.ModelViewSet):
                 sale.customer.balance += sale.final_amount
                 sale.customer.save()
 
-            # If installment: auto-create installment record
+            # If installment: validate inputs then create installment record
             if payment_type == 'installment':
-                down_payment = Decimal(str(self.request.data.get('down_payment', 0)))
-                months_count = int(self.request.data.get('months_count', 1))
+                from treasury.models import TreasuryAccount, TreasuryTransaction
+
+                # ISS-02/03: Validate down_payment range
+                try:
+                    down_payment = Decimal(str(self.request.data.get('down_payment', 0)))
+                except Exception:
+                    raise serializers.ValidationError({'down_payment': 'قيمة المقدم غير صالحة'})
+
+                if down_payment < Decimal('0'):
+                    raise serializers.ValidationError(
+                        {'down_payment': 'المقدم لا يمكن أن يكون سالباً'}
+                    )
+                if down_payment > final_amount:
+                    raise serializers.ValidationError(
+                        {'down_payment': f'المقدم ({down_payment}) لا يمكن أن يتجاوز إجمالي الفاتورة ({final_amount})'}
+                    )
+
+                # ISS-05: Validate months_count
+                try:
+                    months_count = int(self.request.data.get('months_count', 1))
+                except (ValueError, TypeError):
+                    raise serializers.ValidationError({'months_count': 'عدد الأشهر غير صالح'})
+
+                if months_count < 1:
+                    raise serializers.ValidationError(
+                        {'months_count': 'عدد الأشهر يجب أن يكون 1 على الأقل'}
+                    )
+
                 due_date_str = self.request.data.get('due_date', None)
                 due_date = datetime.date.fromisoformat(due_date_str) if due_date_str else datetime.date.today()
+
                 installment_amount = final_amount - down_payment
-                Installment.objects.create(
+
+                installment = Installment.objects.create(
                     sale=sale,
                     down_payment=down_payment,
                     months_count=months_count,
                     amount=installment_amount,
                     remaining_amount=installment_amount,
                     due_date=due_date,
-                    is_paid=False
+                    is_paid=(installment_amount <= Decimal('0'))
                 )
+
+                # ISS-08 FIX: record down_payment in Treasury here (after Installment exists)
+                # This replaces the signal logic which had a race condition
+                if down_payment > Decimal('0'):
+                    acc, _ = TreasuryAccount.objects.get_or_create(
+                        name='CASH',
+                        defaults={'display_name': 'CASH', 'balance': Decimal('0')}
+                    )
+                    acc_locked = TreasuryAccount.objects.select_for_update().get(pk=acc.pk)
+                    acc_locked.balance += down_payment
+                    acc_locked.save()
+                    TreasuryTransaction.objects.create(
+                        account=acc_locked,
+                        transaction_type='INCOME',
+                        category='INSTALLMENT',
+                        amount=down_payment,
+                        balance_after=acc_locked.balance,
+                        description=f'دفعة أولى — فاتورة {sale.invoice_number}',
+                        reference_type='sale',
+                        reference_id=sale.pk,
+                        created_by=self.request.user,
+                        is_auto=True,
+                    )
 
 
 # ==================== BARCODE LOOKUP API ====================
@@ -388,7 +817,6 @@ class DashboardView(APIView):
 
     def get(self, request):
         today = timezone.now().date()
-        week_ago = today - timedelta(days=6)
 
         # مبيعات اليوم
         today_sales = Sale.objects.filter(
@@ -401,17 +829,39 @@ class DashboardView(APIView):
         # عدد العمليات اليوم
         operations_count = today_sales.count()
 
-        # إجمالي التحصيلات (كاش فقط)
-        total_cash = today_sales.filter(
-            payment_type='cash'
-        ).aggregate(
-            total=Sum('final_amount')
-        )['total'] or 0
+        # BUG-01 FIX: التحصيلات الفورية = كاش + فودافون + إنستاباي + كارت
+        # يتطابق مع تعريف cash_revenue في Sales/Financial Reports
+        payment_breakdown = today_sales.aggregate(
+            cash=Sum('final_amount', filter=models_Q(payment_type='cash')),
+            vodafone=Sum('final_amount', filter=models_Q(payment_type='vodafone_cash')),
+            instapay=Sum('final_amount', filter=models_Q(payment_type='instapay')),
+            card=Sum('final_amount', filter=models_Q(payment_type='card')),
+        )
+        total_cash = (
+            (payment_breakdown['cash'] or 0) +
+            (payment_breakdown['vodafone'] or 0) +
+            (payment_breakdown['instapay'] or 0) +
+            (payment_breakdown['card'] or 0)
+        )
 
-        # تنبيهات المخزون المنخفض
-        low_stock_alerts = Product.objects.filter(
+        # BUG-05 FIX: الفصل بين المخزون المنخفض والمخزون المنعدم
+        # out_of_stock: current_stock <= 0
+        out_of_stock_count = Product.objects.filter(
+            current_stock__lte=0
+        ).count()
+        # low_stock: أقل من الحد الأدنى لكن لم ينعدم بعد
+        low_stock_count = Product.objects.filter(
+            current_stock__gt=0,
             current_stock__lte=models_F('min_stock_level')
         ).count()
+
+        # مبيعات الشهر الحالي (ERP-DASH-001B)
+        first_day_of_month = today.replace(day=1)
+        month_sales = Sale.objects.filter(created_at__date__gte=first_day_of_month)
+        total_sales_month = month_sales.aggregate(
+            total=Sum('final_amount')
+        )['total'] or 0
+        operations_count_month = month_sales.count()
 
         # مبيعات آخر 7 أيام للـ chart
         sales_chart = []
@@ -427,9 +877,11 @@ class DashboardView(APIView):
                 'total': float(day_total)
             })
 
-        # آخر 10 أنشطة
+        # BUG-02 FIX: آخر 10 أنشطة اليوم فقط
         recent_sales = Sale.objects.select_related(
             'customer', 'cashier'
+        ).filter(
+            created_at__date=today
         ).order_by('-created_at')[:10]
 
         recent_activities = []
@@ -449,9 +901,13 @@ class DashboardView(APIView):
             'total_sales_today': float(total_sales_today),
             'total_cash_today': float(total_cash),
             'operations_count': operations_count,
-            'low_stock_alerts': low_stock_alerts,
+            'low_stock_count': low_stock_count,
+            'out_of_stock_count': out_of_stock_count,
             'sales_chart': sales_chart,
             'recent_activities': recent_activities,
+            # ERP-DASH-001B: Monthly metrics
+            'total_sales_month': float(total_sales_month),
+            'operations_count_month': operations_count_month,
         })
 
 

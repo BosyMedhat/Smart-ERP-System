@@ -18,6 +18,7 @@ export function PriceQuotationModal({ onClose }: PriceQuotationModalProps) {
   ]);
 
   const [discount, setDiscount] = useState(0);
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
 
   const addItem = () => {
     setItems([
@@ -49,7 +50,16 @@ export function PriceQuotationModal({ onClose }: PriceQuotationModalProps) {
     0
   );
 
-  const total = subtotal - discount;
+  // Calculate discount amount based on type
+  const calculateDiscountAmount = (subtotal: number, type: string, value: number): number => {
+    if (type === 'percentage') {
+      return subtotal * (value / 100);
+    }
+    return value; // fixed amount
+  };
+
+  const discountAmount = calculateDiscountAmount(subtotal, discountType, discount);
+  const total = Math.max(0, subtotal - discountAmount);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -150,24 +160,70 @@ export function PriceQuotationModal({ onClose }: PriceQuotationModalProps) {
           </button>
 
           {/* Summary */}
-          <div className="bg-purple-50 rounded-xl p-4 space-y-2">
-            <div className="flex justify-between font-bold">
+          <div className="bg-purple-50 rounded-xl p-4 space-y-3">
+            <div className="flex justify-between font-bold text-lg">
               <span>الإجمالي</span>
               <span>{subtotal.toLocaleString()} ج.م</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Percent size={18} />
-              <input
-                type="number"
-                placeholder="خصم"
-                value={discount}
-                onChange={(e) => setDiscount(Number(e.target.value))}
-                className="w-32 px-2 py-1 border rounded-lg"
-              />
+            {/* Discount Section */}
+            <div className="bg-white rounded-lg p-3 border border-purple-200">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-semibold text-gray-700">نوع الخصم:</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDiscountType('percentage')}
+                    className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                      discountType === 'percentage'
+                        ? 'bg-purple-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    نسبة %
+                  </button>
+                  <button
+                    onClick={() => setDiscountType('fixed')}
+                    className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                      discountType === 'fixed'
+                        ? 'bg-purple-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    مبلغ ثابت
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Percent size={18} className="text-purple-600" />
+                <input
+                  type="number"
+                  placeholder={discountType === 'percentage' ? 'نسبة الخصم' : 'مبلغ الخصم'}
+                  value={discount}
+                  min={0}
+                  max={discountType === 'percentage' ? 100 : subtotal}
+                  onChange={(e) => setDiscount(Number(e.target.value))}
+                  className="w-32 px-2 py-1 border border-gray-300 rounded-lg text-center"
+                />
+                <span className="text-sm text-gray-500">
+                  {discountType === 'percentage' ? '%' : 'ج.م'}
+                </span>
+              </div>
+              {discount > 0 && (
+                <div className="mt-2 pt-2 border-t border-gray-200 flex justify-between items-center">
+                  <span className="text-sm text-red-600">مبلغ الخصم:</span>
+                  <span className="text-sm font-bold text-red-600">-{discountAmount.toLocaleString()} ج.م</span>
+                </div>
+              )}
             </div>
 
-            <div className="flex justify-between text-xl font-bold text-purple-700">
+            {discount > 0 && (
+              <div className="flex justify-between font-medium text-gray-700">
+                <span>بعد الخصم:</span>
+                <span>{(subtotal - discountAmount).toLocaleString()} ج.م</span>
+              </div>
+            )}
+
+            <div className="flex justify-between text-xl font-bold text-purple-700 border-t border-purple-200 pt-2">
               <span>الإجمالي النهائي</span>
               <span>{total.toLocaleString()} ج.م</span>
             </div>

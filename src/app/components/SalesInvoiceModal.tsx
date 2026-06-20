@@ -45,29 +45,39 @@ export function SalesInvoiceModal({ onClose }: SalesInvoiceModalProps) {
   const total = items.reduce((acc, item) => acc + item.quantity * item.price, 0);
 
   // --- دالة الربط مع الباك إند (Django) ---
+  // ERP-P1-013: Fixed to use /api/sales/ instead of /api/invoices/
   const handleSaveAndPrint = async () => {
     if (items.length === 0) {
       notify.warning('سلة البيع فارغة!', { description: 'أضف منتجات للسلة قبل إتمام البيع' });
       return;
     }
 
+    // ERP-P1-013: Payload adapted for SaleViewSet (modern POS endpoint)
     const saleData = {
-      // تجهيز البيانات لتطابق الـ InvoiceViewSet والـ Treasury
+      customer: null, // Walk-in customer (no specific customer)
+      total_amount: total,
+      discount_type: 'percentage',
+      discount: 0,
+      payment_type: 'cash',
+      notes: '',
       items: items.map(item => ({
-        product_id: item.id, // تأكد إن الـ id مطابق للـ id في الداتابيز
+        product: item.id,
+        product_name: item.name,
         quantity: item.quantity,
         unit_price: item.price
       })),
-      total_amount: total,
-      payment_method: 'cash',
-      status: 'paid'
+      // ERP-P1-013: Required for walk-in customers in cash sales
+      walk_in_name: 'عميل نقدي',
+      walk_in_phone: '0000000000'
     };
 
     try {
-      // إرسال الطلب باستخدام apiClient (مع Token تلقائياً)
-      await apiClient.post('/invoices/', saleData);
+      // ERP-P1-013: Use /sales/ endpoint (modern POS, no shift required)
+      const res = await apiClient.post('/sales/', saleData);
 
-      notify.success('تم تسجيل الفاتورة بنجاح!', { description: 'تم تحديث الخزينة والمخزون' });
+      notify.success('تم تسجيل الفاتورة بنجاح!', {
+        description: `رقم الفاتورة: ${res.data.invoice_number} | الإجمالي: ${res.data.final_amount} ج.م`
+      });
       onClose(); // إغلاق النافذة بعد النجاح
     } catch (error: any) {
       console.error('Connection Error:', error);

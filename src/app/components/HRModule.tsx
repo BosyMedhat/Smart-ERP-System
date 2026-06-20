@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../api/axiosConfig';
 import { notify } from '@/lib/notifications';
@@ -80,9 +80,9 @@ const STATUS_OPTIONS: { value: AttendanceStatus; label: string; color: string }[
 ];
 
 const PAYROLL_STATUS: Record<string, { label: string; color: string; bg: string }> = {
-  draft: { label: 'مسودة', color: 'text-gray-600', bg: 'bg-gray-100' },
-  approved: { label: 'معتمد', color: 'text-blue-600', bg: 'bg-blue-100' },
-  paid: { label: 'مدفوع', color: 'text-green-600', bg: 'bg-green-100' },
+  draft: { label: 'مسودة', color: 'text-muted-foreground', bg: 'bg-muted' },
+  approved: { label: 'معتمد', color: 'text-blue-600', bg: 'bg-blue-500/10' },
+  paid: { label: 'مدفوع', color: 'text-green-600', bg: 'bg-green-500/10' },
 };
 
 export function HRModule() {
@@ -256,7 +256,7 @@ export function HRModule() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50 p-6 space-y-6 text-right" dir="rtl">
+    <div className="h-full overflow-y-auto bg-muted p-6 space-y-6 text-right" dir="rtl">
       {/* Error Display */}
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 font-bold flex items-center gap-2">
@@ -269,11 +269,11 @@ export function HRModule() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-[#1E293B] mb-2 font-sans">{t('hr.title')}</h1>
-          <p className="text-gray-600 font-sans">الحضور، الرواتب، ومسيرات الدفع</p>
+          <p className="text-muted-foreground font-sans">الحضور، الرواتب، ومسيرات الدفعع</p>
         </div>
         <button
           onClick={fetchData}
-          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-all"
+          className="px-4 py-2 bg-muted text-card-foreground rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-all"
           disabled={loading}
         >
           <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
@@ -282,7 +282,7 @@ export function HRModule() {
       </div>
 
       {/* Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      <div className="bg-card rounded-xl shadow-sm border border-border">
         <div className="flex gap-1 p-2 border-b">
           {[
             { key: 'employees', label: t('hr.employees'), icon: Users },
@@ -294,7 +294,7 @@ export function HRModule() {
               key={key}
               onClick={() => setActiveTab(key as TabType)}
               className={`flex-1 py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
-                activeTab === key ? 'bg-[#1E293B] text-white' : 'text-gray-500 hover:bg-gray-100'
+                activeTab === key ? 'bg-[#1E293B] text-white' : 'text-muted-foreground hover:bg-muted'
               }`}
             >
               <Icon size={18} />
@@ -308,7 +308,7 @@ export function HRModule() {
           {activeTab === 'employees' && (
             <div className="overflow-x-auto">
               <table className="w-full text-right font-sans">
-                <thead className="bg-gray-50 border-b-2 border-gray-200 font-bold">
+                <thead className="bg-muted border-b-2 border-border font-bold">
                   <tr>
                     <th className="px-4 py-3">{t('common.name')}</th>
                     <th className="px-4 py-3 text-center">المسمى الوظيفي</th>
@@ -320,7 +320,7 @@ export function HRModule() {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {employees.map((emp) => (
-                    <tr key={emp.id} className="hover:bg-gray-50 font-bold">
+                    <tr key={emp.id} className="hover:bg-muted font-bold">
                       <td className="px-4 py-4">{emp.name}</td>
                       <td className="px-4 py-4 text-center">{emp.position}</td>
                       <td className="px-4 py-4 text-center">{emp.baseSalary?.toLocaleString()} ج.م</td>
@@ -332,7 +332,7 @@ export function HRModule() {
                 </tbody>
               </table>
               {employees.length === 0 && !loading && (
-                <div className="text-center py-8 text-gray-500">{t('common.noData')}</div>
+                <div className="text-center py-8 text-muted-foreground">{t('common.noData')}</div>
               )}
             </div>
           )}
@@ -342,7 +342,7 @@ export function HRModule() {
             <div className="space-y-4">
               {/* Date Selector */}
               <div className="flex items-center gap-4 mb-6">
-                <label className="font-bold text-gray-700">تاريخ الحضور:</label>
+                <label className="font-bold text-card-foreground">تاريخ الحضور:</label>
                 <input
                   type="date"
                   value={selectedDate}
@@ -364,16 +364,16 @@ export function HRModule() {
                 {employees.map((emp) => {
                   const currentStatus = attendanceForm[emp.id] || 'present';
                   return (
-                    <div key={emp.id} className="bg-white border rounded-xl p-4 shadow-sm">
+                    <div key={emp.id} className="bg-card border rounded-xl p-4 shadow-sm">
                       <div className="flex justify-between items-center mb-3">
                         <span className="font-bold text-[#1E293B]">{emp.name}</span>
-                        <span className="text-sm text-gray-500">{emp.position}</span>
+                        <span className="text-sm text-muted-foreground">{emp.position}</span>
                       </div>
                       <div className="relative">
                         <select
                           value={currentStatus}
                           onChange={(e) => handleStatusChange(emp.id, e.target.value as AttendanceStatus)}
-                          className="w-full p-3 border rounded-xl font-bold appearance-none cursor-pointer bg-white"
+                          className="w-full p-3 border border-input rounded-xl font-bold appearance-none cursor-pointer bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           {STATUS_OPTIONS.map(({ value, label }) => (
                             <option key={value} value={value}>{label}</option>
@@ -383,7 +383,7 @@ export function HRModule() {
                       </div>
                       <div className="mt-2 flex items-center gap-2">
                         <span className={`w-3 h-3 rounded-full ${STATUS_OPTIONS.find(s => s.value === currentStatus)?.color}`} />
-                        <span className="text-sm text-gray-500">
+                        <span className="text-sm text-muted-foreground">
                           {STATUS_OPTIONS.find(s => s.value === currentStatus)?.label}
                         </span>
                       </div>
@@ -393,7 +393,7 @@ export function HRModule() {
               </div>
 
               {employees.length === 0 && !loading && (
-                <div className="text-center py-8 text-gray-500">{t('common.noData')}</div>
+                <div className="text-center py-8 text-muted-foreground">{t('common.noData')}</div>
               )}
             </div>
           )}
@@ -415,7 +415,7 @@ export function HRModule() {
               {/* Payroll Runs List */}
               <div className="overflow-x-auto">
                 <table className="w-full text-right font-sans">
-                  <thead className="bg-gray-50 border-b-2 border-gray-200 font-bold">
+                  <thead className="bg-muted border-b-2 border-border font-bold">
                     <tr>
                       <th className="px-4 py-3">الشهر/السنة</th>
                       <th className="px-4 py-3 text-center">{t('common.status')}</th>
@@ -427,7 +427,7 @@ export function HRModule() {
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {payrollRuns.map((run) => (
-                      <tr key={run.id} className="hover:bg-gray-50 font-bold">
+                      <tr key={run.id} className="hover:bg-muted font-bold">
                         <td className="px-4 py-4">{run.month}/{run.year}</td>
                         <td className="px-4 py-4 text-center">{getStatusBadge(run.status)}</td>
                         <td className="px-4 py-4 text-center">{run.total_gross?.toLocaleString()} ج.م</td>
@@ -438,7 +438,7 @@ export function HRModule() {
                             {run.status === 'draft' && (
                               <button
                                 onClick={() => generateSlips(run.id)}
-                                className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100"
+                                className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-500/10"
                                 disabled={loading}
                               >
                                 توليد قسائم
@@ -456,7 +456,7 @@ export function HRModule() {
                             {run.status === 'approved' && (
                               <button
                                 onClick={() => markPayrollPaid(run.id)}
-                                className="px-3 py-1 bg-green-50 text-green-600 rounded-lg text-xs font-bold hover:bg-green-100"
+                                className="px-3 py-1 bg-green-50 text-green-600 rounded-lg text-xs font-bold hover:bg-green-500/10"
                                 disabled={loading}
                               >
                                 تسجيل صرف
@@ -464,7 +464,7 @@ export function HRModule() {
                             )}
                             <button
                               onClick={() => viewSlips(run)}
-                              className="px-3 py-1 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-100"
+                              className="px-3 py-1 bg-muted text-muted-foreground rounded-lg text-xs font-bold hover:bg-muted"
                             >
                               عرض القسائم
                             </button>
@@ -475,7 +475,7 @@ export function HRModule() {
                   </tbody>
                 </table>
                 {payrollRuns.length === 0 && !loading && (
-                  <div className="text-center py-8 text-gray-500">{t('common.noData')}</div>
+                  <div className="text-center py-8 text-muted-foreground">{t('common.noData')}</div>
                 )}
               </div>
             </div>
@@ -488,7 +488,7 @@ export function HRModule() {
               <div className="flex justify-between items-center mb-4">
                 <button
                   onClick={() => setActiveTab('payroll')}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-all"
+                  className="px-4 py-2 bg-muted text-card-foreground rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-all"
                 >
                   <ChevronDown className="rotate-90" size={18} />
                   العودة لمسيرات الرواتب
@@ -506,7 +506,7 @@ export function HRModule() {
               {/* Slips Table */}
               <div className="overflow-x-auto">
                 <table className="w-full text-right font-sans">
-                  <thead className="bg-gray-50 border-b-2 border-gray-200 font-bold">
+                  <thead className="bg-muted border-b-2 border-border font-bold">
                     <tr>
                       <th className="px-4 py-3">الموظف</th>
                       <th className="px-4 py-3 text-center">الأساسي</th>
@@ -520,7 +520,7 @@ export function HRModule() {
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {salarySlips.map((slip) => (
-                      <tr key={slip.id} className="hover:bg-gray-50 font-bold">
+                      <tr key={slip.id} className="hover:bg-muted font-bold">
                         <td className="px-4 py-4">{slip.employee_name}</td>
                         <td className="px-4 py-4 text-center">{slip.base_salary?.toLocaleString()} ج.م</td>
                         <td className="px-4 py-4 text-center text-green-500">+{slip.incentives?.toLocaleString()} ج.م</td>
@@ -535,7 +535,7 @@ export function HRModule() {
                               مدفوع
                             </span>
                           ) : (
-                            <span className="text-gray-500">معلق</span>
+                            <span className="text-muted-foreground">معلق</span>
                           )}
                         </td>
                       </tr>
@@ -543,18 +543,18 @@ export function HRModule() {
                   </tbody>
                 </table>
                 {salarySlips.length === 0 && !loading && (
-                  <div className="text-center py-8 text-gray-500">{t('common.noData')}</div>
+                  <div className="text-center py-8 text-muted-foreground">{t('common.noData')}</div>
                 )}
               </div>
 
               {/* Print Button */}
               {salarySlips.length > 0 && (
                 <div className="flex justify-end gap-2">
-                  <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200">
+                  <button className="px-4 py-2 bg-muted text-card-foreground rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200">
                     <Printer size={18} />
                     {t('common.print')}
                   </button>
-                  <button className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-100">
+                  <button className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-500/10">
                     <Download size={18} />
                     تصدير Excel
                   </button>
@@ -568,19 +568,19 @@ export function HRModule() {
       {/* Create Payroll Modal */}
       {showPayrollModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4 backdrop-blur-sm text-right font-sans">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden font-sans font-bold">
-            <div className="p-6 border-b bg-gray-50 flex justify-between items-center">
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md overflow-hidden font-sans font-bold">
+            <div className="p-6 border-b bg-muted flex justify-between items-center">
               <span className="text-lg">إنشاء مسير رواتب جديد</span>
               <button onClick={() => setShowPayrollModal(false)}><X size={20} /></button>
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block mb-2 text-gray-700">الشهر</label>
+                  <label className="block mb-2 text-card-foreground">الشهر</label>
                   <select
                     value={payrollForm.month}
                     onChange={(e) => setPayrollForm({ ...payrollForm, month: parseInt(e.target.value) })}
-                    className="w-full p-3 border rounded-xl"
+                    className="w-full p-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                       <option key={m} value={m}>{m}</option>
@@ -588,7 +588,7 @@ export function HRModule() {
                   </select>
                 </div>
                 <div>
-                  <label className="block mb-2 text-gray-700">السنة</label>
+                  <label className="block mb-2 text-card-foreground">السنة</label>
                   <input
                     type="number"
                     value={payrollForm.year}
@@ -598,7 +598,7 @@ export function HRModule() {
                 </div>
               </div>
               <div>
-                <label className="block mb-2 text-gray-700">{t('common.notes')}</label>
+                <label className="block mb-2 text-card-foreground">{t('common.notes')}</label>
                 <textarea
                   value={payrollForm.notes}
                   onChange={(e) => setPayrollForm({ ...payrollForm, notes: e.target.value })}
@@ -610,7 +610,7 @@ export function HRModule() {
               <div className="flex gap-2 pt-4">
                 <button
                   onClick={() => setShowPayrollModal(false)}
-                  className="flex-1 bg-gray-100 py-3 rounded-xl hover:bg-gray-200"
+                  className="flex-1 bg-muted py-3 rounded-xl hover:bg-gray-200"
                 >
                   {t('common.cancel')}
                 </button>
@@ -629,3 +629,4 @@ export function HRModule() {
     </div>
   );
 }
+

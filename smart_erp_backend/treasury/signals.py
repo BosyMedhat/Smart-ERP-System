@@ -64,20 +64,10 @@ def handle_sale_treasury(sender, instance, created, **kwargs):
         return
 
     if payment_type == 'installment':
-        installment = instance.installments.first()
-        if installment and installment.down_payment > 0:
-            down = Decimal(str(installment.down_payment))
-            account = _get_account('CASH')
-            _create_transaction(
-                account=account,
-                t_type='INCOME',
-                category='INSTALLMENT',
-                amount=down,
-                description=f'دفعة أولى — فاتورة {instance.invoice_number}',
-                ref_type='sale',
-                ref_id=instance.pk,
-                user=user,
-            )
+        # ISS-08 FIX: down_payment Treasury recording moved to
+        # SaleViewSet.perform_create() where it runs AFTER Installment.objects.create().
+        # Recording here caused a race condition: signal fired before the
+        # Installment record was created, so installments.first() returned None.
         return
 
     account_name = PAYMENT_TO_ACCOUNT.get(payment_type)

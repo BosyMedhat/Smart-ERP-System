@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchTreasurySummary, fetchTransactions, postManualEntry } from './treasuryApi';
 import type { TreasurySummary, TreasuryTransaction, ManualEntryForm } from './types';
 
-/* ────────────────────────────────────
+/* ─────────────────────────────────────────
    حساب الخزينة
-──────────────────────────────────── */
+───────────────────────────────────────── */
 function AccountCard({ account }: { account: { display_name: string; balance: string; name: string } }) {
   const { t } = useTranslation();
   const ICONS: Record<string, string> = {
@@ -15,7 +15,7 @@ function AccountCard({ account }: { account: { display_name: string; balance: st
   const isNegative = balance < 0;
 
   return (
-    <div className="bg-white rounded-xl shadow p-4 flex flex-col gap-2 border border-gray-100">
+    <div className="bg-card rounded-xl shadow p-4 flex flex-col gap-2 border border-border">
       <div className="flex items-center justify-between">
         <span className="text-2xl">{ICONS[account.name] ?? '💰'}</span>
         <span className="text-xs text-gray-400">{account.display_name}</span>
@@ -27,28 +27,28 @@ function AccountCard({ account }: { account: { display_name: string; balance: st
   );
 }
 
-/* ────────────────────────────────────
+/* ─────────────────────────────────────────
    صف حركة
-──────────────────────────────────── */
+───────────────────────────────────────── */
 function TransactionRow({ tx }: { tx: TreasuryTransaction }) {
   const { t } = useTranslation();
   const isIncome = tx.transaction_type === 'INCOME';
   return (
-    <tr className="border-b border-gray-100 hover:bg-gray-50 text-sm">
-      <td className="py-2 px-3 text-gray-500 whitespace-nowrap">
+    <tr className="border-b border-border hover:bg-muted text-sm">
+      <td className="py-2 px-3 text-muted-foreground whitespace-nowrap">
         {new Date(tx.created_at).toLocaleDateString('ar-EG')}
       </td>
       <td className="py-2 px-3">{tx.account_name}</td>
       <td className="py-2 px-3">{tx.category_display}</td>
-      <td className="py-2 px-3 max-w-xs truncate text-gray-600">{tx.description}</td>
+      <td className="py-2 px-3 max-w-xs truncate text-muted-foreground">{tx.description}</td>
       <td className={`py-2 px-3 font-semibold ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
         {isIncome ? '+' : '-'}{parseFloat(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} {t('common.currency')}
       </td>
-      <td className="py-2 px-3 text-gray-500">
+      <td className="py-2 px-3 text-muted-foreground">
         {parseFloat(tx.balance_after).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} {t('common.currency')}
       </td>
       <td className="py-2 px-3">
-        <span className={`text-xs px-2 py-0.5 rounded-full ${tx.is_auto ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+        <span className={`text-xs px-2 py-0.5 rounded-full ${tx.is_auto ? 'bg-blue-500/10 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
           {tx.is_auto ? t('treasury.automatic') : t('treasury.manual')}
         </span>
       </td>
@@ -56,9 +56,9 @@ function TransactionRow({ tx }: { tx: TreasuryTransaction }) {
   );
 }
 
-/* ────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    نموذج الإدخال اليدوي
-──────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function ManualEntryModal({
   accounts,
   onClose,
@@ -99,17 +99,17 @@ function ManualEntryModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" dir="rtl">
-      <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
+      <div className="bg-card rounded-2xl shadow-xl p-6 w-full max-w-md">
         <h2 className="text-lg font-bold mb-4">{t('treasury.manualEntry')}</h2>
 
         <div className="flex flex-col gap-3">
-          <select className="border rounded-lg p-2 text-sm"
+          <select className="border border-input rounded-lg p-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={form.account_id}
             onChange={e => setForm(f => ({ ...f, account_id: Number(e.target.value) }))}>
             {accounts.map(a => <option key={a.id} value={a.id}>{a.display_name}</option>)}
           </select>
 
-          <select className="border rounded-lg p-2 text-sm"
+          <select className="border border-input rounded-lg p-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={form.transaction_type}
             onChange={e => setForm(f => ({ ...f, transaction_type: e.target.value as any }))}>
             <option value="INCOME">{t('treasury.income')}</option>
@@ -117,7 +117,7 @@ function ManualEntryModal({
             <option value="ADJUSTMENT">{t('treasury.adjustment')}</option>
           </select>
 
-          <select className="border rounded-lg p-2 text-sm"
+          <select className="border border-input rounded-lg p-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={form.category}
             onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
             <option value="MANUAL">إدخال يدوي</option>
@@ -145,7 +145,7 @@ function ManualEntryModal({
               {loading ? t('common.loading') : t('common.save')}
             </button>
             <button onClick={onClose}
-              className="flex-1 bg-gray-100 text-gray-700 rounded-lg py-2 text-sm hover:bg-gray-200">
+              className="flex-1 bg-muted text-card-foreground rounded-lg py-2 text-sm hover:bg-gray-200">
               {t('common.cancel')}
             </button>
           </div>
@@ -155,9 +155,9 @@ function ManualEntryModal({
   );
 }
 
-/* ────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    الصفحة الرئيسية
-──────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 export default function TreasuryDashboard() {
   const { t } = useTranslation();
   const [summary, setSummary]           = useState<TreasurySummary | null>(null);
@@ -205,7 +205,7 @@ export default function TreasuryDashboard() {
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">💰 {t('treasury.title')}</h1>
+        <h1 className="text-2xl font-bold text-card-foreground">💰 {t('treasury.title')}</h1>
         <button
           onClick={() => setShowModal(true)}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700">
@@ -225,7 +225,7 @@ export default function TreasuryDashboard() {
           </div>
 
           {/* حسابات الخزينة */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          <div data-demo-id="treasury-accounts" className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
             {summary.accounts.map(acc => <AccountCard key={acc.id} account={acc} />)}
           </div>
 
@@ -239,7 +239,7 @@ export default function TreasuryDashboard() {
               { label: t('treasury.monthExpense'),    value: summary.month_expense, color: 'text-red-600' },
               { label: t('treasury.monthNet'),   value: summary.month_net,     color: parseFloat(summary.month_net) >= 0 ? 'text-green-600' : 'text-red-600' },
             ].map(item => (
-              <div key={item.label} className="bg-white rounded-xl shadow p-4 border border-gray-100">
+              <div key={item.label} className="bg-card rounded-xl shadow p-4 border border-border">
                 <p className="text-xs text-gray-400 mb-1">{item.label}</p>
                 <p className={`text-lg font-bold ${item.color}`}>
                   {parseFloat(item.value).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} {t('common.currency')}
@@ -251,10 +251,10 @@ export default function TreasuryDashboard() {
       )}
 
       {/* فلاتر */}
-      <div className="bg-white rounded-xl shadow p-4 mb-4 flex flex-wrap gap-3 items-end border border-gray-100">
+      <div className="bg-card rounded-xl shadow p-4 mb-4 flex flex-wrap gap-3 items-end border border-border">
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-gray-500">{t('treasury.transactionType')}</label>
-          <select className="border rounded-lg p-2 text-sm"
+          <label className="text-xs text-muted-foreground">{t('treasury.transactionType')}</label>
+          <select className="border border-input rounded-lg p-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={filter.type}
             onChange={e => setFilter(f => ({ ...f, type: e.target.value }))}>
             <option value="">{t('common.filter')}</option>
@@ -264,13 +264,13 @@ export default function TreasuryDashboard() {
           </select>
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-gray-500">{t('reports.dateFrom')}</label>
+          <label className="text-xs text-muted-foreground">{t('reports.dateFrom')}</label>
           <input type="date" className="border rounded-lg p-2 text-sm"
             value={filter.date_from}
             onChange={e => setFilter(f => ({ ...f, date_from: e.target.value }))} />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-gray-500">{t('reports.dateTo')}</label>
+          <label className="text-xs text-muted-foreground">{t('reports.dateTo')}</label>
           <input type="date" className="border rounded-lg p-2 text-sm"
             value={filter.date_to}
             onChange={e => setFilter(f => ({ ...f, date_to: e.target.value }))} />
@@ -280,15 +280,15 @@ export default function TreasuryDashboard() {
           🔍 {t('common.search')}
         </button>
         <button onClick={() => setFilter({ type: '', date_from: '', date_to: '' })}
-          className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-200">
+          className="bg-muted text-muted-foreground px-4 py-2 rounded-lg text-sm hover:bg-gray-200">
           {t('common.reset')}
         </button>
       </div>
 
       {/* جدول الحركات */}
-      <div className="bg-white rounded-xl shadow border border-gray-100 overflow-x-auto">
+      <div data-demo-id="treasury-transactions" className="bg-card rounded-xl shadow border border-border overflow-x-auto">
         <table className="w-full text-right">
-          <thead className="bg-gray-50 text-xs text-gray-500 border-b">
+          <thead className="bg-muted text-xs text-muted-foreground border-b">
             <tr>
               <th className="py-3 px-3">{t('common.date')}</th>
               <th className="py-3 px-3">{t('treasury.account')}</th>
@@ -324,3 +324,4 @@ export default function TreasuryDashboard() {
     </div>
   );
 }
+

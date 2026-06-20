@@ -65,6 +65,15 @@ class TreasuryTransactionViewSet(viewsets.ReadOnlyModelViewSet):
         if date_to:
             qs = qs.filter(created_at__date__lte=date_to)
 
+        # ERP-P1-012: Add reference filters for installment payment history
+        reference_type = self.request.query_params.get('reference_type')
+        if reference_type:
+            qs = qs.filter(reference_type=reference_type)
+
+        reference_id = self.request.query_params.get('reference_id')
+        if reference_id:
+            qs = qs.filter(reference_id=reference_id)
+
         return qs
 
     @action(

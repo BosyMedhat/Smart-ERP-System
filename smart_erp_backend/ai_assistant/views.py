@@ -4,14 +4,21 @@ from rest_framework.decorators import api_view
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import status
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Sum, Count, F
+from decimal import Decimal
 from inventory.models import Sale, SaleItem, Product
+from treasury.models import TreasuryAccount, TreasuryTransaction
+from treasury.serializers import ManualTransactionSerializer
+from treasury.permissions import CanManageTreasuryFull
+from audit.utils import log_action, get_client_ip
 import statistics
 import json
+import re
 import pdfplumber
 import requests
 
@@ -464,3 +471,446 @@ class AnalyzeInvoiceView(APIView):
                 {'error': f'حدث خطأ: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# ─────────────────────────────────────────────────────────────────
+# AI ACTION ASSISTANT — Phase 1
+# ─────────────────────────────────────────────────────────────────
+
+# Allowed expense categories for Phase 1
+_ALLOWED_CATEGORIES = {
+    'ELECTRICITY', 'RENT', 'MAINTENANCE', 'SALARY', 'MANUAL', 'OTHER'
+}
+
+# Large amount threshold — triggers requires_extra_confirmation flag
+_LARGE_AMOUNT_THRESHOLD = Decimal('50000')
+
+# ── Normalization helper ────────────────────────────────────────
+def _normalize_arabic(text: str) -> str:
+    """
+    Normalize Arabic text for consistent matching:
+    - Unify alef variants (أإآ → ا)
+    - Unify alef-maqsura (ى → ي)
+    - Unify taa-marbuta (ة → ه)
+    - Strip tashkeel (diacritics)
+    - Collapse whitespace
+    """
+    # Alef variants
+    text = re.sub(r'[أإآ]', 'ا', text)
+    # Alef-maqsura
+    text = text.replace('ى', 'ي')
+    # Taa-marbuta
+    text = text.replace('ة', 'ه')
+    # Arabic diacritics (fatha, damma, kasra, sukun, shadda, etc.)
+    text = re.sub(r'[\u0610-\u061A\u064B-\u065F]', '', text)
+    # Collapse whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+# Arabic word-to-number map for rule-based fallback
+# Keys are already normalized (no إأآ, no ة, no ى)
+_ARABIC_NUMBERS = {
+    # hundreds
+    'ميه':       100,  'مائه':    100,  'مايه':    100,
+    'ميتين':    200,  'مئتين':   200,
+    'تلاتميه':  300,  'ثلاثميه': 300,  'ثلاثمائه': 300,
+    'اربعميه':  400,
+    'خمسميه':   500,  'بخمسميه': 500,
+    'ستميه':    600,  'سبعميه':  700,
+    'تمانميه':  800,  'تسعميه':  900,
+    # thousands
+    'الف':     1000,  'الفين':  2000,
+    # tens (colloquial)
+    'عشره':      10,  'عشرين':   20,  'تلاتين': 30,
+    'اربعين':    40,  'خمسين':   50,  'ستين':   60,
+    'سبعين':     70,  'تمانين':  80,  'تسعين':  90,
+}
+
+# Category keyword map — keys are normalized
+# Order matters: more specific multi-word keys first
+_CATEGORY_MAP = [
+    # Electricity
+    ('فاتوره كهرباء', 'ELECTRICITY', 'كهرباء'),
+    ('فاتوره الكهرباء', 'ELECTRICITY', 'كهرباء'),
+    ('كهرباء', 'ELECTRICITY', 'كهرباء'),
+    ('كهربا', 'ELECTRICITY', 'كهرباء'),
+    # Rent
+    ('فاتوره ايجار', 'RENT', 'إيجار'),
+    ('فاتوره الايجار', 'RENT', 'إيجار'),
+    ('ايجارات', 'RENT', 'إيجار'),
+    ('ايجار', 'RENT', 'إيجار'),
+    # Maintenance
+    ('صيانه', 'MAINTENANCE', 'صيانة'),
+    # Salary
+    ('رواتب', 'SALARY', 'رواتب'),
+    ('راتب', 'SALARY', 'راتب'),
+    ('مرتب', 'SALARY', 'مرتب'),
+    ('مرتبات', 'SALARY', 'رواتب'),
+]
+
+# Expense intent trigger words — keys are normalized
+_EXPENSE_TRIGGERS = [
+    'سجل مصروف',
+    'سجل صرف',
+    'مصروف',
+    'مصاريف',
+    'صرف',
+    'ادفع',
+    'دفعت',
+    'دفع',
+    'خصم',
+    'ادفع مصاريف',
+    'سددت',
+    'تكلفه',
+    'تكاليف',
+    'فاتوره كهرباء',
+    'فاتوره ايجار',
+    'دفعت كهرباء',
+    'دفعت ايجار',
+]
+
+
+def _rule_based_parse(message: str) -> dict | None:
+    """
+    Rule-based fallback parser.
+    Applies full Arabic normalization before all matching.
+    Returns a dict with keys: amount, category, description
+    or None if no expense intent detected.
+    """
+    normalized = _normalize_arabic(message)
+
+    # Normalize trigger list for comparison
+    has_trigger = any(_normalize_arabic(t) in normalized for t in _EXPENSE_TRIGGERS)
+    if not has_trigger:
+        return None
+
+    # Try numeric amount first (digits in the message)
+    amount = None
+    amount_match = re.search(r'(?<![\u0600-\u06FF])(\d+(?:\.\d+)?)(?![\u0600-\u06FF])', normalized)
+    if amount_match:
+        amount = Decimal(amount_match.group(1))
+
+    # Try Arabic word amounts if no numeric found
+    if amount is None:
+        for word, value in _ARABIC_NUMBERS.items():
+            if _normalize_arabic(word) in normalized:
+                amount = Decimal(value)
+                break
+
+    if amount is None:
+        return None
+
+    # Detect category — iterate ordered list, most-specific first
+    category = 'OTHER'
+    description = 'مصروف'
+    for keyword, cat, label in _CATEGORY_MAP:
+        if _normalize_arabic(keyword) in normalized:
+            category    = cat
+            description = label
+            break
+
+    return {
+        'amount':      amount,
+        'category':    category,
+        'description': description,
+        'confidence':  0.70,
+        'parser':      'rule_based',
+    }
+
+
+def _ollama_parse(message: str) -> dict | None:
+    """
+    Ollama-based primary parser.
+    Sends Arabic command to qwen2.5:3b and expects strict JSON output.
+    Returns parsed dict or None on failure.
+    """
+    prompt = f"""أنت نظام استخراج بيانات من أوامر عربية لنظام ERP.
+
+المهمة: حلل الأمر التالي وأرجع JSON فقط بدون أي نص إضافي.
+
+الأمر: "{message}"
+
+الصيغة المطلوبة:
+{{
+  "intent": "create_expense",
+  "amount": <رقم فقط أو null إذا لم يوجد مبلغ>,
+  "category": "<ELECTRICITY|RENT|MAINTENANCE|SALARY|MANUAL|OTHER>",
+  "description": "<وصف قصير بالعربية>",
+  "confidence": <0.0 إلى 1.0>
+}}
+
+مؤشرات تسجيل المصروف (إذا وجد أي منها مع مبلغ → intent=create_expense):
+مصروف، صرف، سجل صرف، دفعت، ادفع، دفع، خصم، سددت، تكلفة، فاتورة، مصاريف
+
+قواعد صارمة:
+- إذا لم يكن الأمر تسجيل مصروف أو دفع، أرجع: {{"intent": "unknown"}}
+- إذا لم يوجد مبلغ واضح في النص، أرجع: {{"intent": "unknown"}}
+- لا تخترع مبلغاً غير موجود في الأمر
+- تجاهل كلمات مثل: النهارده، امبارح، دلوقتي، الأسبوع (لا تؤثر على المبلغ)
+- أرجع JSON فقط
+
+الفئات المتاحة:
+- كهرباء / فاتورة كهرباء → ELECTRICITY
+- إيجار / ايجار / فاتورة إيجار → RENT
+- صيانة → MAINTENANCE
+- راتب / رواتب / مرتب → SALARY
+- غير ذلك → OTHER"""
+
+    try:
+        resp = requests.post(
+            'http://127.0.0.1:11434/api/generate',
+            json={
+                'model':  'qwen2.5:3b',
+                'prompt': prompt,
+                'stream': False,
+                'options': {
+                    'temperature': 0.1,
+                    'num_predict': 200,
+                },
+                'keep_alive': -1,
+            },
+            timeout=60,
+        )
+        resp.raise_for_status()
+        raw = resp.json().get('response', '').strip()
+
+        # Strip markdown fences if present
+        raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
+        raw = re.sub(r'```\s*$', '', raw, flags=re.MULTILINE).strip()
+
+        # Extract first JSON object
+        start = raw.find('{')
+        end   = raw.rfind('}')
+        if start == -1 or end == -1:
+            return None
+
+        parsed = json.loads(raw[start:end + 1])
+
+        if parsed.get('intent') != 'create_expense':
+            return None
+
+        raw_amount = parsed.get('amount')
+        if raw_amount is None:
+            return None
+
+        return {
+            'amount':      Decimal(str(raw_amount)),
+            'category':    parsed.get('category', 'OTHER'),
+            'description': parsed.get('description', ''),
+            'confidence':  float(parsed.get('confidence', 0.85)),
+            'parser':      'ollama',
+        }
+
+    except Exception:
+        return None
+
+
+def _validate_parsed(parsed: dict) -> str | None:
+    """
+    Validates a parsed result dict.
+    Returns an Arabic error string or None if valid.
+    """
+    amount = parsed.get('amount')
+    if amount is None:
+        return 'لم يتم استخراج المبلغ من الأمر.'
+    try:
+        amount = Decimal(str(amount))
+    except Exception:
+        return 'المبلغ غير صالح.'
+    if amount <= 0:
+        return 'المبلغ يجب أن يكون أكبر من صفر.'
+
+    category = parsed.get('category', '')
+    if category not in _ALLOWED_CATEGORIES:
+        return f'الفئة "{category}" غير مدعومة.'
+
+    description = (parsed.get('description') or '').strip()
+    if not description:
+        return 'الوصف مطلوب.'
+
+    return None
+
+
+class AIActionParseView(APIView):
+    """
+    POST /api/ai/action/parse/
+    Parse an Arabic natural-language command into a structured expense intent.
+    Does NOT write to the database.
+    """
+    authentication_classes = [TokenAuthentication]
+    permission_classes     = [IsAuthenticated, CanManageTreasuryFull]
+
+    def post(self, request):
+        message = (request.data.get('message') or '').strip()
+        if not message:
+            return Response(
+                {'error': 'الرجاء إرسال أمر نصي.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Step 1: Try Ollama first
+        parsed = _ollama_parse(message)
+        parser_used = 'ollama'
+
+        # Step 2: Fallback to rule-based if Ollama failed
+        if parsed is None:
+            parsed = _rule_based_parse(message)
+            parser_used = 'rule_based'
+
+        # Step 3: If both failed → unknown intent
+        if parsed is None:
+            return Response({
+                'intent':               'unknown',
+                'requires_confirmation': False,
+                'parser':               parser_used,
+                'error':                'لم أتمكن من فهم الأمر كإجراء مالي. جرّب: سجل مصروف 500 جنيه كهرباء',
+            })
+
+        # Step 4: Validate
+        validation_error = _validate_parsed(parsed)
+        if validation_error:
+            return Response({
+                'intent':               'create_expense',
+                'requires_confirmation': False,
+                'parser':               parser_used,
+                'error':                validation_error,
+            })
+
+        amount   = Decimal(str(parsed['amount']))
+        category = parsed['category']
+        description = parsed['description'].strip()
+        confidence  = parsed.get('confidence', 0.80)
+
+        # Step 5: Resolve CASH account id
+        try:
+            cash_account = TreasuryAccount.objects.get(name='CASH', is_active=True)
+            account_id   = cash_account.id
+            account_name = cash_account.display_name
+        except TreasuryAccount.DoesNotExist:
+            return Response(
+                {'error': 'لم يتم العثور على حساب الخزينة النقدية.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        requires_extra = amount > _LARGE_AMOUNT_THRESHOLD
+
+        return Response({
+            'intent':                'create_expense',
+            'confidence':            confidence,
+            'requires_confirmation': True,
+            'requires_extra_confirmation': requires_extra,
+            'parser':                parser_used,
+            'data': {
+                'account_id':        account_id,
+                'transaction_type':  'EXPENSE',
+                'category':          category,
+                'amount':            str(amount),
+                'description':       description,
+            },
+            'preview_message': (
+                f'هل تريد تسجيل مصروف {description} بقيمة '
+                f'{amount:,.2f} ج.م من {account_name}؟'
+            ),
+        })
+
+
+class AIActionExecuteView(APIView):
+    """
+    POST /api/ai/action/execute/
+    Execute a previously confirmed expense action.
+    Creates TreasuryTransaction and writes AuditLog.
+    """
+    authentication_classes = [TokenAuthentication]
+    permission_classes     = [IsAuthenticated, CanManageTreasuryFull]
+
+    def post(self, request):
+        source           = request.data.get('source', 'FLOATING_AI_ASSISTANT')
+        original_command = (request.data.get('original_command') or '').strip()
+        intent           = request.data.get('intent', '')
+        data             = request.data.get('data') or {}
+        parser_used      = request.data.get('parser', 'unknown')
+
+        # Phase 1: only create_expense is allowed
+        if intent != 'create_expense':
+            return Response(
+                {'error': 'هذا النوع من الإجراءات غير مدعوم في المرحلة الأولى.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Re-validate via existing serializer
+        serializer = ManualTransactionSerializer(data={
+            'account_id':       data.get('account_id'),
+            'transaction_type': data.get('transaction_type', 'EXPENSE'),
+            'category':         data.get('category', 'OTHER'),
+            'amount':           data.get('amount'),
+            'description':      data.get('description', ''),
+        })
+        if not serializer.is_valid():
+            return Response(
+                {'error': 'بيانات غير صالحة.', 'details': serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        vdata  = serializer.validated_data
+        amount = Decimal(str(vdata['amount']))
+
+        if amount <= 0:
+            return Response(
+                {'error': 'المبلغ يجب أن يكون أكبر من صفر.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            account = TreasuryAccount.objects.get(
+                pk=vdata['account_id'], is_active=True
+            )
+        except TreasuryAccount.DoesNotExist:
+            return Response(
+                {'error': 'الحساب غير موجود أو غير نشط.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        from django.db import transaction as db_tx
+        with db_tx.atomic():
+            acc = TreasuryAccount.objects.select_for_update().get(pk=account.pk)
+            acc.balance -= amount
+            acc.save()
+
+            t = TreasuryTransaction.objects.create(
+                account          = acc,
+                transaction_type = 'EXPENSE',
+                category         = vdata['category'],
+                amount           = amount,
+                balance_after    = acc.balance,
+                description      = vdata['description'],
+                reference_type   = 'ai_action',
+                created_by       = request.user,
+                is_auto          = False,
+            )
+
+        log_action(
+            user         = request.user,
+            action       = 'CREATE',
+            model_name   = 'TreasuryTransaction',
+            object_id    = t.pk,
+            object_repr  = f'AI مصروف {amount} ج.م — {vdata["category"]}',
+            ip_address   = get_client_ip(request),
+            extra_data   = {
+                'source':           source,
+                'original_command': original_command,
+                'intent':           intent,
+                'parsed_category':  vdata['category'],
+                'parsed_amount':    str(amount),
+                'confirmed_by_user': True,
+                'transaction_id':   t.pk,
+                'parser':           parser_used,
+            },
+        )
+
+        return Response({
+            'status':         'success',
+            'transaction_id': t.pk,
+            'balance_after':  str(t.balance_after),
+            'message':        f'تم تسجيل مصروف {vdata["description"]} بقيمة {amount:,.2f} ج.م بنجاح.',
+        }, status=status.HTTP_201_CREATED)

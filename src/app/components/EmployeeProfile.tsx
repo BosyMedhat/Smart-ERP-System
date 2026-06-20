@@ -102,7 +102,6 @@ export function EmployeeProfile({ onLogout }: EmployeeProfileProps) {
       'inventory': 'bg-orange-500',
       'sales': 'bg-purple-500',
       'installments': 'bg-pink-500',
-      'representatives': 'bg-indigo-500',
       'quotations': 'bg-teal-500',
       'employees': 'bg-yellow-500',
       'ai': 'bg-cyan-500',

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import {
   Save,
   Store,
@@ -18,10 +18,17 @@ import {
   ToggleLeft,
   StickyNote,
   AlertTriangle,
+  Sun,
+  Moon,
+  Monitor,
+  Image as ImageIcon,
+  X,
 } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
+import { fetchCurrencyFromAPI } from '../utils/currency';
 import i18n from '../../i18n/index';
 import { useTranslation } from 'react-i18next';
+import { useTheme, type Theme } from '../providers/ThemeProvider';
 
 // Complete StoreSettings interface matching backend model
 interface StoreSettings {
@@ -31,6 +38,7 @@ interface StoreSettings {
   system_name: string;
   currency: string;
   tax_rate: number;
+  enable_tax: boolean;
   installment_markup_pct: number;
   credit_markup_pct: number;
   phone: string;
@@ -62,6 +70,7 @@ const defaultSettings: StoreSettings = {
   system_name: 'Smart ERP',
   currency: 'EGP',
   tax_rate: 14.00,
+  enable_tax: false,
   installment_markup_pct: 0,
   credit_markup_pct: 0,
   phone: '',
@@ -82,6 +91,45 @@ const defaultSettings: StoreSettings = {
   is_configured: false,
 };
 
+// Theme Selector Component
+function ThemeSelector() {
+  const { theme, setTheme, resolvedTheme } = useTheme();
+
+  const themes: { value: Theme; label: string; icon: typeof Sun }[] = [
+    { value: 'light', label: 'فاتح', icon: Sun },
+    { value: 'dark', label: 'داكن', icon: Moon },
+    { value: 'system', label: 'النظام', icon: Monitor },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-3">
+        {themes.map(({ value, label, icon: Icon }) => {
+          const isActive = theme === value;
+          return (
+            <button
+              key={value}
+              onClick={() => setTheme(value)}
+              className={`flex-1 flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
+                isActive
+                  ? 'border-[#3B82F6] bg-blue-50 text-blue-700'
+                  : 'border-border hover:border-input text-muted-foreground'
+              }`}
+            >
+              <Icon size={20} />
+              <span className="font-medium">{label}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-sm text-muted-foreground">
+        الوضع الحالي: {resolvedTheme === 'dark' ? 'داكن' : 'فاتح'}
+        {theme === 'system' && ' (محدد تلقائياً)'}
+      </p>
+    </div>
+  );
+}
+
 export function Settings() {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<StoreSettings>(defaultSettings);
@@ -91,6 +139,8 @@ export function Settings() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [needsReload, setNeedsReload] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   // Fetch settings on mount
   useEffect(() => {
@@ -99,6 +149,8 @@ export function Settings() {
         const response = await apiClient.get('/settings/1/');
         const data = response.data;
         setSettings({ ...defaultSettings, ...data });
+        // Cache settings for Sidebar and other components
+        localStorage.setItem('storeSettings', JSON.stringify(data));
         // Sync language with localStorage
         const savedLang = localStorage.getItem('lang') || data.language || 'ar';
         if (savedLang !== data.language) {
@@ -106,6 +158,10 @@ export function Settings() {
         }
         document.documentElement.dir = savedLang === 'ar' ? 'rtl' : 'ltr';
         document.documentElement.lang = savedLang;
+        // Update document title
+        if (data.system_name) {
+          document.title = data.system_name;
+        }
       } catch (err) {
         setError(t('errors.loadFailed'));
         console.error('Error fetching settings:', err);
@@ -126,22 +182,82 @@ export function Settings() {
     document.documentElement.lang = newLang;
   };
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type and size
+      if (!file.type.startsWith('image/')) {
+        setError('يرجى اختيار ملف صورة صالح (PNG, JPG, JPEG)');
+        return;
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        setError('حجم الصورة يجب أن لا يتجاوز 2 ميجابايت');
+        return;
+      }
+      setLogoFile(file);
+      setLogoPreview(URL.createObjectURL(file));
+      setError('');
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoFile(null);
+    setLogoPreview(null);
+    setSettings(prev => ({ ...prev, store_logo: null }));
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError('');
     setSuccess(false);
     try {
-      const response = await apiClient.patch('/settings/1/', {
-        ...settings,
-        is_configured: true,
-      });
+      let response;
+      
+      if (logoFile) {
+        // Use FormData for multipart upload when logo file exists
+        const formData = new FormData();
+        formData.append('store_logo', logoFile);
+        // Append other fields
+        Object.entries(settings).forEach(([key, value]) => {
+          if (value !== null && value !== undefined && key !== 'store_logo') {
+            formData.append(key, String(value));
+          }
+        });
+        formData.append('is_configured', 'true');
+        
+        response = await apiClient.patch('/settings/1/', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        // Clear logo file after successful upload
+        setLogoFile(null);
+        setLogoPreview(null);
+      } else {
+        // Use JSON for regular updates — exclude store_logo (ImageField rejects URL strings)
+        const { store_logo: _, ...settingsWithoutLogo } = settings;
+        response = await apiClient.patch('/settings/1/', {
+          ...settingsWithoutLogo,
+          is_configured: true,
+        });
+      }
+      
       setSettings({ ...defaultSettings, ...response.data });
+      // Cache updated settings
+      localStorage.setItem('storeSettings', JSON.stringify(response.data));
+      
+      // Refresh currency from API (triggers currencyChanged event for all components)
+      await fetchCurrencyFromAPI();
 
       // Apply theme color immediately
       document.documentElement.style.setProperty('--primary-color', settings.primary_color);
       localStorage.setItem('primaryColor', settings.primary_color);
       localStorage.setItem('systemName', settings.system_name);
       localStorage.setItem('lang', settings.language);
+      // Update document title
+      if (response.data.system_name) {
+        document.title = response.data.system_name;
+      }
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -175,22 +291,22 @@ export function Settings() {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-gray-500">{t('common.loading')}</div>
+        <div className="text-muted-foreground">{t('common.loading')}</div>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50 p-6">
+    <div className="h-full overflow-y-auto bg-muted p-6">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-[#1E293B] mb-2">{t('settings.title')}</h1>
-        <p className="text-gray-600">إدارة إعدادات النظام والمتجر والأمان</p>
+        <p className="text-muted-foreground">إدارة إعدادات النظام والمتجر والأمان</p>
       </div>
 
       {/* Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
-        <div className="flex border-b border-gray-200 overflow-x-auto">
+      <div className="bg-card rounded-xl shadow-sm border border-border mb-6">
+        <div className="flex border-b border-border overflow-x-auto">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -200,7 +316,7 @@ export function Settings() {
                 className={`flex items-center gap-2 px-6 py-4 font-semibold transition-colors whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'text-[#3B82F6] border-b-2 border-[#3B82F6]'
-                    : 'text-gray-600 hover:text-gray-800'
+                    : 'text-muted-foreground hover:text-card-foreground'
                 }`}
               >
                 <Icon size={20} />
@@ -213,46 +329,46 @@ export function Settings() {
         <div className="p-6">
           {/* TAB 1: معلومات الشركة */}
           {activeTab === 'company' && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <div data-demo-id="settings-branding" className="space-y-6">
+              <h3 className="text-lg font-bold text-card-foreground mb-4 flex items-center gap-2">
                 <Building2 className="text-[#3B82F6]" />
                 معلومات الشركة
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2">
                     {t('settings.storeName')}
                   </label>
                   <input
                     type="text"
                     value={settings.store_name}
                     onChange={(e) => updateSetting('store_name', e.target.value)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                     placeholder="اسم المتجر"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2">
                     اسم النظام
                   </label>
                   <input
                     type="text"
                     value={settings.system_name}
                     onChange={(e) => updateSetting('system_name', e.target.value)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                     placeholder="Smart ERP"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2">
                     {t('settings.currency')}
                   </label>
                   <select
                     value={settings.currency}
                     onChange={(e) => updateSetting('currency', e.target.value)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] bg-background text-foreground"
                   >
                     <option value="EGP">EGP جنيه مصري</option>
                     <option value="SAR">SAR ريال سعودي</option>
@@ -261,9 +377,31 @@ export function Settings() {
                   </select>
                 </div>
 
+                {/* تفعيل الضريبة */}
+                <div className="flex items-center gap-4 p-4 bg-muted rounded-lg border border-border">
+                  <div className="flex-1">
+                    <label className="block text-sm font-semibold text-card-foreground mb-1 flex items-center gap-2">
+                      <ToggleLeft size={16} />
+                      تفعيل الضريبة على المبيعات
+                    </label>
+                    <p className="text-xs text-muted-foreground">عند التفعيل تضاف الضريبة للفاتورة وتُحسب في الإجمالي</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.enable_tax}
+                      onChange={(e) => updateSetting('enable_tax', e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-card after:border-input after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3B82F6]"></div>
+                  </label>
+                </div>
+
+                {/* نسبة الضريبة */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2">
                     {t('settings.taxRate')}
+                    {!settings.enable_tax && <span className="text-xs text-gray-400 mr-2">(معطّل)</span>}
                   </label>
                   <input
                     type="number"
@@ -272,13 +410,16 @@ export function Settings() {
                     max="100"
                     value={settings.tax_rate}
                     onChange={(e) => updateSetting('tax_rate', parseFloat(e.target.value) || 0)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    disabled={!settings.enable_tax}
+                    className={`w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] ${
+                      !settings.enable_tax ? 'opacity-50 cursor-not-allowed bg-muted' : ''
+                    }`}
                   />
                 </div>
 
                 {/* نسبة زيادة التقسيط */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2">
                     نسبة زيادة سعر التقسيط %
                   </label>
                   <input
@@ -288,14 +429,14 @@ export function Settings() {
                     max="100"
                     value={settings.installment_markup_pct ?? 0}
                     onChange={(e) => updateSetting('installment_markup_pct', parseFloat(e.target.value) || 0)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                   />
                   <span className="text-xs text-gray-400">0 = بدون زيادة</span>
                 </div>
 
                 {/* نسبة زيادة الآجل */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2">
                     نسبة زيادة سعر الآجل %
                   </label>
                   <input
@@ -305,13 +446,13 @@ export function Settings() {
                     max="100"
                     value={settings.credit_markup_pct ?? 0}
                     onChange={(e) => updateSetting('credit_markup_pct', parseFloat(e.target.value) || 0)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                   />
                   <span className="text-xs text-gray-400">0 = بدون زيادة</span>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2 flex items-center gap-2">
                     <Phone size={16} />
                     رقم الهاتف
                   </label>
@@ -319,13 +460,13 @@ export function Settings() {
                     type="tel"
                     value={settings.phone}
                     onChange={(e) => updateSetting('phone', e.target.value)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                     dir="ltr"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2 flex items-center gap-2">
                     <Mail size={16} />
                     البريد الإلكتروني
                   </label>
@@ -333,22 +474,68 @@ export function Settings() {
                     type="email"
                     value={settings.email}
                     onChange={(e) => updateSetting('email', e.target.value)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                     dir="ltr"
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2 flex items-center gap-2">
                     <MapPin size={16} />
                     {t('common.address')}
                   </label>
                   <textarea
                     value={settings.address}
                     onChange={(e) => updateSetting('address', e.target.value)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                     rows={3}
                   />
+                </div>
+
+                {/* شعار المتجر - Logo Upload */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-3 flex items-center gap-2">
+                    <ImageIcon size={16} />
+                    شعار المتجر
+                  </label>
+                  <div className="flex items-center gap-4">
+                    {/* Logo Preview */}
+                    {(logoPreview || settings.store_logo) && (
+                      <div className="relative">
+                        <img
+                          src={logoPreview || settings.store_logo || ''}
+                          alt="Store Logo"
+                          className="w-20 h-20 object-contain rounded-lg border border-border bg-white p-2"
+                        />
+                        <button
+                          onClick={handleRemoveLogo}
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                          title="إزالة الشعار"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
+                    
+                    {/* Upload Button */}
+                    <div className="flex-1">
+                      <label className="flex items-center gap-2 px-4 py-3 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-[#3B82F6] hover:bg-blue-50 transition-all">
+                        <ImageIcon size={20} className="text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">
+                          {logoFile ? logoFile.name : 'اختر صورة الشعار (PNG, JPG - max 2MB)'}
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/jpg"
+                          onChange={handleLogoChange}
+                          className="hidden"
+                        />
+                      </label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        يفضل استخدام صورة مربعة بخلفية شفافة للحصول على أفضل عرض
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -357,13 +544,13 @@ export function Settings() {
           {/* TAB 2: الفواتير والمبيعات */}
           {activeTab === 'invoices' && (
             <div className="space-y-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-bold text-card-foreground mb-4 flex items-center gap-2">
                 <FileText className="text-[#3B82F6]" />
                 الفواتير والمبيعات
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2 flex items-center gap-2">
                     <Hash size={16} />
                     بادئة الفاتورة
                   </label>
@@ -371,15 +558,15 @@ export function Settings() {
                     type="text"
                     value={settings.invoice_prefix}
                     onChange={(e) => updateSetting('invoice_prefix', e.target.value)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                     dir="ltr"
                     maxLength={10}
                   />
-                  <p className="text-xs text-gray-500 mt-1">مثال: INV-00001</p>
+                  <p className="text-xs text-muted-foreground mt-1">مثال: INV-00001</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2">
                     رقم البداية
                   </label>
                   <input
@@ -387,12 +574,12 @@ export function Settings() {
                     min="1"
                     value={settings.invoice_starting_number}
                     onChange={(e) => updateSetting('invoice_starting_number', parseInt(e.target.value) || 1)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2 flex items-center gap-2">
                     <Calendar size={16} />
                     أيام الاستحقاق
                   </label>
@@ -401,17 +588,17 @@ export function Settings() {
                     min="1"
                     value={settings.invoice_due_days}
                     onChange={(e) => updateSetting('invoice_due_days', parseInt(e.target.value) || 30)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                   />
                 </div>
 
-                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
                   <div className="flex-1">
-                    <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
+                    <label className="block text-sm font-semibold text-card-foreground mb-1 flex items-center gap-2">
                       <ToggleLeft size={16} />
                       إظهار الضريبة في الفاتورة
                     </label>
-                    <p className="text-xs text-gray-500">عرض سطر الضريبة في الفاتورة المطبوعة</p>
+                    <p className="text-xs text-muted-foreground">عرض سطر الضريبة في الفاتورة المطبوعة</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
@@ -420,19 +607,19 @@ export function Settings() {
                       onChange={(e) => updateSetting('show_tax_on_invoice', e.target.checked)}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3B82F6]"></div>
+                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-card after:border-input after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3B82F6]"></div>
                   </label>
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2 flex items-center gap-2">
                     <StickyNote size={16} />
                     ملاحظات ثابتة في الفاتورة
                   </label>
                   <textarea
                     value={settings.invoice_notes}
                     onChange={(e) => updateSetting('invoice_notes', e.target.value)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                     rows={3}
                     placeholder="شروط الدفع، سياسة الإرجاع، إلخ..."
                   />
@@ -444,14 +631,14 @@ export function Settings() {
           {/* TAB 3: الأمان */}
           {activeTab === 'security' && (
             <div className="space-y-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-bold text-card-foreground mb-4 flex items-center gap-2">
                 <Shield className="text-[#3B82F6]" />
                 {t('settings.security')}
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2 flex items-center gap-2">
                     <Clock size={16} className="text-blue-600" />
                     مدة الجلسة (ساعات)
                   </label>
@@ -461,13 +648,13 @@ export function Settings() {
                     max="24"
                     value={settings.session_timeout_hours}
                     onChange={(e) => updateSetting('session_timeout_hours', parseInt(e.target.value) || 8)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                   />
-                  <p className="text-xs text-gray-500 mt-1">سيتم تسجيل الخروج تلقائياً بعد هذه المدة</p>
+                  <p className="text-xs text-muted-foreground mt-1">سيتم تسجيل الخروج تلقائياً بعد هذه المدة</p>
                 </div>
 
                 <div className="p-4 bg-orange-50 rounded-lg border border-orange-100">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2 flex items-center gap-2">
                     <AlertTriangle size={16} className="text-orange-600" />
                     محاولات الدخول
                   </label>
@@ -477,13 +664,13 @@ export function Settings() {
                     max="10"
                     value={settings.max_login_attempts}
                     onChange={(e) => updateSetting('max_login_attempts', parseInt(e.target.value) || 5)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                   />
-                  <p className="text-xs text-gray-500 mt-1">عدد المحاولات قبل حظر المستخدم</p>
+                  <p className="text-xs text-muted-foreground mt-1">عدد المحاولات قبل حظر المستخدم</p>
                 </div>
 
                 <div className="p-4 bg-red-50 rounded-lg border border-red-100">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="block text-sm font-semibold text-card-foreground mb-2 flex items-center gap-2">
                     <Lock size={16} className="text-red-600" />
                     مدة الحظر (دقائق)
                   </label>
@@ -493,9 +680,9 @@ export function Settings() {
                     max="1440"
                     value={settings.lockout_duration_minutes}
                     onChange={(e) => updateSetting('lockout_duration_minutes', parseInt(e.target.value) || 30)}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                   />
-                  <p className="text-xs text-gray-500 mt-1">مدة منع المستخدم من تسجيل الدخول</p>
+                  <p className="text-xs text-muted-foreground mt-1">مدة منع المستخدم من تسجيل الدخول</p>
                 </div>
               </div>
 
@@ -516,14 +703,23 @@ export function Settings() {
           {/* TAB 4: المظهر واللغة */}
           {activeTab === 'appearance' && (
             <div className="space-y-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-bold text-card-foreground mb-4 flex items-center gap-2">
                 <Palette className="text-[#3B82F6]" />
                 {t('settings.appearance')}
               </h3>
 
+              {/* Theme Section */}
+              <div className="p-6 bg-muted rounded-xl">
+                <h4 className="font-semibold text-card-foreground mb-4 flex items-center gap-2">
+                  <Palette size={18} />
+                  المظهر (Theme)
+                </h4>
+                <ThemeSelector />
+              </div>
+
               {/* Language Section */}
-              <div className="p-6 bg-gray-50 rounded-xl">
-                <h4 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <div className="p-6 bg-muted rounded-xl">
+                <h4 className="font-semibold text-card-foreground mb-4 flex items-center gap-2">
                   <Globe size={18} />
                   {t('settings.language')}
                 </h4>
@@ -532,10 +728,10 @@ export function Settings() {
                     {settings.language === 'ar' ? '🇸🇦' : '🇬🇧'}
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-800">
+                    <p className="font-semibold text-card-foreground">
                       {settings.language === 'ar' ? t('settings.languageAr') + ' (RTL)' : t('settings.languageEn') + ' (LTR)'}
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       {settings.language === 'ar' ? 'تخطيط من اليمين لليسار' : 'Left-to-Right layout'}
                     </p>
                   </div>
@@ -547,32 +743,32 @@ export function Settings() {
                   </button>
                 </div>
                 {needsReload && (
-                  <div className="mt-3 p-3 bg-blue-100 rounded-lg text-blue-700 text-sm">
+                  <div className="mt-3 p-3 bg-blue-500/10 rounded-lg text-blue-700 text-sm">
                     💡 سيتم إعادة تحميل الصفحة عند الحفظ لتطبيق تغيير اللغة
                   </div>
                 )}
               </div>
 
               {/* Primary Color */}
-              <div className="p-6 bg-gray-50 rounded-xl">
-                <h4 className="font-semibold text-gray-700 mb-4">اللون الأساسي</h4>
+              <div className="p-6 bg-muted rounded-xl">
+                <h4 className="font-semibold text-card-foreground mb-4">اللون الأساسي</h4>
                 <div className="flex items-center gap-4">
                   <input
                     type="color"
                     value={settings.primary_color}
                     onChange={(e) => updateSetting('primary_color', e.target.value)}
-                    className="w-16 h-16 rounded-lg cursor-pointer border border-gray-200"
+                    className="w-16 h-16 rounded-lg cursor-pointer border border-border"
                   />
                   <input
                     type="text"
                     value={settings.primary_color}
                     onChange={(e) => updateSetting('primary_color', e.target.value)}
-                    className="w-32 p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] text-center uppercase"
+                    className="w-32 p-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] text-center uppercase"
                     placeholder="#3B82F6"
                     maxLength={7}
                   />
                   <div
-                    className="w-12 h-12 rounded-lg border border-gray-200"
+                    className="w-12 h-12 rounded-lg border border-border"
                     style={{ backgroundColor: settings.primary_color }}
                   />
                 </div>
@@ -595,15 +791,15 @@ export function Settings() {
               </div>
 
               {/* Date Format */}
-              <div className="p-6 bg-gray-50 rounded-xl">
-                <h4 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <div className="p-6 bg-muted rounded-xl">
+                <h4 className="font-semibold text-card-foreground mb-4 flex items-center gap-2">
                   <Calendar size={18} />
                   تنسيق التاريخ
                 </h4>
                 <select
                   value={settings.date_format}
                   onChange={(e) => updateSetting('date_format', e.target.value)}
-                  className="w-full md:w-1/2 p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                  className="w-full md:w-1/2 p-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] bg-background text-foreground"
                 >
                   <option value="DD/MM/YYYY">DD/MM/YYYY (31/12/2024)</option>
                   <option value="MM/DD/YYYY">MM/DD/YYYY (12/31/2024)</option>
@@ -648,4 +844,5 @@ export function Settings() {
     </div>
   );
 }
+
 

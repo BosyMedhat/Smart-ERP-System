@@ -52,6 +52,35 @@ except ImportError:
     ARABIC_SUPPORT = False
 
 from inventory.models import Sale, SaleItem, Product, StoreSettings, Purchase, Expense
+from treasury.models import TreasuryTransaction
+
+
+def get_store_branding():
+    """
+    Fetch store branding information from StoreSettings.
+    Returns a dictionary with company info for PDF headers.
+    """
+    try:
+        settings = StoreSettings.objects.first()
+        if settings:
+            return {
+                'store_name': settings.store_name or '',
+                'system_name': settings.system_name or '',
+                'phone': settings.phone or '',
+                'email': settings.email or '',
+                'address': settings.address or '',
+                'store_logo': settings.store_logo.url if settings.store_logo else None,
+            }
+    except Exception:
+        pass
+    return {
+        'store_name': '',
+        'system_name': '',
+        'phone': '',
+        'email': '',
+        'address': '',
+        'store_logo': None,
+    }
 
 
 def reshape_arabic(text):
@@ -129,25 +158,19 @@ class SalesReportView(APIView):
             total=Sum('final_amount')
         )['total'] or Decimal('0')
         
-        # Calculate discount: difference between total_amount and final_amount
-        # This is safe even if discount/tax fields don't exist separately
-        from django.db.models import ExpressionWrapper, DecimalField as DField
-        
-        discount_expr = sales.aggregate(
-            total=Sum(
-                ExpressionWrapper(
-                    F('total_amount') - F('final_amount'),
-                    output_field=DField(max_digits=12, decimal_places=2)
-                )
-            )
+        # Calculate discount from explicit discount field (NOT total_amount - final_amount)
+        # The old formula was wrong because it included tax adjustments
+        total_discount = sales.aggregate(
+            total=Sum('discount')
         )['total'] or Decimal('0')
-        
-        # Ensure non-negative (في حالة final_amount > total_amount بسبب ضريبة)
-        total_discount = max(discount_expr, Decimal('0'))
+
         total_tax = sales.aggregate(
             total=Sum('tax_amount')
         )['total'] or Decimal('0')
-        net_revenue = total_revenue - total_discount
+
+        # Net revenue is final_amount (already after discount and tax)
+        # Do NOT subtract discount again as that double-counts
+        net_revenue = total_revenue
 
         # All payment types breakdown
         payment_breakdown = sales.aggregate(
@@ -379,21 +402,46 @@ class FinancialReportView(APIView):
         installment_revenue = payment_breakdown['installment'] or Decimal('0')
 
         # Safe discount calculation
-        discount_expr = sales.aggregate(
-            total=Sum(
-                ExpressionWrapper(
-                    F('total_amount') - F('final_amount'),
-                    output_field=DField(max_digits=12, decimal_places=2)
-                )
-            )
+        # Fixed: Use explicit discount field instead of (total - final)
+        total_discount = sales.aggregate(
+            total=Sum('discount')
         )['total'] or Decimal('0')
-        total_discount = max(discount_expr, Decimal('0'))
+
         total_tax = sales.aggregate(
             total=Sum('tax_amount')
         )['total'] or Decimal('0')
-        
-        # Net profit estimate (safe version)
-        net_profit = total_revenue - total_discount
+
+        # Calculate COGS from SaleItems
+        sale_items = SaleItem.objects.filter(
+            sale__created_at__date__gte=from_dt,
+            sale__created_at__date__lte=to_dt,
+        )
+        cogs = Decimal('0')
+        for item in sale_items:
+            cost = item.cost_price_at_sale or Decimal('0')
+            cogs += cost * item.quantity
+
+        # Calculate Operating Expenses (from Expense model)
+        expenses = Expense.objects.filter(
+            date__gte=from_dt,
+            date__lte=to_dt,
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+
+        # Calculate Treasury expenses (manual entries only, not mirrored from other sources)
+        # Exclude: expense, purchase, payroll (already counted via their source models)
+        # Include: MANUAL category or NULL reference_type (direct treasury entries)
+        treasury_expenses = TreasuryTransaction.objects.filter(
+            created_at__date__gte=from_dt,
+            created_at__date__lte=to_dt,
+            transaction_type='EXPENSE',
+            category='MANUAL',  # Only manual entries, not auto-generated
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+
+        total_expenses = expenses + treasury_expenses
+
+        # Net profit with proper P&L formula
+        gross_profit = total_revenue - cogs
+        net_profit = gross_profit - total_expenses
 
         # Payment split percentages (all types)
         if total_revenue > 0:
@@ -443,6 +491,11 @@ class FinancialReportView(APIView):
             },
             'total_tax_collected': float(total_tax),
             'total_discount_given': float(total_discount),
+            'cogs': float(cogs),
+            'gross_profit': float(gross_profit),
+            'operating_expenses': float(expenses),
+            'treasury_expenses': float(treasury_expenses),
+            'total_expenses': float(total_expenses),
             'net_profit_estimate': float(net_profit),
             'daily_cash_flow': formatted_daily,
             'payment_split': {
@@ -501,6 +554,59 @@ class SalesReportPDFView(APIView):
 
         elements = []
         styles = getSampleStyleSheet()
+
+        # Get store branding
+        branding = get_store_branding()
+
+        # Company Header with Branding
+        header_style = ParagraphStyle(
+            'CompanyHeader',
+            parent=styles['Heading1'],
+            fontName='Amiri-Bold',
+            fontSize=16,
+            alignment=TA_CENTER,
+            spaceAfter=6
+        )
+        company_info_style = ParagraphStyle(
+            'CompanyInfo',
+            parent=styles['Normal'],
+            fontName='Amiri',
+            fontSize=10,
+            alignment=TA_CENTER,
+            spaceAfter=4
+        )
+
+        # Add company name/system name
+        company_name = branding['store_name'] or branding['system_name'] or 'Smart ERP'
+        if company_name:
+            elements.append(Paragraph(reshape_arabic(company_name), header_style))
+
+        # Add contact info line
+        contact_parts = []
+        if branding['phone']:
+            contact_parts.append(f"هاتف: {branding['phone']}")
+        if branding['email']:
+            contact_parts.append(f"بريد: {branding['email']}")
+        if contact_parts:
+            elements.append(Paragraph(
+                reshape_arabic(' | '.join(contact_parts)),
+                company_info_style
+            ))
+
+        # Add address if available
+        if branding['address']:
+            elements.append(Paragraph(
+                reshape_arabic(f"العنوان: {branding['address']}"),
+                company_info_style
+            ))
+
+        # Add separator line
+        if branding['store_name'] or branding['system_name']:
+            elements.append(Spacer(1, 10))
+            elements.append(Table([['']], colWidths=[16*cm], style=TableStyle([
+                ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#2c3e50')),
+            ])))
+            elements.append(Spacer(1, 15))
 
         # Title
         title_style = ParagraphStyle(
@@ -648,6 +754,59 @@ class InventoryReportPDFView(APIView):
         elements = []
         styles = getSampleStyleSheet()
 
+        # Get store branding
+        branding = get_store_branding()
+
+        # Company Header with Branding
+        header_style = ParagraphStyle(
+            'CompanyHeader',
+            parent=styles['Heading1'],
+            fontName='Amiri-Bold',
+            fontSize=16,
+            alignment=TA_CENTER,
+            spaceAfter=6
+        )
+        company_info_style = ParagraphStyle(
+            'CompanyInfo',
+            parent=styles['Normal'],
+            fontName='Amiri',
+            fontSize=10,
+            alignment=TA_CENTER,
+            spaceAfter=4
+        )
+
+        # Add company name/system name
+        company_name = branding['store_name'] or branding['system_name'] or 'Smart ERP'
+        if company_name:
+            elements.append(Paragraph(reshape_arabic(company_name), header_style))
+
+        # Add contact info line
+        contact_parts = []
+        if branding['phone']:
+            contact_parts.append(f"هاتف: {branding['phone']}")
+        if branding['email']:
+            contact_parts.append(f"بريد: {branding['email']}")
+        if contact_parts:
+            elements.append(Paragraph(
+                reshape_arabic(' | '.join(contact_parts)),
+                company_info_style
+            ))
+
+        # Add address if available
+        if branding['address']:
+            elements.append(Paragraph(
+                reshape_arabic(f"العنوان: {branding['address']}"),
+                company_info_style
+            ))
+
+        # Add separator line
+        if branding['store_name'] or branding['system_name']:
+            elements.append(Spacer(1, 10))
+            elements.append(Table([['']], colWidths=[16*cm], style=TableStyle([
+                ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#2c3e50')),
+            ])))
+            elements.append(Spacer(1, 15))
+
         # Title
         title_style = ParagraphStyle(
             'CustomTitle',
@@ -790,6 +949,59 @@ class FinancialReportPDFView(APIView):
 
         elements = []
         styles = getSampleStyleSheet()
+
+        # Get store branding
+        branding = get_store_branding()
+
+        # Company Header with Branding
+        header_style = ParagraphStyle(
+            'CompanyHeader',
+            parent=styles['Heading1'],
+            fontName='Amiri-Bold',
+            fontSize=16,
+            alignment=TA_CENTER,
+            spaceAfter=6
+        )
+        company_info_style = ParagraphStyle(
+            'CompanyInfo',
+            parent=styles['Normal'],
+            fontName='Amiri',
+            fontSize=10,
+            alignment=TA_CENTER,
+            spaceAfter=4
+        )
+
+        # Add company name/system name
+        company_name = branding['store_name'] or branding['system_name'] or 'Smart ERP'
+        if company_name:
+            elements.append(Paragraph(reshape_arabic(company_name), header_style))
+
+        # Add contact info line
+        contact_parts = []
+        if branding['phone']:
+            contact_parts.append(f"هاتف: {branding['phone']}")
+        if branding['email']:
+            contact_parts.append(f"بريد: {branding['email']}")
+        if contact_parts:
+            elements.append(Paragraph(
+                reshape_arabic(' | '.join(contact_parts)),
+                company_info_style
+            ))
+
+        # Add address if available
+        if branding['address']:
+            elements.append(Paragraph(
+                reshape_arabic(f"العنوان: {branding['address']}"),
+                company_info_style
+            ))
+
+        # Add separator line
+        if branding['store_name'] or branding['system_name']:
+            elements.append(Spacer(1, 10))
+            elements.append(Table([['']], colWidths=[16*cm], style=TableStyle([
+                ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#2c3e50')),
+            ])))
+            elements.append(Spacer(1, 15))
 
         # Title
         title_style = ParagraphStyle(
@@ -1016,7 +1228,16 @@ def calculate_pl(date_from, date_to):
         t=Sum('total_net')
     )['t'] or Decimal('0')
 
-    total_expenses = total_expenses_operational + total_salaries
+    # ── مصروفات الخزينة اليدوية ──────────────────
+    # Include manual treasury expenses (category='MANUAL') to align with Financial Report
+    treasury_expenses_manual = TreasuryTransaction.objects.filter(
+        created_at__date__gte=date_from,
+        created_at__date__lte=date_to,
+        transaction_type='EXPENSE',
+        category='MANUAL',
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+
+    total_expenses = total_expenses_operational + total_salaries + treasury_expenses_manual
 
     # ── صافي الربح ──────────────────────────────
     net_profit = gross_profit - total_expenses
@@ -1050,12 +1271,13 @@ def calculate_pl(date_from, date_to):
         'gross_profit': str(gross_profit),
         'gross_margin': str(gross_margin.quantize(Decimal('0.01'))),
         'expenses': {
-            'rent':         str(exp_rent),
-            'electricity':  str(exp_electricity),
-            'maintenance':  str(exp_maintenance),
-            'other':        str(exp_other),
-            'salaries':     str(total_salaries),
-            'total':        str(total_expenses),
+            'rent':              str(exp_rent),
+            'electricity':       str(exp_electricity),
+            'maintenance':       str(exp_maintenance),
+            'other':             str(exp_other),
+            'salaries':          str(total_salaries),
+            'treasury_manual':   str(treasury_expenses_manual),
+            'total':             str(total_expenses),
         },
         'net_profit': str(net_profit),
         'net_margin': str(net_margin.quantize(Decimal('0.01'))),

@@ -141,7 +141,20 @@
     "title": "الموردون",
     "addSupplier": "إضافة مورد",
     "balance": "الرصيد المستحق",
-    "noSuppliers": "لا يوجد موردون"
+    "noSuppliers": "لا يوجد موردون",
+    "intelligence": "ذكاء الموردين",
+    "bestOverall": "أفضل مورد بشكل عام",
+    "bestQuality": "أفضل مورد جودة",
+    "bestPrice": "أفضل مورد سعر",
+    "bestDelivery": "أفضل مورد استلام",
+    "recommended": "موصى به",
+    "good": "جيد",
+    "risky": "محفوف بالمخاطر",
+    "new": "جديد",
+    "recommendationReason": "سبب التوصية",
+    "sortByRecommended": "الترتيب: الأفضل",
+    "sortByScore": "الترتيب: التقييم",
+    "sortByPurchases": "الترتيب: المشتريات"
   },
   "hr": {
     "title": "الموارد البشرية",

@@ -1,10 +1,18 @@
 from django.urls import path
 from . import views
-from .views import SmartAnalyticsView, PDFProductImportView, AnalyzeInvoiceView
+from .views import (
+    SmartAnalyticsView,
+    PDFProductImportView,
+    AnalyzeInvoiceView,
+    AIActionParseView,
+    AIActionExecuteView,
+)
 
 urlpatterns = [
     path('ask/', views.ask_ai, name='ask_ai'),
     path('analytics/', SmartAnalyticsView.as_view(), name='ai_analytics'),
     path('import-pdf/', PDFProductImportView.as_view(), name='import_pdf'),
     path('analyze-invoice/', AnalyzeInvoiceView.as_view(), name='analyze-invoice'),
+    path('action/parse/', AIActionParseView.as_view(), name='ai_action_parse'),
+    path('action/execute/', AIActionExecuteView.as_view(), name='ai_action_execute'),
 ]

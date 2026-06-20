@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import apiClient from '../../api/axiosConfig';
 import {
   Shield, Search, RefreshCw,
@@ -6,7 +6,7 @@ import {
   Download, Eye, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
-/* ─── Types ────────────────────────────────── */
+/* ─── Types ───────────────────────────────── */
 interface AuditEntry {
   id: number;
   user: string;
@@ -28,15 +28,15 @@ interface AuditResponse {
   results: AuditEntry[];
 }
 
-/* ─── Action Badge ─────────────────────────── */
+/* ─── Action Badge ────────────────────────── */
 const ACTION_CONFIG: Record<string, {
   label: string; color: string; icon: React.ComponentType<{ className?: string }>
 }> = {
   CREATE:  { label: 'إنشاء',           color: 'bg-emerald-100 text-emerald-700', icon: Plus },
-  UPDATE:  { label: 'تعديل',           color: 'bg-blue-100 text-blue-700',       icon: Edit },
-  DELETE:  { label: 'حذف',             color: 'bg-red-100 text-red-700',         icon: Trash2 },
+  UPDATE:  { label: 'تعديل',           color: 'bg-blue-500/10 text-blue-700',       icon: Edit },
+  DELETE:  { label: 'حذف',             color: 'bg-red-500/10 text-red-700',         icon: Trash2 },
   LOGIN:   { label: 'دخول',            color: 'bg-purple-100 text-purple-700',   icon: LogIn },
-  LOGOUT:  { label: 'خروج',            color: 'bg-gray-100 text-gray-600',       icon: LogOut },
+  LOGOUT:  { label: 'خروج',            color: 'bg-muted text-muted-foreground',       icon: LogOut },
   EXPORT:  { label: 'تصدير',           color: 'bg-orange-100 text-orange-700',   icon: Download },
   VIEW:    { label: 'عرض',             color: 'bg-slate-100 text-slate-600',     icon: Eye },
 };
@@ -57,7 +57,7 @@ const MODEL_NAMES: Record<string, string> = {
 
 function ActionBadge({ action }: { action: string }) {
   const cfg = ACTION_CONFIG[action] ?? {
-    label: action, color: 'bg-gray-100 text-gray-600', icon: Eye
+    label: action, color: 'bg-muted text-muted-foreground', icon: Eye
   };
   const Icon = cfg.icon;
   return (
@@ -68,14 +68,14 @@ function ActionBadge({ action }: { action: string }) {
   );
 }
 
-/* ─── Changes Viewer ───────────────────────── */
+/* ─── Changes Viewer ──────────────────── */
 function ChangesViewer({ changes }: { changes: Record<string, { from: string; to: string }> }) {
   if (!changes || Object.keys(changes).length === 0) return null;
   return (
-    <div className="mt-2 bg-gray-50 rounded-lg p-2 text-xs space-y-1">
+    <div className="mt-2 bg-muted rounded-lg p-2 text-xs space-y-1">
       {Object.entries(changes).map(([field, { from, to }]) => (
         <div key={field} className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-gray-600">{field}:</span>
+          <span className="font-medium text-muted-foreground">{field}:</span>
           <span className="text-red-500 line-through">{from}</span>
           <span className="text-gray-400">&larr;</span>
           <span className="text-emerald-600 font-medium">{to}</span>
@@ -85,7 +85,7 @@ function ChangesViewer({ changes }: { changes: Record<string, { from: string; to
   );
 }
 
-/* ─── Main Component ───────────────────────── */
+/* ─── Main Component ───────────────────── */
 export default function AuditLog() {
   const [data, setData]         = useState<AuditResponse | null>(null);
   const [loading, setLoading]   = useState(false);
@@ -136,21 +136,21 @@ export default function AuditLog() {
             <Shield className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">سجل التدقيق</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-bold text-card-foreground">سجل التدقيق</h1>
+            <p className="text-sm text-muted-foreground">
               {data ? `${data.count} عملية مسجّلة` : ''}
             </p>
           </div>
         </div>
         <button onClick={load}
-          className="flex items-center gap-2 bg-white border border-gray-200 text-gray-600 px-3 py-2 rounded-lg text-sm hover:bg-gray-50">
+          className="flex items-center gap-2 bg-card border border-border text-muted-foreground px-3 py-2 rounded-lg text-sm hover:bg-muted">
           <RefreshCw className="w-4 h-4" />
           تحديث
         </button>
       </div>
 
       {/* فلاتر */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4
+      <div className="bg-card rounded-xl border border-border p-4
         grid grid-cols-2 md:grid-cols-5 gap-3">
 
         {/* بحث */}
@@ -166,7 +166,7 @@ export default function AuditLog() {
         {/* نوع العملية */}
         <select value={filterAction}
           onChange={e => { setAction(e.target.value); setPage(1); }}
-          className="border rounded-lg px-3 py-2 text-sm">
+          className="border border-input rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="">كل العمليات</option>
           {Object.entries(ACTION_CONFIG).map(([key, val]) => (
             <option key={key} value={key}>{val.label}</option>
@@ -176,7 +176,7 @@ export default function AuditLog() {
         {/* النموذج */}
         <select value={filterModel}
           onChange={e => { setModel(e.target.value); setPage(1); }}
-          className="border rounded-lg px-3 py-2 text-sm">
+          className="border border-input rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="">كل النماذج</option>
           {Object.entries(MODEL_NAMES).map(([key, val]) => (
             <option key={key} value={key}>{val}</option>
@@ -204,9 +204,9 @@ export default function AuditLog() {
           {error}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
           <table className="w-full text-right text-sm">
-            <thead className="bg-gray-50 border-b text-xs text-gray-500 uppercase">
+            <thead className="bg-muted border-b text-xs text-muted-foreground uppercase">
               <tr>
                 <th className="py-3 px-4">الوقت</th>
                 <th className="py-3 px-4">المستخدم</th>
@@ -217,7 +217,7 @@ export default function AuditLog() {
                 <th className="py-3 px-4"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-border">
               {(!data || data.results.length === 0) ? (
                 <tr>
                   <td colSpan={7} className="text-center py-12 text-gray-400">
@@ -225,20 +225,20 @@ export default function AuditLog() {
                   </td>
                 </tr>
               ) : data.results.map(log => (
-                <tr key={log.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="py-3 px-4 text-gray-500 whitespace-nowrap text-xs">
+                <tr key={log.id} className="hover:bg-muted transition-colors">
+                  <td className="py-3 px-4 text-muted-foreground whitespace-nowrap text-xs">
                     {log.created_at}
                   </td>
-                  <td className="py-3 px-4 font-medium text-gray-800">
+                  <td className="py-3 px-4 font-medium text-card-foreground">
                     {log.user}
                   </td>
                   <td className="py-3 px-4">
                     <ActionBadge action={log.action} />
                   </td>
-                  <td className="py-3 px-4 text-gray-600">
+                  <td className="py-3 px-4 text-muted-foreground">
                     {MODEL_NAMES[log.model_name] ?? log.model_name}
                   </td>
-                  <td className="py-3 px-4 text-gray-600 max-w-xs truncate">
+                  <td className="py-3 px-4 text-muted-foreground max-w-xs truncate">
                     {log.object_repr}
                   </td>
                   <td className="py-3 px-4 text-gray-400 text-xs font-mono">
@@ -269,8 +269,8 @@ export default function AuditLog() {
 
           {/* Pagination */}
           {data && data.count > PAGE_SIZE && (
-            <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
-              <p className="text-sm text-gray-500">
+            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted">
+              <p className="text-sm text-muted-foreground">
                 صفحة {page} من {totalPages}
                 <span className="mr-2 text-gray-400">
                   ({data.count} إجمالي)
@@ -280,13 +280,13 @@ export default function AuditLog() {
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="p-1 rounded border disabled:opacity-40 hover:bg-white">
+                  className="p-1 rounded border disabled:opacity-40 hover:bg-card">
                   <ChevronRight className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="p-1 rounded border disabled:opacity-40 hover:bg-white">
+                  className="p-1 rounded border disabled:opacity-40 hover:bg-card">
                   <ChevronLeft className="w-4 h-4" />
                 </button>
               </div>
@@ -297,3 +297,4 @@ export default function AuditLog() {
     </div>
   );
 }
+

@@ -31,10 +31,10 @@ export function ProductGrid({
   return (
     <>
       {/* Search Bar with Refresh Button */}
-      <div className="bg-white rounded-xl p-4 shadow-sm">
+      <div className="bg-card rounded-xl p-4 shadow-sm border border-border">
         <div className="flex gap-3">
           <div className="relative flex-1">
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground">
               <Search size={20} />
             </div>
             <input
@@ -42,13 +42,13 @@ export function ProductGrid({
               placeholder={t('pos.searchProduct')}
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full pr-12 pl-24 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+              className="w-full pr-12 pl-24 py-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] bg-background text-foreground"
             />
             <div className="absolute left-4 top-1/2 -translate-y-1/2 flex gap-2">
-              <button className="text-gray-400 hover:text-[#3B82F6] transition-colors">
+              <button className="text-muted-foreground hover:text-[#3B82F6] transition-colors">
                 <Barcode size={20} />
               </button>
-              <button className="text-gray-400 hover:text-[#3B82F6] transition-colors">
+              <button className="text-muted-foreground hover:text-[#3B82F6] transition-colors">
                 <Mic size={20} />
               </button>
             </div>
@@ -58,7 +58,7 @@ export function ProductGrid({
             <button
               onClick={onRefresh}
               disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-3 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground bg-secondary hover:bg-secondary/80 rounded-lg transition disabled:opacity-50"
               title="تحديث قائمة المنتجات"
             >
               <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
@@ -77,7 +77,7 @@ export function ProductGrid({
             className={`px-4 py-2 rounded-lg whitespace-nowrap transition-all ${
               selectedCategory === category
                 ? 'bg-[#3B82F6] text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
+                : 'bg-card text-muted-foreground hover:bg-muted border border-border'
             }`}
           >
             {category}
@@ -86,7 +86,7 @@ export function ProductGrid({
       </div>
 
       {/* Product Grid */}
-      <div className="flex-1 bg-white rounded-xl p-3 shadow-sm overflow-y-auto">
+      <div className="flex-1 bg-card rounded-xl p-3 shadow-sm overflow-y-auto border border-border">
         <div className="grid grid-cols-3 gap-2">
           {products.map((product) => {
             const stock = Number(product.current_stock || 0);
@@ -107,24 +107,24 @@ export function ProductGrid({
                 disabled={isOutOfStock}
                 className={`border-2 rounded-xl p-3 transition-all text-right ${
                   isOutOfStock
-                    ? 'opacity-50 cursor-not-allowed bg-gray-100 border-gray-200'
-                    : 'bg-white border-gray-100 hover:border-[#3B82F6] hover:bg-blue-50 hover:shadow-md active:scale-95'
+                    ? 'opacity-50 cursor-not-allowed bg-muted border-border'
+                    : 'bg-card border-border hover:border-[#3B82F6] hover:bg-blue-500/5 hover:shadow-md active:scale-95'
                 }`}
               >
-                <div className="font-bold text-gray-800 text-sm leading-tight mb-1 line-clamp-2">
+                <div className="font-bold text-card-foreground text-sm leading-tight mb-1 line-clamp-2">
                   {product.name}
                 </div>
-                <div className="text-xs text-gray-400 mb-2">{product.category}</div>
+                <div className="text-xs text-muted-foreground mb-2">{product.category}</div>
                 <div className="text-base font-bold text-[#3B82F6]">
                   {formatCurrency(product.price)}
                 </div>
                 {isOutOfStock && (
-                  <span className="inline-block text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full mt-1 font-medium">
+                  <span className="inline-block text-xs bg-red-500/10 text-red-600 px-2 py-0.5 rounded-full mt-1 font-medium">
                     {t('inventory.outOfStock')}
                   </span>
                 )}
                 {isLowStock && (
-                  <span className="inline-block text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full mt-1 font-medium">
+                  <span className="inline-block text-xs bg-orange-500/10 text-orange-600 px-2 py-0.5 rounded-full mt-1 font-medium">
                     {t('inventory.lowStock')} ({stock})
                   </span>
                 )}

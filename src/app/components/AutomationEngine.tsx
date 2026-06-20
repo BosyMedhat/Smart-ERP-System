@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { 
   Zap, 
   CheckCircle, 
@@ -151,11 +151,11 @@ export function AutomationEngine() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50 p-6 space-y-6">
+    <div className="h-full overflow-y-auto bg-muted p-6 space-y-6">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
+          <h1 className="text-3xl font-bold text-card-foreground mb-2">
             محرك الأتمتة والربط (n8n Engine)
           </h1>
           <div className="flex items-center gap-2">
@@ -167,12 +167,12 @@ export function AutomationEngine() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="px-4 py-2 bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="text-xs text-gray-500">إجمالي العمليات اليوم</div>
+          <div className="px-4 py-2 bg-card rounded-lg shadow-sm border border-border">
+            <div className="text-xs text-muted-foreground">إجمالي العمليات اليوم</div>
             <div className="text-2xl font-bold text-[#F85554]">147</div>
           </div>
-          <div className="px-4 py-2 bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="text-xs text-gray-500">القواعد النشطة</div>
+          <div className="px-4 py-2 bg-card rounded-lg shadow-sm border border-border">
+            <div className="text-xs text-muted-foreground">القواعد النشطة</div>
             <div className="text-2xl font-bold text-[#3B82F6]">
               {workflows.filter((w) => w.enabled).length}/{workflows.length}
             </div>
@@ -183,10 +183,10 @@ export function AutomationEngine() {
       {/* Three-Column Grid Layout */}
       <div className="grid grid-cols-3 gap-6">
         {/* Column 1: Workflows & Rules */}
-        <div className="space-y-4">
+        <div data-demo-id="automation-workflows" className="space-y-4">
           <div className="flex items-center gap-2 mb-4">
             <Zap size={20} className="text-[#F85554]" />
-            <h2 className="text-xl font-bold text-gray-800">قواعد العمل</h2>
+            <h2 className="text-xl font-bold text-card-foreground">قواعد العمل</h2>
           </div>
 
           {workflows.map((workflow) => {
@@ -194,7 +194,7 @@ export function AutomationEngine() {
             return (
               <div
                 key={workflow.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                className="bg-card rounded-xl shadow-sm border border-border p-4 hover:shadow-md transition-shadow"
               >
                 <div className="flex items-start gap-3">
                   <div
@@ -205,7 +205,7 @@ export function AutomationEngine() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
-                      <h3 className="font-bold text-gray-800 text-sm">{workflow.title}</h3>
+                      <h3 className="font-bold text-card-foreground text-sm">{workflow.title}</h3>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
                           type="checkbox"
@@ -213,10 +213,10 @@ export function AutomationEngine() {
                           onChange={() => toggleWorkflow(workflow.id)}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3B82F6]"></div>
+                        <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-card after:border-input after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3B82F6]"></div>
                       </label>
                     </div>
-                    <p className="text-xs text-gray-600 leading-relaxed mb-2">
+                    <p className="text-xs text-muted-foreground leading-relaxed mb-2">
                       {workflow.description}
                     </p>
                     <div className="flex items-center gap-1">
@@ -228,7 +228,7 @@ export function AutomationEngine() {
                       ) : (
                         <>
                           <div className="w-3.5 h-3.5 rounded-full bg-gray-300"></div>
-                          <span className="text-xs text-gray-500 font-semibold">معطّل</span>
+                          <span className="text-xs text-muted-foreground font-semibold">معطّل</span>
                         </>
                       )}
                     </div>
@@ -240,13 +240,13 @@ export function AutomationEngine() {
         </div>
 
         {/* Column 2: Live Activity Stream */}
-        <div className="space-y-4">
+        <div data-demo-id="automation-activity-log" className="space-y-4">
           <div className="flex items-center gap-2 mb-4">
             <Clock size={20} className="text-[#3B82F6]" />
-            <h2 className="text-xl font-bold text-gray-800">سجل الأنشطة المباشر</h2>
+            <h2 className="text-xl font-bold text-card-foreground">سجل الأنشطة المباشر</h2>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6">
             <div className="relative">
               {/* Timeline Line */}
               <div className="absolute right-5 top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#3B82F6] to-gray-200"></div>
@@ -260,10 +260,10 @@ export function AutomationEngine() {
 
                     {/* Content */}
                     <div className="flex-1 pt-1">
-                      <div className="text-xs text-gray-500 mb-1">{log.time}</div>
-                      <div className="text-sm text-gray-800 leading-relaxed">{log.message}</div>
+                      <div className="text-xs text-muted-foreground mb-1">{log.time}</div>
+                      <div className="text-sm text-card-foreground leading-relaxed">{log.message}</div>
                       {index === 0 && (
-                        <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs font-semibold">
+                        <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-green-500/10 text-green-700 rounded-md text-xs font-semibold">
                           <CheckCircle size={12} />
                           تم بنجاح
                         </div>
@@ -280,14 +280,14 @@ export function AutomationEngine() {
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-4">
             <Bell className="text-[#F85554]" size={20} />
-            <h2 className="text-xl font-bold text-gray-800">إعدادات التنبيهات</h2>
+            <h2 className="text-xl font-bold text-card-foreground">إعدادات التنبيهات</h2>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6 space-y-6">
             {/* Contact Settings */}
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-card-foreground mb-2">
                   رقم واتساب المدير
                 </label>
                 <div className="relative">
@@ -295,7 +295,7 @@ export function AutomationEngine() {
                     type="text"
                     value={settings.managerWhatsApp}
                     onChange={(e) => handleSettingChange('managerWhatsApp', e.target.value)}
-                    className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#25D366]"
+                    className="w-full px-4 py-2.5 pr-10 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-[#25D366]"
                     dir="ltr"
                   />
                   <MessageCircle
@@ -306,7 +306,7 @@ export function AutomationEngine() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-card-foreground mb-2">
                   بريد المدير
                 </label>
                 <div className="relative">
@@ -314,7 +314,7 @@ export function AutomationEngine() {
                     type="email"
                     value={settings.managerEmail}
                     onChange={(e) => handleSettingChange('managerEmail', e.target.value)}
-                    className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full px-4 py-2.5 pr-10 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                     dir="ltr"
                   />
                   <Mail
@@ -325,7 +325,7 @@ export function AutomationEngine() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-card-foreground mb-2">
                   بريد المورد الافتراضي
                 </label>
                 <div className="relative">
@@ -333,7 +333,7 @@ export function AutomationEngine() {
                     type="email"
                     value={settings.supplierEmail}
                     onChange={(e) => handleSettingChange('supplierEmail', e.target.value)}
-                    className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                    className="w-full px-4 py-2.5 pr-10 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                     dir="ltr"
                   />
                   <Mail
@@ -345,10 +345,10 @@ export function AutomationEngine() {
             </div>
 
             {/* Notification Channels */}
-            <div className="pt-4 border-t border-gray-200">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">قنوات التنبيه</h3>
+            <div className="pt-4 border-t border-border">
+              <h3 className="text-sm font-semibold text-card-foreground mb-3">قنوات التنبيه</h3>
               <div className="space-y-3">
-                <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
+                <label className="flex items-center gap-3 p-3 bg-muted rounded-lg cursor-pointer hover:bg-muted transition-colors">
                   <input
                     type="checkbox"
                     checked={settings.enableWhatsApp}
@@ -356,10 +356,10 @@ export function AutomationEngine() {
                     className="w-5 h-5 text-[#25D366] rounded focus:ring-2 focus:ring-[#25D366]"
                   />
                   <MessageCircle size={20} className="text-[#25D366]" />
-                  <span className="text-sm font-semibold text-gray-800">WhatsApp</span>
+                  <span className="text-sm font-semibold text-card-foreground">WhatsApp</span>
                 </label>
 
-                <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
+                <label className="flex items-center gap-3 p-3 bg-muted rounded-lg cursor-pointer hover:bg-muted transition-colors">
                   <input
                     type="checkbox"
                     checked={settings.enableEmail}
@@ -367,10 +367,10 @@ export function AutomationEngine() {
                     className="w-5 h-5 text-[#3B82F6] rounded focus:ring-2 focus:ring-[#3B82F6]"
                   />
                   <Mail size={20} className="text-[#3B82F6]" />
-                  <span className="text-sm font-semibold text-gray-800">البريد الإلكتروني</span>
+                  <span className="text-sm font-semibold text-card-foreground">البريد الإلكتروني</span>
                 </label>
 
-                <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
+                <label className="flex items-center gap-3 p-3 bg-muted rounded-lg cursor-pointer hover:bg-muted transition-colors">
                   <input
                     type="checkbox"
                     checked={settings.enableSMS}
@@ -378,7 +378,7 @@ export function AutomationEngine() {
                     className="w-5 h-5 text-[#F85554] rounded focus:ring-2 focus:ring-[#F85554]"
                   />
                   <MessageCircle size={20} className="text-[#F85554]" />
-                  <span className="text-sm font-semibold text-gray-800">رسائل SMS</span>
+                  <span className="text-sm font-semibold text-card-foreground">رسائل SMS</span>
                 </label>
               </div>
             </div>
@@ -390,8 +390,8 @@ export function AutomationEngine() {
             </button>
 
             {/* n8n Badge */}
-            <div className="pt-4 border-t border-gray-200">
-              <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+            <div className="pt-4 border-t border-border">
+              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <span>مدعوم بواسطة</span>
                 <span className="font-bold text-[#F85554]">n8n</span>
                 <Zap size={16} className="text-[#F85554]" />

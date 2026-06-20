@@ -5,7 +5,9 @@ from .models import (
     Invoice, Installment, Supplier, Purchase, Expense, Treasury,
     Employee,  # تم إضافة الموظفين هنا 
     UserProfile,  # RBAC
-    StoreSettings  # إعدادات المتجر
+    StoreSettings,  # إعدادات المتجر
+    SupplierEvaluation,
+    SupplierProductRanking,
 )
 
 admin.site.register(Product)
@@ -20,3 +22,5 @@ admin.site.register(StockMovement)
 admin.site.register(Employee) # تم إضافة سطر التسجيل هنا 
 admin.site.register(UserProfile)  # RBAC
 admin.site.register(StoreSettings)  # إعدادات المتجر
+admin.site.register(SupplierEvaluation)
+admin.site.register(SupplierProductRanking)

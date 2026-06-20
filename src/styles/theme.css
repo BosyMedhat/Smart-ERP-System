@@ -120,6 +120,17 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* === AI Demo Mode Highlight === */
+[data-demo-id].demo-spotlight {
+  outline: 3px solid #3B82F6;
+  outline-offset: 4px;
+  border-radius: 12px;
+  box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.15), 0 0 24px rgba(59, 130, 246, 0.2);
+  transition: outline 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+  z-index: 10;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -24,6 +24,7 @@ from inventory.views import (
     DashboardView,  # Dashboard API
     ProductByBarcodeView,  # Barcode lookup API
     SupplierEvaluationViewSet,
+    SupplierProductRankingViewSet,
     AlertsView,  # Smart Alerts API
 )
 
@@ -46,6 +47,7 @@ router.register(r'users', UserViewSet) # تم إضافة مسار المستخد
 router.register(r'settings', StoreSettingsViewSet) # إعدادات المتجر
 router.register(r'sales', SaleViewSet)  # فواتير المبيعات الجديدة
 router.register(r'supplier-evaluations', SupplierEvaluationViewSet, basename='supplier-evaluations')
+router.register(r'supplier-product-rankings', SupplierProductRankingViewSet, basename='supplier-product-rankings')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

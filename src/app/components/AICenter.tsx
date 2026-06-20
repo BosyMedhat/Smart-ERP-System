@@ -470,7 +470,7 @@ export function AICenter() {
       {/* AI Chat & Analytics Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Voice Chat */}
-        <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 p-6">
+        <div data-demo-id="ai-assistant-panel" className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-2xl border border-slate-700/50 p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-gradient-to-br from-[#60A5FA] to-[#6366F1] rounded-lg flex items-center justify-center">
               <Mic size={20} className="text-white" />
@@ -745,7 +745,7 @@ export function AICenter() {
 
         {/* PDF Import Tab */}
         {activeTab === 'import' && (
-          <div className="bg-slate-900/50 rounded-2xl border border-slate-700/50 p-6">
+          <div data-demo-id="ai-pdf-import" className="bg-slate-900/50 rounded-2xl border border-slate-700/50 p-6">
             <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
               <FileUp className="text-blue-400" />
               استيراد منتجات من PDF

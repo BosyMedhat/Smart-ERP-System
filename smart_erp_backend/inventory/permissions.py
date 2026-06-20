@@ -1,5 +1,34 @@
 from rest_framework.permissions import BasePermission
 
+from accounts.permissions import has_permission
+
+
+class CanAccessSuppliers(BasePermission):
+    """
+    RBAC-aligned supplier permissions.
+    Maps ViewSet actions to suppliers:view/create/edit/delete.
+    """
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+
+        action = getattr(view, 'action', None)
+        if action in ['list', 'retrieve', 'recommendations', 'insights', 'evaluations']:
+            return has_permission(request.user, 'suppliers', 'view')
+        if action == 'create':
+            return has_permission(request.user, 'suppliers', 'create')
+        if action in ['update', 'partial_update']:
+            return has_permission(request.user, 'suppliers', 'edit')
+        if action == 'destroy':
+            return has_permission(request.user, 'suppliers', 'delete')
+        if action == 'pay_debt':
+            return has_permission(request.user, 'suppliers', 'edit')
+        return False
+
+
 class IsManagerOrHasPermission(BasePermission):
     """
     مدير النظام = وصول كامل لكل شيء

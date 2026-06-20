@@ -154,18 +154,18 @@ export function InventoryScreen() {
   };
 
   return (
-    <div className="h-full flex flex-col p-6 gap-6" dir="rtl">
+    <div className="h-full flex flex-col p-6 gap-6 bg-background" dir="rtl">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-800">{t('inventory.title')}</h1>
+        <h1 className="text-3xl font-bold text-card-foreground">{t('inventory.title')}</h1>
         <button onClick={() => { setEditingProduct(null); setIsModalOpen(true); }} className="px-6 py-3 bg-[#3B82F6] text-white font-semibold rounded-xl flex items-center gap-2 shadow-lg hover:bg-blue-700 transition-all">
           <Plus size={20} /> {t('inventory.addProduct')}
         </button>
       </div>
 
       {/* Barcode Scanner Section */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 shadow-sm border border-blue-200">
+      <div data-demo-id="inventory-barcode-section" className="bg-gradient-to-r from-blue-500/10 to-indigo-500/10 rounded-xl p-4 shadow-sm border border-blue-200/50">
         <form onSubmit={handleBarcodeSubmit} className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-          <div className="flex items-center gap-2 text-blue-700 font-semibold">
+          <div className="flex items-center gap-2 text-blue-600 font-semibold">
             <ScanLine size={20} />
             <span>مسح الباركود</span>
           </div>
@@ -177,14 +177,14 @@ export function InventoryScreen() {
               placeholder="امسح الباركود أو اكتبه يدوياً..."
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
-              className="w-full pr-4 pl-10 py-2.5 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+              className="w-full pr-4 pl-10 py-2.5 border border-blue-300/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-background text-foreground"
             />
             <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400" size={18} />
           </div>
           <button
             type="submit"
             disabled={!barcodeInput.trim()}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
+            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-muted disabled:cursor-not-allowed transition-colors font-medium"
           >
             {t('common.search')}
           </button>
@@ -192,8 +192,8 @@ export function InventoryScreen() {
         
         {/* Error Message */}
         {scanError && (
-          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
-            <div className="flex items-center gap-2 text-red-700">
+          <div className="mt-3 p-3 bg-red-500/10 border border-red-200/50 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-2 text-red-600">
               <AlertCircle size={18} />
               <span>{scanError}</span>
             </div>
@@ -208,31 +208,31 @@ export function InventoryScreen() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl p-4 shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4 border border-gray-100">
+      <div data-demo-id="inventory-search" className="bg-card rounded-xl p-4 shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4 border border-border">
         <div className="relative">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <input type="text" placeholder="بحث بالاسم أو الكود..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pr-10 pl-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+          <input type="text" placeholder="بحث بالاسم أو الكود..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pr-10 pl-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-background text-foreground" />
         </div>
         
-        <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="border rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500">
+        <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="border border-input rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500 bg-background text-foreground">
           {categories.map(cat => <option key={cat} value={cat}>التصنيف: {cat}</option>)}
         </select>
 
-        <select value={selectedSupplier} onChange={(e) => setSelectedSupplier(e.target.value)} className="border rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500">
+        <select value={selectedSupplier} onChange={(e) => setSelectedSupplier(e.target.value)} className="border border-input rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500 bg-background text-foreground">
           {suppliers.map(sup => <option key={sup} value={sup}>المورد: {sup}</option>)}
         </select>
 
-        <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="border rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500">
+        <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="border border-input rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500 bg-background text-foreground">
           <option value="الكل">الحالة: الكل</option>
           <option value="متوفر">متوفر</option>
           <option value="نفذت الكمية">نفذت الكمية</option>
         </select>
       </div>
 
-      <div className="flex-1 bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
+      <div data-demo-id="inventory-table" className="flex-1 bg-card rounded-xl shadow-md overflow-hidden border border-border">
         <div className="overflow-y-auto h-[60vh]">
           <table className="w-full text-sm text-right">
-            <thead className="bg-[#1E293B] text-white sticky top-0">
+            <thead className="bg-sidebar text-sidebar-foreground sticky top-0">
               <tr>
                 <th className="px-4 py-4">الكود</th>
                 <th className="px-4 py-4">{t('inventory.productName')}</th>
@@ -244,19 +244,19 @@ export function InventoryScreen() {
                 <th className="px-4 py-4 text-center">{t('common.actions')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-border">
               {filteredProducts.map((product) => (
-                <tr 
-                  key={product.id} 
+                <tr
+                  key={product.id}
                   className={`transition-colors ${
-                    highlightedProductId === String(product.id) 
-                      ? 'bg-green-100 border-2 border-green-500 animate-pulse' 
-                      : 'hover:bg-blue-50/50'
+                    highlightedProductId === String(product.id)
+                      ? 'bg-green-500/10 border-2 border-green-500 animate-pulse'
+                      : 'hover:bg-muted/50'
                   }`}
                 >
-                  <td className="px-4 py-3 font-mono text-gray-500">{product.barcode || product.sku}</td>
-                  <td className="px-4 py-3 font-bold text-gray-700">{product.name}</td>
-                  <td className="px-4 py-3 text-gray-600">
+                  <td className="px-4 py-3 font-mono text-muted-foreground">{product.barcode || product.sku}</td>
+                  <td className="px-4 py-3 font-bold text-card-foreground">{product.name}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <Users size={14} className="text-blue-400" />
                       {product.supplier_name || 'غير محدد'}
@@ -266,17 +266,17 @@ export function InventoryScreen() {
                     {Number(product.current_stock).toFixed(0)} {product.unit}
                   </td>
                   {/* تصليح الحقول لتطابق الـ API واختفاء الـ NaN */}
-                  <td className="px-4 py-3 text-gray-600">{formatCurrency(product.cost_price)}</td>
-                  <td className="px-4 py-3 font-bold text-blue-700">{formatCurrency(product.retail_price)}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{formatCurrency(product.cost_price)}</td>
+                  <td className="px-4 py-3 font-bold text-blue-600">{formatCurrency(product.retail_price)}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black ${Number(product.current_stock) > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black ${Number(product.current_stock) > 0 ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-600'}`}>
                       {Number(product.current_stock) > 0 ? 'متوفر' : 'نفذت الكمية'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex justify-center gap-1">
-                      <button onClick={() => handleEditProduct(product)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-full"><Edit2 size={16}/></button>
-                      <button onClick={() => handleDeleteProduct(product.id)} className="p-2 text-red-600 hover:bg-red-100 rounded-full"><Trash2 size={16}/></button>
+                      <button onClick={() => handleEditProduct(product)} className="p-2 text-blue-600 hover:bg-blue-500/10 rounded-full"><Edit2 size={16}/></button>
+                      <button onClick={() => handleDeleteProduct(product.id)} className="p-2 text-red-600 hover:bg-red-500/10 rounded-full"><Trash2 size={16}/></button>
                     </div>
                   </td>
                 </tr>
@@ -300,26 +300,26 @@ export function InventoryScreen() {
       {/* Stock Update Modal */}
       {showStockModal && scannedProduct && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowStockModal(false)}>
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-2xl p-6 w-full max-w-md shadow-2xl border border-border" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-green-100 rounded-full">
+              <div className="p-3 bg-green-500/10 rounded-full">
                 <Package className="text-green-600" size={24} />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-gray-800">تحديث المخزون</h3>
-                <p className="text-sm text-gray-500">{scannedProduct.name}</p>
+                <h3 className="text-lg font-bold text-card-foreground">تحديث المخزون</h3>
+                <p className="text-sm text-muted-foreground">{scannedProduct.name}</p>
               </div>
             </div>
-            
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-              <div className="text-sm text-gray-600 mb-1">الكمية الحالية:</div>
+
+            <div className="mb-4 p-3 bg-muted rounded-lg">
+              <div className="text-sm text-muted-foreground mb-1">الكمية الحالية:</div>
               <div className="text-2xl font-bold text-blue-600">
                 {Number(scannedProduct.current_stock || 0).toFixed(0)} {scannedProduct.unit}
               </div>
             </div>
-            
+
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-card-foreground mb-2">
                 أضف كمية (يمكن أن تكون سالبة للخصم)
               </label>
               <input
@@ -327,15 +327,15 @@ export function InventoryScreen() {
                 value={stockQuantity}
                 onChange={(e) => setStockQuantity(e.target.value)}
                 placeholder="مثال: 10 أو -5"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-lg"
+                className="w-full px-4 py-3 border border-input rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-lg bg-background text-foreground"
                 autoFocus
               />
             </div>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={() => setShowStockModal(false)}
-                className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                className="flex-1 px-4 py-3 border border-input text-card-foreground rounded-lg hover:bg-muted transition-colors font-medium"
               >
                 {t('common.cancel')}
               </button>

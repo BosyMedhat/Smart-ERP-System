@@ -84,22 +84,8 @@ class TreasuryTransaction(models.Model):
 
     def save(self, *args, **kwargs):
         """
-        يحسب balance_after تلقائياً ويحدّث رصيد الحساب
+        ERP-FIX-001D-C: Balance is managed exclusively by callers (select_for_update).
+        This save() only persists the transaction record.
+        balance_after must be set by the caller before create().
         """
-        from decimal import Decimal
-        from django.db import transaction as db_transaction
-        is_new = self.pk is None
-
-        if is_new:
-            with db_transaction.atomic():
-                account = TreasuryAccount.objects.select_for_update().get(pk=self.account_id)
-                if self.transaction_type == 'INCOME':
-                    account.balance += Decimal(str(self.amount))
-                elif self.transaction_type == 'EXPENSE':
-                    account.balance -= Decimal(str(self.amount))
-                # ADJUSTMENT لا يغيّر الرصيد — فقط يُسجّل
-                self.balance_after = account.balance
-                account.save()
-                super().save(*args, **kwargs)
-        else:
-            super().save(*args, **kwargs)
+        super().save(*args, **kwargs)

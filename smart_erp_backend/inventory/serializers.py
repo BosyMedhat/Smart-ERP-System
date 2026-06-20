@@ -3,7 +3,7 @@ from .models import (
     Product, Invoice, WorkShift, Installment, 
     Supplier, Purchase, Expense, Treasury, 
     StockMovement, Employee, Sale, SaleItem,
-    SupplierEvaluation
+    SupplierEvaluation, SupplierProductRanking
 )
 
 # 1. الموظفين
@@ -63,6 +63,12 @@ class SupplierSerializer(serializers.ModelSerializer):
     total_purchases = serializers.SerializerMethodField()
     supplier_score = serializers.SerializerMethodField()
     evaluation_count = serializers.SerializerMethodField()
+    rank = serializers.SerializerMethodField()
+    badge = serializers.SerializerMethodField()
+    recommendation_reason = serializers.SerializerMethodField()
+    rating_breakdown = serializers.SerializerMethodField()
+    latest_purchase_date = serializers.SerializerMethodField()
+    purchase_frequency = serializers.SerializerMethodField()
 
     def get_purchase_count(self, obj):
         return obj.purchases.count()
@@ -84,13 +90,50 @@ class SupplierSerializer(serializers.ModelSerializer):
     def get_evaluation_count(self, obj):
         return obj.evaluations.count()
 
+    def get_rank(self, obj):
+        # Compute rank dynamically for the supplier
+        from .services import SupplierIntelligenceService
+        recs = SupplierIntelligenceService.calculate_recommendations()
+        for item in recs:
+            if item['supplier_id'] == obj.id:
+                return item['rank']
+        return None
+
+    def get_badge(self, obj):
+        from .services import SupplierIntelligenceService
+        data = SupplierIntelligenceService.enrich_supplier(obj)
+        return data['badge']
+
+    def get_recommendation_reason(self, obj):
+        from .services import SupplierIntelligenceService
+        data = SupplierIntelligenceService.enrich_supplier(obj)
+        return data['recommendation_reason']
+
+    def get_rating_breakdown(self, obj):
+        from .services import SupplierIntelligenceService
+        data = SupplierIntelligenceService.enrich_supplier(obj)
+        return data['rating_breakdown']
+
+    def get_latest_purchase_date(self, obj):
+        from .services import SupplierIntelligenceService
+        data = SupplierIntelligenceService.enrich_supplier(obj)
+        return data['latest_purchase_date']
+
+    def get_purchase_frequency(self, obj):
+        from .services import SupplierIntelligenceService
+        data = SupplierIntelligenceService.enrich_supplier(obj)
+        return data['purchase_frequency']
+
     class Meta:
         model = Supplier
         fields = [
             'id', 'name', 'phone', 'email', 'company',
             'address', 'balance', 'created_at',
             'purchase_count', 'total_purchases',
-            'supplier_score', 'evaluation_count'
+            'supplier_score', 'evaluation_count',
+            'rank', 'badge', 'recommendation_reason',
+            'rating_breakdown', 'latest_purchase_date',
+            'purchase_frequency',
         ]
 
 class SupplierEvaluationSerializer(serializers.ModelSerializer):
@@ -111,6 +154,22 @@ class SupplierEvaluationSerializer(serializers.ModelSerializer):
         if obj.evaluated_by:
             return obj.evaluated_by.get_full_name() or obj.evaluated_by.username
         return 'غير محدد'
+
+
+# 8.5. ترتيب الموردين لكل منتج (Future architecture)
+class SupplierProductRankingSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+
+    class Meta:
+        model = SupplierProductRanking
+        fields = [
+            'id', 'product', 'product_name', 'supplier', 'supplier_name',
+            'avg_cost_price', 'avg_quality', 'avg_delivery',
+            'total_purchases', 'last_purchase_date', 'rank',
+            'recommendation_reason', 'updated_at',
+        ]
+
 
 # 8. المشتريات
 class PurchaseSerializer(serializers.ModelSerializer):
@@ -157,7 +216,7 @@ class SaleSerializer(serializers.ModelSerializer):
         model = Sale
         fields = [
             'id', 'invoice_number', 'customer', 'customer_name',
-            'cashier', 'cashier_name', 'total_amount', 'discount', 'tax_amount',
+            'cashier', 'cashier_name', 'total_amount', 'discount_type', 'discount', 'tax_amount',
             'final_amount', 'payment_type', 'notes', 'created_at', 'items'
         ]
         read_only_fields = ['invoice_number', 'cashier', 'tax_amount', 'final_amount']
@@ -176,7 +235,7 @@ class SaleWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Sale
-        fields = ['customer', 'total_amount', 'discount', 'payment_type', 'notes', 'items']
+        fields = ['customer', 'total_amount', 'discount_type', 'discount', 'payment_type', 'notes', 'items']
 
     def create(self, validated_data):
         items_data = validated_data.pop('items')

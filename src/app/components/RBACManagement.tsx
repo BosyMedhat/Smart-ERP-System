@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import {
   Shield,
   Save,
@@ -133,7 +133,7 @@ export default function RBACManagement() {
             className={`flex flex-col items-start gap-1 rounded-lg px-4 py-2 text-sm font-medium transition min-w-[140px] ${
               selectedRoleId === role.id
                 ? 'bg-blue-600 text-white'
-                : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
+                : 'bg-card text-slate-700 hover:bg-slate-50 border border-slate-200'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -145,8 +145,8 @@ export default function RBACManagement() {
             </span>
             <span className={`text-xs px-2 py-0.5 rounded-full ${
               role.level === 0
-                ? 'bg-red-100 text-red-700'
-                : 'bg-gray-100 text-gray-600'
+                ? 'bg-red-500/10 text-red-700'
+                : 'bg-muted text-muted-foreground'
             }`}>
               {role.level === 0 ? 'مدير كامل' : `مستوى ${role.level}`}
             </span>
@@ -179,7 +179,7 @@ export default function RBACManagement() {
           {Object.entries(groupedPerms).map(([module, perms]) => (
             <div
               key={module}
-              className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+              className="rounded-lg border border-slate-200 bg-card p-4 shadow-sm"
             >
               <h3 className="mb-3 text-lg font-semibold text-slate-800">
                 {MODULE_LABELS[module] || module}
@@ -194,7 +194,7 @@ export default function RBACManagement() {
                       className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 transition ${
                         checked
                           ? 'border-blue-200 bg-blue-50'
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                          : 'border-slate-200 bg-card hover:bg-slate-50'
                       } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
                     >
                       <input
@@ -228,3 +228,4 @@ export default function RBACManagement() {
     </div>
   );
 }
+

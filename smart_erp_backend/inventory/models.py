@@ -4,6 +4,8 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver as signal_receiver
+from django.core.validators import MinValueValidator
+from decimal import Decimal
 
 # 1. المنتجات
 class Product(models.Model):
@@ -105,16 +107,21 @@ class Installment(models.Model):
     )
     down_payment = models.DecimalField(
         max_digits=10, decimal_places=2, default=0,
-        verbose_name='المقدم'
+        verbose_name='المقدم',
+        validators=[MinValueValidator(Decimal('0'))]
     )
-    months_count = models.IntegerField(default=1, verbose_name='عدد الأشهر')
+    months_count = models.IntegerField(
+        default=1, verbose_name='عدد الأشهر',
+        validators=[MinValueValidator(1)]
+    )
     amount = models.DecimalField(
         max_digits=10, decimal_places=2,
         verbose_name='إجمالي مبلغ التقسيط'
     )
     remaining_amount = models.DecimalField(
         max_digits=10, decimal_places=2,
-        verbose_name='المبلغ المتبقي'
+        verbose_name='المبلغ المتبقي',
+        validators=[MinValueValidator(Decimal('0'))]
     )
     due_date = models.DateField(verbose_name='تاريخ أول قسط')
     is_paid = models.BooleanField(default=False, verbose_name='هل تم السداد الكامل؟')
@@ -252,6 +259,72 @@ class Purchase(models.Model):
     def __str__(self):
         return f"{self.supplier.name} - {self.product.name} x{self.quantity}"
 
+
+# 8.5. ترتيب الموردين لكل منتج (Future: Best Supplier Per Product)
+class SupplierProductRanking(models.Model):
+    """
+    Future architecture data structure for "Best Supplier Per Product".
+    Current release: structure only; not populated by default.
+    """
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='supplier_rankings',
+        verbose_name='المنتج'
+    )
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.CASCADE,
+        related_name='product_rankings',
+        verbose_name='المورد'
+    )
+    avg_cost_price = models.DecimalField(
+        "متوسط سعر التكلفة",
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+    avg_quality = models.DecimalField(
+        "متوسط تقييم الجودة",
+        max_digits=3,
+        decimal_places=2,
+        default=0
+    )
+    avg_delivery = models.DecimalField(
+        "متوسط تقييم الاستلام",
+        max_digits=3,
+        decimal_places=2,
+        default=0
+    )
+    total_purchases = models.PositiveIntegerField(
+        "عدد المشتريات",
+        default=0
+    )
+    last_purchase_date = models.DateField(
+        "تاريخ آخر عملية شراء",
+        null=True,
+        blank=True
+    )
+    rank = models.PositiveSmallIntegerField(
+        "الترتيب",
+        default=0
+    )
+    recommendation_reason = models.TextField(
+        "سبب التوصية",
+        blank=True
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "ترتيب المورد للمنتج"
+        verbose_name_plural = "ترتيبات الموردين للمنتجات"
+        ordering = ['product', 'rank']
+        unique_together = [['product', 'supplier']]
+
+    def __str__(self):
+        return f"#{self.rank} {self.supplier.name} — {self.product.name}"
+
+
 # 9. المصاريف (معدل ليتوافق مع Modal الموظفين)
 class Expense(models.Model):
     CATEGORIES = [('rent', 'إيجار'), ('electricity', 'كهرباء'), ('maintenance', 'صيانة'), ('other', 'أخرى')]
@@ -347,6 +420,7 @@ class StoreSettings(models.Model):
     system_name = models.CharField(max_length=100, default='Smart ERP', verbose_name='اسم النظام')
     currency = models.CharField(max_length=10, default='EGP', verbose_name='العملة')
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=14.00, verbose_name='نسبة الضريبة')
+    enable_tax = models.BooleanField(default=False, verbose_name='تفعيل الضريبة')
     phone = models.CharField(max_length=20, blank=True, default='', verbose_name='رقم الهاتف')
     address = models.TextField(blank=True, default='', verbose_name='العنوان')
     email = models.EmailField(blank=True, default='', verbose_name='البريد الإلكتروني')
@@ -440,9 +514,20 @@ class Sale(models.Model):
         max_digits=12, decimal_places=2,
         verbose_name='الإجمالي'
     )
+    DISCOUNT_TYPES = [
+        ('percentage', 'نسبة %'),
+        ('fixed', 'مبلغ ثابت'),
+        ('legacy', 'سجل قديم'),
+    ]
+    discount_type = models.CharField(
+        max_length=10,
+        choices=DISCOUNT_TYPES,
+        default='percentage',
+        verbose_name='نوع الخصم'
+    )
     discount = models.DecimalField(
         max_digits=5, decimal_places=2, default=0,
-        verbose_name='الخصم'
+        verbose_name='قيمة الخصم'
     )
     tax_amount = models.DecimalField(
         max_digits=10, decimal_places=2, default=0,

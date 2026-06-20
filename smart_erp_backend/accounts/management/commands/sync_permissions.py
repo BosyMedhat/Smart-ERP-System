@@ -93,12 +93,6 @@ SYSTEM_PERMISSIONS = {
     'audit': [
         ('view',   'عرض سجل التدقيق'),
     ],
-    'representatives': [
-        ('view',   'عرض المناديب'),
-        ('create', 'إضافة مندوب'),
-        ('edit',   'تعديل مندوب'),
-        ('delete', 'حذف مندوب'),
-    ],
     'roles': [
         ('view',              'عرض الأدوار'),
         ('create',            'إنشاء دور'),
