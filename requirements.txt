@@ -1,3 +1,12 @@
+# ── Production deployment ─────────────────────────────────────────
+gunicorn==23.0.0
+whitenoise==6.9.0
+brotli==1.1.0
+python-dotenv==1.0.1
+psycopg2-binary==2.9.12
+dj-database-url==2.3.0
+
+# ── Core packages ─────────────────────────────────────────────────
 annotated-types==0.7.0
 anyio==4.12.1
 asgiref==3.11.1
@@ -18,7 +27,11 @@ langsmith==0.7.16
 ollama==0.6.1
 orjson==3.11.7
 packaging==26.0
+pdfplumber==0.11.6
 Pillow==11.3.0
+reportlab==4.4.1
+arabic-reshaper==3.0.0
+python-bidi==0.6.10
 pydantic==2.12.5
 pydantic_core==2.41.5
 pyserial==3.5
