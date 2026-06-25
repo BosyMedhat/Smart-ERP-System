@@ -9,8 +9,9 @@ import axios from "axios";
 
 
 const apiClient = axios.create({ 
-    baseURL: 'http://127.0.0.1:8000/api/',
+    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/',
     // hena ka2ny pa2ol le el backend ana 7p3tlk json we enta rod 3lya pe json pardo
+    // Production: set VITE_API_BASE_URL=https://your-railway-app.up.railway.app/api/
     headers: {
         'Content-Type': 'application/json', 
     }

@@ -16,11 +16,16 @@ from treasury.models import TreasuryAccount, TreasuryTransaction
 from treasury.serializers import ManualTransactionSerializer
 from treasury.permissions import CanManageTreasuryFull
 from audit.utils import log_action, get_client_ip
+from django.conf import settings as django_settings
 import statistics
 import json
 import re
 import pdfplumber
 import requests
+
+# Ollama base URL — set OLLAMA_BASE_URL in Railway environment variables
+# Falls back to localhost for local development
+_OLLAMA_BASE_URL = getattr(django_settings, 'OLLAMA_BASE_URL', 'http://localhost:11434')
 
 
 @api_view(['POST'])
@@ -37,7 +42,7 @@ def ask_ai(request):
         # Initialize Ollama LLM with extended timeout
         llm = OllamaLLM(
             model="qwen2.5:3b",
-            base_url="http://127.0.0.1:11434",
+            base_url=_OLLAMA_BASE_URL,
             timeout=120,  # 2 minutes timeout
             num_predict=500,
             keep_alive=-1,
@@ -305,7 +310,7 @@ class PDFProductImportView(APIView):
             # Call Ollama API
             try:
                 response = requests.post(
-                    'http://localhost:11434/api/generate',
+                    f'{_OLLAMA_BASE_URL}/api/generate',
                     json={
                         'model': 'qwen2.5:3b',
                         'prompt': prompt,
@@ -329,7 +334,7 @@ class PDFProductImportView(APIView):
             except requests.exceptions.ConnectionError:
                 return Response({
                     'status': 'error',
-                    'message': 'تعذر الاتصال بـ Ollama - تأكد من تشغيل الخدمة'
+                    'message': 'خدمة الذكاء الاصطناعي غير متاحة حالياً - يرجى المحاولة لاحقاً'
                 }, status=503)
             except Exception as e:
                 return Response({
@@ -425,7 +430,7 @@ class AnalyzeInvoiceView(APIView):
 
             import requests as req
             ollama_response = req.post(
-                'http://localhost:11434/api/generate',
+                f'{_OLLAMA_BASE_URL}/api/generate',
                 json={
                     'model': 'qwen2.5:3b',
                     'prompt': prompt,
@@ -659,7 +664,7 @@ def _ollama_parse(message: str) -> dict | None:
 
     try:
         resp = requests.post(
-            'http://127.0.0.1:11434/api/generate',
+            f'{_OLLAMA_BASE_URL}/api/generate',
             json={
                 'model':  'qwen2.5:3b',
                 'prompt': prompt,

@@ -1,0 +1,1 @@
+web: python smart_erp_backend/manage.py migrate --noinput && python smart_erp_backend/manage.py collectstatic --noinput && gunicorn core.wsgi:application --chdir smart_erp_backend --bind 0.0.0.0:$PORT --workers 2
