@@ -29,6 +29,29 @@ class CanAccessSuppliers(BasePermission):
         return False
 
 
+class CanAccessProducts(BasePermission):
+    """
+    RBAC-aligned product permissions (ERP-CORE-STABILIZATION-001A).
+    Was CanManageProducts('add_product') for ALL actions — a cashier
+    couldn't even list products, breaking POS for the primary role.
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        action = getattr(view, 'action', None)
+        if action in ['list', 'retrieve']:
+            return has_permission(request.user, 'inventory', 'view')
+        if action == 'create':
+            return has_permission(request.user, 'inventory', 'create')
+        if action in ['update', 'partial_update']:
+            return has_permission(request.user, 'inventory', 'edit')
+        if action == 'destroy':
+            return has_permission(request.user, 'inventory', 'delete')
+        return False
+
+
 class IsManagerOrHasPermission(BasePermission):
     """
     مدير النظام = وصول كامل لكل شيء

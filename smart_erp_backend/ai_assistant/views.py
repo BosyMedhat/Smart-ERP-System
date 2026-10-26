@@ -51,7 +51,8 @@ def ask_ai(request):
         # Fetch real system context
         today = timezone.now().date()
         sales_today = Sale.objects.filter(
-            created_at__date=today
+            created_at__date=today,
+            status='completed',
         ).count()
         products_count = Product.objects.count()
 
@@ -108,7 +109,8 @@ class SmartAnalyticsView(APIView):
 
         # Sales in last 30 days
         sales_30 = Sale.objects.filter(
-            created_at__date__gte=month_ago
+            created_at__date__gte=month_ago,
+            status='completed',
         )
         total_30 = sales_30.aggregate(
             t=Sum('final_amount'))['t'] or 0
@@ -116,7 +118,8 @@ class SmartAnalyticsView(APIView):
 
         # Top selling products
         top_products = SaleItem.objects.filter(
-            sale__created_at__date__gte=month_ago
+            sale__created_at__date__gte=month_ago,
+            sale__status='completed',
         ).values('product_name').annotate(
             total_qty=Sum('quantity'),
             total_revenue=Sum('subtotal')
@@ -129,7 +132,8 @@ class SmartAnalyticsView(APIView):
 
         # Anomaly Detection using statistical method
         all_amounts = list(
-            Sale.objects.values_list('final_amount', flat=True)
+            Sale.objects.filter(status='completed')
+                .values_list('final_amount', flat=True)
         )
         anomalies = []
         if len(all_amounts) >= 3:
@@ -139,7 +143,8 @@ class SmartAnalyticsView(APIView):
                 threshold = avg + (2 * std)
 
                 suspicious = Sale.objects.filter(
-                    final_amount__gte=threshold
+                    final_amount__gte=threshold,
+                    status='completed',
                 ).select_related('customer', 'cashier') \
                  .order_by('-final_amount')[:5]
 
@@ -166,7 +171,8 @@ class SmartAnalyticsView(APIView):
             end = today - timedelta(days=w*7)
             wt = Sale.objects.filter(
                 created_at__date__gte=start,
-                created_at__date__lt=end
+                created_at__date__lt=end,
+                status='completed',
             ).aggregate(t=Sum('final_amount'))['t'] or 0
             weekly_totals.append(float(wt))
 
@@ -210,7 +216,8 @@ class SmartAnalyticsView(APIView):
             month_end = today.replace(day=1) - timedelta(days=(i-1)*30) if i > 0 else today + timedelta(days=1)
             month_total = Sale.objects.filter(
                 created_at__date__gte=month_start,
-                created_at__date__lt=month_end
+                created_at__date__lt=month_end,
+                status='completed',
             ).aggregate(t=Sum('final_amount'))['t'] or 0
             sales_trend.append({
                 'month': month_start.strftime('%b'),

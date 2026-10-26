@@ -57,3 +57,27 @@ smart_erp_backend/kpi_validation.py
 smart_erp_backend/test_*.py
 smart_erp_backend/treasury_analysis.py
 smart_erp_backend/validate_fix.py
+
+# Local backups and database exports
+/backups/
+/*.sql
+/*.dump
+/*.backup
+/*.sqlite3
+
+# Browser E2E profiles and screenshots
+/.e2e-profile/
+/e2e-shots/
+
+# Temporary E2E scripts
+/e2e_*.mjs
+
+# Local investigation scripts
+/smart_erp_backend/acc_check2.py
+/smart_erp_backend/acceptance_e2e.py
+
+# Windows temporary file
+/nul
+
+# Local audit archive
+/docs/funding-audit.zip

@@ -149,7 +149,8 @@ class SalesReportView(APIView):
         # Filter sales by date range
         sales = Sale.objects.filter(
             created_at__date__gte=from_dt,
-            created_at__date__lte=to_dt
+            created_at__date__lte=to_dt,
+            status='completed',
         )
 
         # Summary calculations
@@ -194,7 +195,8 @@ class SalesReportView(APIView):
         # Top products
         top_products = SaleItem.objects.filter(
             sale__created_at__date__gte=from_dt,
-            sale__created_at__date__lte=to_dt
+            sale__created_at__date__lte=to_dt,
+            sale__status='completed',
         ).values('product_name').annotate(
             quantity_sold=Sum('quantity'),
             revenue=Sum('subtotal')
@@ -306,7 +308,7 @@ class InventoryReportView(APIView):
         from_date = request.query_params.get('from_date')
         to_date = request.query_params.get('to_date')
 
-        sale_items = SaleItem.objects.all()
+        sale_items = SaleItem.objects.filter(sale__status='completed')
         if from_date and to_date:
             try:
                 from_dt = datetime.strptime(from_date, '%Y-%m-%d').date()
@@ -374,7 +376,8 @@ class FinancialReportView(APIView):
         # Filter sales
         sales = Sale.objects.filter(
             created_at__date__gte=from_dt,
-            created_at__date__lte=to_dt
+            created_at__date__lte=to_dt,
+            status='completed',
         )
 
         # Revenue calculations
@@ -415,6 +418,7 @@ class FinancialReportView(APIView):
         sale_items = SaleItem.objects.filter(
             sale__created_at__date__gte=from_dt,
             sale__created_at__date__lte=to_dt,
+            sale__status='completed',
         )
         cogs = Decimal('0')
         for item in sale_items:
@@ -1141,6 +1145,7 @@ def calculate_pl(date_from, date_to):
     sales_qs = Sale.objects.filter(
         created_at__date__gte=date_from,
         created_at__date__lte=date_to,
+        status='completed',
     )
 
     revenue_cash = sales_qs.filter(
@@ -1176,6 +1181,7 @@ def calculate_pl(date_from, date_to):
     items_qs = SaleItem.objects.filter(
         sale__created_at__date__gte=date_from,
         sale__created_at__date__lte=date_to,
+        sale__status='completed',
     )
 
     cogs = Decimal('0')

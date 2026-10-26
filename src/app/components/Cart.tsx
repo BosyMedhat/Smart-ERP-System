@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Minus, Printer, X, Loader2, ScanLine, User, Phone, Percent } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CartItem, Product } from '../App';
 import apiClient from '../../api/axiosConfig';
+import { cachedGet } from '../utils/apiCache';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 import { formatCurrency } from '../utils/currency';
 import { notify } from '@/lib/notifications';
@@ -49,6 +50,8 @@ export function Cart({
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  // Synchronous double-submit guard — React state updates lag rapid clicks.
+  const submittingRef = useRef(false);
   const [error, setError] = useState('');
   const [paymentType, setPaymentType] = useState<'cash' | 'vodafone_cash' | 'instapay' | 'card' | 'credit' | 'installment'>('cash');
   const [showCreditWarning, setShowCreditWarning] = useState(false);
@@ -60,6 +63,7 @@ export function Cart({
   });
   const [lastScannedProduct, setLastScannedProduct] = useState<string | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [pricingConfigFailed, setPricingConfigFailed] = useState(false);
   const [pricingConfig, setPricingConfig] = useState({
     installment_markup_pct: '0',
     credit_markup_pct: '0',
@@ -82,7 +86,7 @@ export function Cart({
         price: parseFloat(product.retail_price || 0),
         retail_price: parseFloat(product.retail_price || 0),
         category: product.category || 'عام',
-        image: product.image || `https://placehold.co/400x400/3B82F6/FFFFFF?text=${encodeURIComponent(product.name.substring(0, 10))}`,
+        image: product.image || undefined,
         current_stock: parseFloat(product.current_stock || 0),
         sku: product.sku,
       };
@@ -125,11 +129,15 @@ export function Cart({
     fetchCustomers();
   }, []);
 
-  // Fetch dynamic pricing config (markup percentages by payment type)
+  // Fetch dynamic pricing config (markup percentages by payment type).
+  // Cached 5 min — it changes rarely and POS remounts on every visit.
   useEffect(() => {
-    apiClient.get('/pricing-config/')
-      .then(res => setPricingConfig(res.data))
-      .catch(() => {}); // silent fail — use defaults
+    cachedGet('/pricing-config/', 5 * 60 * 1000)
+      .then(data => {
+        setPricingConfig(data);
+        setPricingConfigFailed(false);
+      })
+      .catch(() => setPricingConfigFailed(true)); // visible warning — totals may differ
   }, []);
 
   // Effective price = base price + markup based on selected payment type
@@ -167,6 +175,7 @@ export function Cart({
   const finalAmount = subtotalAfterDiscount + tax;
 
   const handleCheckout = async () => {
+    if (submittingRef.current) return;
     if (cartItems.length === 0) {
       notify.warning('السلة فارغة!', { description: 'أضف منتجات للسلة قبل إتمام البيع' });
       return;
@@ -215,6 +224,7 @@ export function Cart({
         }
       }
 
+      submittingRef.current = true;
       setCheckoutLoading(true);
 
       const payload: Record<string, unknown> = {
@@ -262,12 +272,15 @@ export function Cart({
         notify.error('فشل إتمام البيع', { description: 'يرجى المحاولة مرة أخرى' });
       }
     } finally {
+      submittingRef.current = false;
       setCheckoutLoading(false);
     }
   };
 
   const handleCustomerConfirm = async (data: CustomerData) => {
+    if (submittingRef.current) return;
     setShowCustomerModal(false);
+    submittingRef.current = true;
     setCheckoutLoading(true);
     try {
       const payload: Record<string, unknown> = {
@@ -309,6 +322,7 @@ export function Cart({
         notify.error('فشل إتمام البيع', { description: 'يرجى المحاولة مرة أخرى' });
       }
     } finally {
+      submittingRef.current = false;
       setCheckoutLoading(false);
     }
   };
@@ -336,6 +350,7 @@ export function Cart({
           {customers.map((customer) => (
             <option key={customer.id} value={String(customer.id)}>
               {customer.name}
+              {Number(customer.balance) > 0 ? ` — مديونية ${Number(customer.balance).toLocaleString()} ج.م` : ''}
             </option>
           ))}
         </select>
@@ -498,6 +513,11 @@ export function Cart({
            parseFloat(pricingConfig.credit_markup_pct) > 0 && (
             <div className="text-xs text-orange-500 text-right mt-1">
               * يشمل زيادة الآجل {pricingConfig.credit_markup_pct}%
+            </div>
+          )}
+          {pricingConfigFailed && (
+            <div className="text-xs text-red-500 text-right mt-1">
+              * تعذر تحميل إعدادات التسعير — الإجمالي المعروض تقريبي والسعر الفعلي يُحسب في الخادم
             </div>
           )}
         </div>
@@ -694,7 +714,7 @@ export function Cart({
                 onClick={() => setShowInstallmentModal(false)}
                 className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl transition-colors"
               >
-                ✅ تأكيد وإتمام البيع
+                ✅ تأكيد بيانات التقسيط
               </button>
             </div>
           </div>

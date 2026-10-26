@@ -74,6 +74,11 @@ class TreasuryTransactionViewSet(viewsets.ReadOnlyModelViewSet):
         if reference_id:
             qs = qs.filter(reference_id=reference_id)
 
+        # ERP-FINANCIAL-OPERATIONS-005: free-text search on description
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(description__icontains=search)
+
         return qs
 
     @action(

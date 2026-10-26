@@ -9,13 +9,14 @@ from .serializers import (AttendanceSerializer,
                            PayrollRunSerializer,
                            SalarySlipSerializer)
 from inventory.models import Employee
+from .permissions import HRModulePermission
 
 
 class AttendanceViewSet(viewsets.ModelViewSet):
     queryset = Attendance.objects.select_related(
         'employee', 'recorded_by').all()
     serializer_class = AttendanceSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HRModulePermission]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -90,7 +91,7 @@ class AttendanceViewSet(viewsets.ModelViewSet):
 class PayrollRunViewSet(viewsets.ModelViewSet):
     queryset = PayrollRun.objects.prefetch_related('slips').all()
     serializer_class = PayrollRunSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HRModulePermission]
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -188,7 +189,7 @@ class SalarySlipViewSet(viewsets.ModelViewSet):
     queryset = SalarySlip.objects.select_related(
         'employee', 'payroll_run').all()
     serializer_class = SalarySlipSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HRModulePermission]
 
     def get_queryset(self):
         qs = super().get_queryset()

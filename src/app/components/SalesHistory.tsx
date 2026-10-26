@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Search, ChevronLeft, ChevronRight, Receipt, Calendar, User, CreditCard, Package, Printer } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../api/axiosConfig';
+import { cachedGet } from '../utils/apiCache';
 import { formatCurrency } from '../utils/currency';
 
 interface StoreSettings {
@@ -37,6 +38,8 @@ interface Sale {
   created_at: string;
   notes: string;
   items: SaleItem[];
+  status?: 'completed' | 'voided';
+  void_reason?: string;
 }
 
 export function SalesHistory() {
@@ -48,6 +51,11 @@ export function SalesHistory() {
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
+  const [voiding, setVoiding] = useState(false);
+  const [voidError, setVoidError] = useState('');
+  const [voidMode, setVoidMode] = useState(false);
+  const [voidReason, setVoidReason] = useState('');
+  const voidingRef = useRef(false);
   const itemsPerPage = 20;
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -58,8 +66,8 @@ export function SalesHistory() {
 
   const fetchSettings = async () => {
     try {
-      const response = await apiClient.get('/settings/1/');
-      setSettings(response.data);
+      const data = await cachedGet('/settings/1/', 60_000);
+      setSettings(data);
     } catch (err) {
       console.error('Error fetching settings:', err);
     }
@@ -99,14 +107,39 @@ export function SalesHistory() {
     });
   };
 
-  const getPaymentTypeLabel = (type: string) => {
-    return type === 'cash' ? 'كاش' : 'آجل';
+  const PAYMENT_META: Record<string, { label: string; color: string }> = {
+    cash:           { label: 'كاش',          color: 'bg-green-100 text-green-700' },
+    vodafone_cash:  { label: 'فودافون كاش',  color: 'bg-rose-100 text-rose-700' },
+    instapay:       { label: 'إنستاباي',     color: 'bg-violet-100 text-violet-700' },
+    card:           { label: 'بطاقة بنكية',  color: 'bg-sky-100 text-sky-700' },
+    credit:         { label: 'آجل',          color: 'bg-amber-100 text-amber-700' },
+    installment:    { label: 'تقسيط',        color: 'bg-purple-100 text-purple-700' },
   };
 
-  const getPaymentTypeColor = (type: string) => {
-    return type === 'cash' 
-      ? 'bg-green-100 text-green-700' 
-      : 'bg-amber-100 text-amber-700';
+  const getPaymentTypeLabel = (type: string) =>
+    PAYMENT_META[type]?.label ?? type;
+
+  const getPaymentTypeColor = (type: string) =>
+    PAYMENT_META[type]?.color ?? 'bg-gray-100 text-gray-700';
+
+  const handleVoid = async () => {
+    if (!selectedSale || voidingRef.current) return;
+    voidingRef.current = true;
+    setVoiding(true);
+    setVoidError('');
+    try {
+      await apiClient.post(`/sales/${selectedSale.id}/void/`, { reason: voidReason.trim() });
+      setSelectedSale(null);
+      setVoidMode(false);
+      setVoidReason('');
+      fetchSales();
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || 'تعذر إلغاء الفاتورة';
+      setVoidError(msg);
+    } finally {
+      voidingRef.current = false;
+      setVoiding(false);
+    }
   };
 
   const handlePrint = () => {
@@ -263,11 +296,14 @@ export function SalesHistory() {
                   </tr>
                 ) : (
                   paginatedSales.map((sale) => (
-                    <tr key={sale.id} className="hover:bg-muted/50 transition-colors">
+                    <tr key={sale.id} className={`hover:bg-muted/50 transition-colors ${sale.status === 'voided' ? 'opacity-55' : ''}`}>
                       <td className="px-4 py-3 text-sm font-medium text-card-foreground">
                         <div className="flex items-center gap-2">
                           <Receipt size={16} className="text-[#3B82F6]" />
                           {sale.invoice_number}
+                          {sale.status === 'voided' && (
+                            <span className="px-1.5 py-0.5 rounded text-xs bg-red-100 text-red-700">ملغاة</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
@@ -293,7 +329,7 @@ export function SalesHistory() {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button
-                          onClick={() => setSelectedSale(sale)}
+                          onClick={() => { setSelectedSale(sale); setVoidMode(false); setVoidReason(''); setVoidError(''); }}
                           className="text-[#3B82F6] hover:text-[#2563EB] text-sm font-medium"
                         >
                           عرض
@@ -450,20 +486,73 @@ export function SalesHistory() {
                 </div>
               )}
               
-              <div className="p-6 border-t border-border bg-muted flex gap-3">
-                <button
-                  onClick={() => setSelectedSale(null)}
-                  className="flex-1 py-3 bg-[#3B82F6] hover:bg-[#2563EB] text-white font-medium rounded-lg transition-colors"
-                >
-                  إغلاق
-                </button>
-                <button
-                  onClick={handlePrint}
-                  className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
-                >
-                  <Printer size={18} />
-                  طباعة
-                </button>
+              <div className="p-6 border-t border-border bg-muted">
+                {voidError && (
+                  <div className="mb-3 text-sm text-red-600 text-center">{voidError}</div>
+                )}
+                {selectedSale.status === 'voided' && (
+                  <div className="mb-3 text-sm text-red-600 text-center">
+                    هذه الفاتورة ملغاة{selectedSale.void_reason ? ` — ${selectedSale.void_reason}` : ''}
+                  </div>
+                )}
+                {voidMode && selectedSale.status !== 'voided' ? (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                    <div className="text-sm font-bold text-red-700 mb-2">
+                      تأكيد إلغاء الفاتورة {selectedSale.invoice_number}
+                    </div>
+                    <p className="text-xs text-red-600 mb-3">
+                      سيُعاد المخزون، وتُعكس القيود المالية والأقساط — لا يمكن التراجع.
+                    </p>
+                    <input
+                      type="text"
+                      value={voidReason}
+                      onChange={(e) => setVoidReason(e.target.value)}
+                      placeholder="سبب الإلغاء (يُسجَّل في سجل التدقيق)…"
+                      className="w-full px-3 py-2.5 border border-red-200 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-red-300 bg-white"
+                      autoFocus
+                    />
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleVoid}
+                        disabled={voiding}
+                        className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold rounded-lg transition-colors"
+                      >
+                        {voiding ? 'جارٍ الإلغاء…' : 'تأكيد الإلغاء'}
+                      </button>
+                      <button
+                        onClick={() => { setVoidMode(false); setVoidReason(''); setVoidError(''); }}
+                        disabled={voiding}
+                        className="flex-1 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        تراجع
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setSelectedSale(null)}
+                      className="flex-1 py-3 bg-[#3B82F6] hover:bg-[#2563EB] text-white font-medium rounded-lg transition-colors"
+                    >
+                      إغلاق
+                    </button>
+                    <button
+                      onClick={handlePrint}
+                      className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+                    >
+                      <Printer size={18} />
+                      طباعة
+                    </button>
+                    {selectedSale.status !== 'voided' && (
+                      <button
+                        onClick={() => setVoidMode(true)}
+                        className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors"
+                      >
+                        إلغاء الفاتورة
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

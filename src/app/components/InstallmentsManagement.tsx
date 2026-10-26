@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../api/axiosConfig';
+import { notify } from '@/lib/notifications';
+import { formatCurrency } from '../utils/currency';
 import { CreditCard, Calendar, DollarSign, CheckCircle, AlertTriangle, X, History, User, FileText } from 'lucide-react';
 
 interface Installment {
@@ -56,6 +58,9 @@ export function InstallmentsManagement() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState('');
   const [collectAmount, setCollectAmount] = useState('');
+  const [collectMethod, setCollectMethod] = useState<'cash' | 'vodafone_cash' | 'instapay' | 'card'>('cash');
+  const [collecting, setCollecting] = useState(false);
+  const collectingRef = useRef(false);
 
   const fetchInstallments = async () => {
     try {
@@ -85,23 +90,29 @@ export function InstallmentsManagement() {
   }).length;
 
   const handleCollect = async () => {
-    if (!selectedInstallment || !collectAmount) return;
+    if (!selectedInstallment || !collectAmount || collectingRef.current) return;
+    collectingRef.current = true;
+    setCollecting(true);
     try {
-      await apiClient.post(`/installments/${selectedInstallment.id}/pay/`, {
-        amount: parseFloat(collectAmount)
+      const res = await apiClient.post(`/installments/${selectedInstallment.id}/pay/`, {
+        amount: parseFloat(collectAmount),
+        payment_method: collectMethod,
+      });
+      notify.success('تم تسجيل التحصيل', {
+        description: res.data?.is_paid
+          ? 'اكتمل سداد هذه العملية ✅'
+          : `المتبقي: ${formatCurrency(res.data?.remaining_amount ?? 0)}`,
       });
       await fetchInstallments();
       setShowCollectModal(false);
       setCollectAmount('');
     } catch (error: any) {
       console.error("Error collecting installment:", error);
-      if (error.response?.status === 401) {
-        setError('ليس لديك صلاحية لتنفيذ هذا الإجراء');
-      } else if (error.response?.status === 403) {
-        setError('غير مصرح لك بهذه العملية');
-      } else {
-        setError('حدث خطأ، يرجى المحاولة مرة أخرى');
-      }
+      const msg = error.response?.data?.error || 'حدث خطأ، يرجى المحاولة مرة أخرى';
+      notify.error(msg);
+    } finally {
+      collectingRef.current = false;
+      setCollecting(false);
     }
   };
 
@@ -168,6 +179,13 @@ export function InstallmentsManagement() {
           <div className="text-sm text-muted-foreground mb-1 font-bold">أقساط متأخرة</div>
           <div className="text-3xl font-bold text-card-foreground">{lateInstallments}</div>
         </div>
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500/10 to-green-500/5 p-6 shadow-sm border border-green-200/50">
+          <div className="text-sm text-muted-foreground mb-1 font-bold">عمليات مسددة</div>
+          <div className="text-3xl font-bold text-card-foreground">
+            {installments.filter(i => i.is_paid || Number(i.remaining_amount) <= 0).length}
+            <span className="text-base font-normal text-muted-foreground"> / {installments.length}</span>
+          </div>
+        </div>
       </div>
 
       {/* Table */}
@@ -229,12 +247,67 @@ export function InstallmentsManagement() {
           <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-border">
             <div className="bg-emerald-500 p-6 text-white flex justify-between items-center font-bold">
               <h2 className="text-xl flex items-center gap-2"><DollarSign /> تحصيل قسط</h2>
-              <button onClick={() => setShowCollectModal(false)}><X /></button>
+              <button onClick={() => { setShowCollectModal(false); setCollectAmount(''); setCollectMethod('cash'); }}><X /></button>
             </div>
             <div className="p-6 space-y-4">
-                <p className="font-bold text-card-foreground">العميل: {selectedInstallment.customer_name}</p>
-                <input type="number" placeholder={t('common.amount')} className="w-full px-4 py-4 border-2 border-emerald-200/50 rounded-xl text-center text-2xl font-bold bg-background text-foreground" value={collectAmount} onChange={(e)=>setCollectAmount(e.target.value)} />
-                <button onClick={handleCollect} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold">تأكيد التحصيل</button>
+                <div className="bg-muted rounded-xl p-4">
+                  <p className="font-bold text-card-foreground">{selectedInstallment.customer_name}</p>
+                  <p className="text-sm text-muted-foreground font-mono">فاتورة #{selectedInstallment.invoice_number}</p>
+                  <div className="flex justify-between mt-3 text-sm">
+                    <span className="text-muted-foreground">المتبقي:</span>
+                    <span className="font-bold text-orange-600">{formatCurrency(selectedInstallment.remaining_amount)}</span>
+                  </div>
+                  <div className="flex justify-between mt-1 text-sm">
+                    <span className="text-muted-foreground">القسط الشهري:</span>
+                    <span className="font-bold text-purple-600">{formatCurrency(selectedInstallment.monthly_amount)}</span>
+                  </div>
+                </div>
+                <div>
+                  <input type="number" min="0" placeholder={t('common.amount')} className="w-full px-4 py-4 border-2 border-emerald-200/50 rounded-xl text-center text-2xl font-bold bg-background text-foreground" value={collectAmount} onChange={(e)=>setCollectAmount(e.target.value)} />
+                  <button
+                    type="button"
+                    onClick={() => setCollectAmount(String(selectedInstallment.remaining_amount))}
+                    className="mt-1.5 text-xs text-emerald-600 hover:text-emerald-700 font-bold"
+                  >
+                    سداد كامل المتبقي ({formatCurrency(selectedInstallment.remaining_amount)})
+                  </button>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-card-foreground mb-2">طريقة التحصيل</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { v: 'cash' as const, l: '💵 كاش' },
+                      { v: 'instapay' as const, l: '⚡ إنستاباي' },
+                      { v: 'vodafone_cash' as const, l: '📱 فودافون كاش' },
+                      { v: 'card' as const, l: '💳 بطاقة' },
+                    ].map(m => (
+                      <button
+                        key={m.v}
+                        type="button"
+                        onClick={() => setCollectMethod(m.v)}
+                        className={`py-2 rounded-xl text-sm font-bold border-2 transition ${
+                          collectMethod === m.v
+                            ? 'bg-emerald-500 border-emerald-500 text-white'
+                            : 'bg-muted border-transparent text-card-foreground hover:border-emerald-300'
+                        }`}
+                      >
+                        {m.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {collectAmount && parseFloat(collectAmount) > Number(selectedInstallment.remaining_amount) && (
+                  <div className="bg-red-500/10 border border-red-200/50 rounded-xl p-3 text-center text-sm text-red-600">
+                    المبلغ أكبر من المتبقي — الحد الأقصى {formatCurrency(selectedInstallment.remaining_amount)}
+                  </div>
+                )}
+                <button
+                  onClick={handleCollect}
+                  disabled={collecting || !collectAmount || parseFloat(collectAmount) <= 0 || parseFloat(collectAmount) > Number(selectedInstallment.remaining_amount)}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {collecting ? 'جارٍ التحصيل…' : 'تأكيد التحصيل'}
+                </button>
             </div>
           </div>
         </div>

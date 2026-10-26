@@ -80,8 +80,13 @@ function ManualEntryModal({
   const [error, setError] = useState('');
 
   const handleSubmit = async () => {
-    if (!form.amount || !form.description) {
-      setError(t('errors.validationError'));
+    const amt = parseFloat(form.amount);
+    if (!form.amount || isNaN(amt) || amt <= 0) {
+      setError('أدخل مبلغًا صحيحًا أكبر من صفر');
+      return;
+    }
+    if (!form.description.trim()) {
+      setError('الوصف مطلوب');
       return;
     }
     setLoading(true);
@@ -91,7 +96,7 @@ function ManualEntryModal({
       onSuccess();
       onClose();
     } catch (e: any) {
-      setError(t('errors.saveFailed'));
+      setError(e?.response?.data?.error || t('errors.saveFailed'));
     } finally {
       setLoading(false);
     }
@@ -165,7 +170,7 @@ export default function TreasuryDashboard() {
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState('');
   const [showModal, setShowModal]       = useState(false);
-  const [filter, setFilter]             = useState({ type: '', date_from: '', date_to: '' });
+  const [filter, setFilter]             = useState({ type: '', account: '', category: '', search: '', date_from: '', date_to: '' });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -175,6 +180,9 @@ export default function TreasuryDashboard() {
         fetchTreasurySummary(),
         fetchTransactions({
           type:      filter.type      || undefined,
+          account:   filter.account   ? Number(filter.account) : undefined,
+          category:  filter.category  || undefined,
+          search:    filter.search    || undefined,
           date_from: filter.date_from || undefined,
           date_to:   filter.date_to   || undefined,
         }),
@@ -264,6 +272,42 @@ export default function TreasuryDashboard() {
           </select>
         </div>
         <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted-foreground">{t('treasury.account')}</label>
+          <select className="border border-input rounded-lg p-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={filter.account}
+            onChange={e => setFilter(f => ({ ...f, account: e.target.value }))}>
+            <option value="">{t('common.filter')}</option>
+            {summary?.accounts.map(a => (
+              <option key={a.id} value={a.id}>{a.display_name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted-foreground">التصنيف</label>
+          <select className="border border-input rounded-lg p-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={filter.category}
+            onChange={e => setFilter(f => ({ ...f, category: e.target.value }))}>
+            <option value="">{t('common.filter')}</option>
+            <option value="SALE">مبيعات</option>
+            <option value="PURCHASE">مشتريات</option>
+            <option value="INSTALLMENT">قسط</option>
+            <option value="COLLECTION">تحصيل دين</option>
+            <option value="SALARY">رواتب</option>
+            <option value="RENT">إيجار</option>
+            <option value="ELECTRICITY">كهرباء</option>
+            <option value="MAINTENANCE">صيانة</option>
+            <option value="MANUAL">إدخال يدوي</option>
+            <option value="SALE_VOID">عكس فاتورة ملغاة</option>
+            <option value="OTHER">أخرى</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted-foreground">{t('common.search')}</label>
+          <input type="text" placeholder="بحث في الوصف…" className="border rounded-lg p-2 text-sm w-40"
+            value={filter.search}
+            onChange={e => setFilter(f => ({ ...f, search: e.target.value }))} />
+        </div>
+        <div className="flex flex-col gap-1">
           <label className="text-xs text-muted-foreground">{t('reports.dateFrom')}</label>
           <input type="date" className="border rounded-lg p-2 text-sm"
             value={filter.date_from}
@@ -279,7 +323,7 @@ export default function TreasuryDashboard() {
           className="bg-gray-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-800">
           🔍 {t('common.search')}
         </button>
-        <button onClick={() => setFilter({ type: '', date_from: '', date_to: '' })}
+        <button onClick={() => setFilter({ type: '', account: '', category: '', search: '', date_from: '', date_to: '' })}
           className="bg-muted text-muted-foreground px-4 py-2 rounded-lg text-sm hover:bg-gray-200">
           {t('common.reset')}
         </button>

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Bell, X, AlertTriangle, AlertCircle, Info,
          Package, CreditCard, Wallet } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
+import { usePolling } from '../hooks/usePolling';
 
 /* ─── Types ────────────────────────────────── */
 interface AlertItem {
@@ -127,12 +128,11 @@ export default function AlertsBell() {
     }
   }, []);
 
-  // تحميل أولي + polling كل 5 دقائق
+  // تحميل أولي + polling كل 5 دقائق (يتوقف مؤقتاً عند إخفاء التبويب)
   useEffect(() => {
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 5 * 60 * 1000);
-    return () => clearInterval(interval);
   }, [fetchAlerts]);
+  usePolling(fetchAlerts, 5 * 60 * 1000);
 
   // إغلاق عند الضغط خارج الـ dropdown (مع مراعاة أن الـ popup مُصيَّر عبر portal)
   useEffect(() => {

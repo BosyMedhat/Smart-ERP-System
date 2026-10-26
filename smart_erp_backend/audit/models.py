@@ -12,6 +12,7 @@ class AuditLog(models.Model):
         ('LOGOUT',  'تسجيل خروج'),
         ('EXPORT',  'تصدير'),
         ('VIEW',    'عرض'),
+        ('VOID',    'إلغاء/عكس'),
     ]
 
     user         = models.ForeignKey(

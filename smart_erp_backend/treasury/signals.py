@@ -87,28 +87,14 @@ def handle_sale_treasury(sender, instance, created, **kwargs):
     )
 
 
-@receiver(post_save, sender=Purchase)
-def handle_purchase_treasury(sender, instance, created, **kwargs):
-    if not created:
-        return
-
-    amount = Decimal(str(instance.total_amount))
-    if amount <= 0:
-        return
-
-    account = _get_account('CASH')
-    supplier_name = instance.supplier.name if instance.supplier else 'مورد'
-
-    _create_transaction(
-        account=account,
-        t_type='EXPENSE',
-        category='PURCHASE',
-        amount=amount,
-        description=f'مشتريات من {supplier_name} — {instance.product.name if instance.product else ""}',
-        ref_type='purchase',
-        ref_id=instance.pk,
-        user=None,
-    )
+# ERP-FINANCIAL-OPERATIONS-005: purchase-creation treasury posting REMOVED.
+# Purchase.save() always creates a supplier payable (supplier.balance +=
+# total_amount) — the model has no "paid at creation" flag, so every
+# purchase is a CREDIT purchase. Posting a full EXPENSE here double-counted
+# the cash outflow: once at purchase creation and again at
+# SupplierViewSet.pay_debt, which posts the real EXPENSE when the debt is
+# actually settled. Historical PURCHASE ledger rows are kept as-is; new
+# purchases no longer deduct treasury cash until paid via pay_debt.
 
 
 @receiver(post_save, sender=Expense)

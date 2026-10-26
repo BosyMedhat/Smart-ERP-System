@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Home, Package, ShoppingCart, FileText, Brain, Zap, Users, Settings, Shield, CreditCard, FileCheck, LogOut, Receipt, Briefcase, Truck, HandCoins, Wallet, TrendingUp, ClipboardList, UserRound, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Screen } from '../App';
+import { useState, useEffect, useMemo } from 'react';
+import { ChevronLeft, ChevronRight, ChevronDown, LogOut } from 'lucide-react';
+import { Screen, NAV_GROUPS } from '../navigation';
 import { useTranslation } from 'react-i18next';
 import { hasScreenPermission } from '../../auth';
 import AlertsBell from './AlertsBell';
@@ -21,6 +21,7 @@ interface CachedSettings {
 export function Sidebar({ activeScreen, onScreenChange, currentUser, onLogout }: SidebarProps) {
   const { t } = useTranslation();
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [cachedSettings, setCachedSettings] = useState<CachedSettings>({
     system_name: 'Smart ERP',
     store_logo: null,
@@ -44,31 +45,63 @@ export function Sidebar({ activeScreen, onScreenChange, currentUser, onLogout }:
     };
 
     loadSettings();
-    // Listen for storage changes to update in real-time
     window.addEventListener('storage', loadSettings);
     return () => window.removeEventListener('storage', loadSettings);
   }, []);
 
-  const menuItems: { key: string; icon: typeof Home; label: string; screen: Screen }[] = [
-    { key: 'dashboard', icon: Home, label: t('nav.home'), screen: 'home' },
-    { key: 'inventory', icon: Package, label: t('nav.inventory'), screen: 'inventory' },
-    { key: 'pos', icon: ShoppingCart, label: t('nav.pos'), screen: 'pos' },
-    { key: 'sales', icon: Receipt, label: t('nav.sales'), screen: 'sales' },
-    { key: 'installments', icon: CreditCard, label: t('nav.installments'), screen: 'installments' },
-    { key: 'credit', icon: HandCoins, label: t('nav.credit'), screen: 'credit' },
-    { key: 'suppliers', icon: Truck, label: t('nav.suppliers'), screen: 'suppliers' },
-    { key: 'customers_pos', icon: UserRound, label: 'عملاء POS', screen: 'customers_pos' },
-    { key: 'quotations', icon: FileCheck, label: 'عروض الأسعار', screen: 'quotations' },
-    { key: 'hr', icon: Briefcase, label: t('nav.hr'), screen: 'hr' },
-    { key: 'ai', icon: Brain, label: t('nav.ai'), screen: 'ai' },
-    { key: 'automation', icon: Zap, label: 'الأتمتة', screen: 'automation' },
-    { key: 'roles', icon: Shield, label: 'الأدوار والصلاحيات', screen: 'roles' },
-    { key: 'settings', icon: Settings, label: t('nav.settings'), screen: 'settings' },
-    { key: 'reports', icon: FileText, label: t('nav.reports'), screen: 'reports' },
-    { key: 'pl', icon: TrendingUp, label: t('nav.pl') || 'الأرباح والخسائر', screen: 'pl' },
-    { key: 'audit', icon: ClipboardList, label: t('nav.audit') || 'سجل التدقيق', screen: 'audit' },
-    { key: 'treasury', icon: Wallet, label: t('nav.treasury'), screen: 'treasury' },
-  ];
+  const perms = currentUser?.permission_list ?? [];
+  const level = currentUser?.role_obj?.level;
+
+  /** Groups with only the items the user may see; empty groups dropped. */
+  const visibleGroups = useMemo(
+    () =>
+      NAV_GROUPS.map((g) => ({
+        ...g,
+        items: g.items.filter((i) => hasScreenPermission(perms, i.screen, level)),
+      })).filter((g) => g.items.length > 0),
+    [perms, level]
+  );
+
+  const activeGroupKey = visibleGroups.find((g) =>
+    g.items.some((i) => i.screen === activeScreen)
+  )?.key;
+
+  // Auto-open the group containing the active screen (never close others).
+  useEffect(() => {
+    if (activeGroupKey) {
+      setOpenGroups((prev) => (prev[activeGroupKey] ? prev : { ...prev, [activeGroupKey]: true }));
+    }
+  }, [activeGroupKey]);
+
+  const itemLabel = (item: { labelKey?: string; label?: string }) =>
+    item.labelKey ? t(item.labelKey, item.label ?? '') : item.label ?? '';
+
+  const renderItem = (item: (typeof NAV_GROUPS)[number]['items'][number]) => {
+    const Icon = item.icon;
+    const isActive = activeScreen === item.screen;
+    const label = itemLabel(item);
+    return (
+      <button
+        key={item.key}
+        onClick={() => onScreenChange(item.screen)}
+        title={isCollapsed ? label : undefined}
+        aria-current={isActive ? 'page' : undefined}
+        className={`flex items-center gap-3 rounded-xl transition-all flex-shrink-0 ${
+          isCollapsed
+            ? 'w-12 h-12 justify-center mx-auto'
+            : 'w-full h-10 px-3 justify-start'
+        } ${
+          isActive
+            ? 'text-sidebar-primary-foreground shadow-sm'
+            : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+        }`}
+        style={{ backgroundColor: isActive ? 'var(--primary-color)' : undefined }}
+      >
+        <Icon size={20} className="flex-shrink-0" />
+        {!isCollapsed && <span className="text-sm font-medium truncate">{label}</span>}
+      </button>
+    );
+  };
 
   return (
     <div
@@ -77,7 +110,7 @@ export function Sidebar({ activeScreen, onScreenChange, currentUser, onLogout }:
       } bg-sidebar flex flex-col py-4 gap-1 overflow-y-auto overflow-x-hidden transition-all duration-300 flex-shrink-0 border-l border-sidebar-border`}
     >
       {/* Logo + Toggle Row */}
-      <div className={`flex items-center mb-4 px-3 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+      <div className={`flex items-center mb-3 px-3 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
         {!isCollapsed && (
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {cachedSettings.store_logo ? (
@@ -108,7 +141,7 @@ export function Sidebar({ activeScreen, onScreenChange, currentUser, onLogout }:
           </div>
         )}
         <button
-          onClick={() => setIsCollapsed(prev => !prev)}
+          onClick={() => setIsCollapsed((prev) => !prev)}
           className="w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all flex-shrink-0"
           title={isCollapsed ? 'توسيع القائمة' : 'طي القائمة'}
         >
@@ -116,41 +149,56 @@ export function Sidebar({ activeScreen, onScreenChange, currentUser, onLogout }:
         </button>
       </div>
 
-      {/* Menu Items */}
-      <div className="flex flex-col gap-1 px-2 flex-1">
-        {menuItems
-          .filter(item => hasScreenPermission(
-            currentUser?.permission_list ?? [],
-            item.screen,
-            currentUser?.role_obj?.level
-          ))
-          .map((item) => {
-            const Icon = item.icon;
-            const isActive = activeScreen === item.screen;
+      {/* Navigation — grouped modules */}
+      <nav className="flex flex-col gap-1 px-2 flex-1" aria-label={t('nav.mainMenu', 'القائمة الرئيسية')}>
+        {visibleGroups.map((group) => {
+          const single = group.items.length === 1;
+          const open = isCollapsed || single || openGroups[group.key] === true || group.key === activeGroupKey;
+
+          // Collapsed icon rail: flat items only (no group headers).
+          if (isCollapsed) {
             return (
-              <button
-                key={item.key}
-                onClick={() => onScreenChange(item.screen)}
-                title={isCollapsed ? item.label : undefined}
-                className={`flex items-center gap-3 rounded-xl transition-all flex-shrink-0 ${
-                  isCollapsed
-                    ? 'w-12 h-12 justify-center mx-auto'
-                    : 'w-full h-11 px-3 justify-start'
-                } ${
-                  isActive
-                    ? 'text-sidebar-primary-foreground'
-                    : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground'
-                }`}
-                style={{ backgroundColor: isActive ? 'var(--primary-color)' : undefined }}
-              >
-                <Icon size={20} className="flex-shrink-0" />
-                {!isCollapsed && (
-                  <span className="text-sm font-medium truncate">{item.label}</span>
-                )}
-              </button>
+              <div key={group.key} className="contents">
+                {group.items.map(renderItem)}
+              </div>
             );
-          })}
-      </div>
+          }
+
+          // Single-item groups render as plain top-level items (no header).
+          if (single) {
+            return (
+              <div key={group.key} className="contents">
+                {group.items.map(renderItem)}
+              </div>
+            );
+          }
+
+          return (
+            <div key={group.key} className="mb-1">
+              <button
+                onClick={() =>
+                  setOpenGroups((prev) => ({ ...prev, [group.key]: !open }))
+                }
+                className="w-full flex items-center justify-between px-3 h-8 text-xs font-semibold tracking-wide text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors"
+                aria-expanded={open}
+              >
+                <span className="truncate">{t(group.labelKey)}</span>
+                <ChevronDown
+                  size={14}
+                  className={`flex-shrink-0 transition-transform duration-200 ${open ? '' : 'ltr:-rotate-90 rtl:rotate-90'}`}
+                />
+              </button>
+              <div
+                className={`flex flex-col gap-0.5 overflow-hidden transition-all duration-200 ${
+                  open ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                }`}
+              >
+                {group.items.map(renderItem)}
+              </div>
+            </div>
+          );
+        })}
+      </nav>
 
       {/* Alerts Bell */}
       <div className={`px-2 ${isCollapsed ? 'flex justify-center' : ''}`}>

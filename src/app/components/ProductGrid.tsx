@@ -1,6 +1,7 @@
 import { Search, Barcode, Mic, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Product } from '../App';
+import { ProductImage } from './ProductImage';
 import { formatCurrency } from '../utils/currency';
 import { notify } from '../../lib/notifications';
 
@@ -87,7 +88,7 @@ export function ProductGrid({
 
       {/* Product Grid */}
       <div className="flex-1 bg-card rounded-xl p-3 shadow-sm overflow-y-auto border border-border">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {products.map((product) => {
             const stock = Number(product.current_stock || 0);
             const minLevel = Number(product.min_stock_level || 5);
@@ -111,8 +112,11 @@ export function ProductGrid({
                     : 'bg-card border-border hover:border-[#3B82F6] hover:bg-blue-500/5 hover:shadow-md active:scale-95'
                 }`}
               >
-                <div className="font-bold text-card-foreground text-sm leading-tight mb-1 line-clamp-2">
-                  {product.name}
+                <div className="flex items-center gap-2 mb-1">
+                  <ProductImage src={product.image} alt={product.name} size="sm" />
+                  <div className="font-bold text-card-foreground text-sm leading-tight line-clamp-2 min-w-0">
+                    {product.name}
+                  </div>
                 </div>
                 <div className="text-xs text-muted-foreground mb-2">{product.category}</div>
                 <div className="text-base font-bold text-[#3B82F6]">

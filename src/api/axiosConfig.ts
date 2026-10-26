@@ -30,18 +30,37 @@ apiClient.interceptors.request.use((config) => {
 });
 
 // Interceptor: لو جاء 401/403 → logout + رسالة عربية + redirect
+// Guard so several parallel 401s trigger one logout/redirect, not a reload storm.
+let handling401 = false;
+let last429Warn = 0;
+
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
-            // Session expired or not authenticated
-            localStorage.removeItem('erp_user');
-            // Dispatch custom event for notification
-            window.dispatchEvent(new CustomEvent('sessionExpired'));
-            window.location.href = '/';
-        } else if (error.response?.status === 403) {
+        const status = error.response?.status;
+        if (status === 401) {
+            if (!handling401) {
+                handling401 = true;
+                // Session expired or not authenticated
+                localStorage.removeItem('erp_user');
+                // Dispatch custom event for notification
+                window.dispatchEvent(new CustomEvent('sessionExpired'));
+                window.location.href = '/';
+            }
+        } else if (status === 403) {
             // Forbidden - no permission
             console.error('403 Forbidden:', error.response.data);
+        } else if (status === 429) {
+            // Throttled — surface a single warning; components must not
+            // auto-retry faster than their normal poll interval.
+            const wait = error.response.headers?.['retry-after'];
+            if (Date.now() - last429Warn > 30_000) {
+                last429Warn = Date.now();
+                console.warn(
+                    `429 Too Many Requests${wait ? ` — retry after ${wait}s` : ''}:`,
+                    error.config?.url
+                );
+            }
         }
         return Promise.reject(error);
     }

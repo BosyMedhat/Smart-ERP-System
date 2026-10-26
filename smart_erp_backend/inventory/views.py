@@ -30,6 +30,7 @@ from .serializers import (
 )
 from .permissions import (
     CanManageProducts,
+    CanAccessProducts,
     CanManageInvoices,
     CanManageEmployees,
     CanManageSuppliers,
@@ -43,12 +44,13 @@ from .permissions import (
     CanViewDashboard,
     IsManagerRole,
 )
+from hr.permissions import EmployeeRecordPermission
 
 # 1. المنتجات
 class ProductViewSet(viewsets.ModelViewSet): 
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    permission_classes = [CanManageProducts]
+    permission_classes = [CanAccessProducts]
 
 # 2. الفواتير (نظام البيع وخصم المخزن)
 class InvoiceViewSet(viewsets.ModelViewSet):
@@ -106,7 +108,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
-    permission_classes = [CanManageEmployees]
+    # ERP-CORE-STABILIZATION-001: RBAC hr:* permissions (was legacy JSON-perm check)
+    permission_classes = [EmployeeRecordPermission]
 
 # 4. المصاريف (معدلة لتخصم من الخزينة تلقائياً)
 class ExpenseViewSet(viewsets.ModelViewSet):
@@ -115,14 +118,13 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsManager]
 
     def perform_create(self, serializer):
-        # حفظ المصروف
-        expense = serializer.save()
-        # خصم المبلغ من الخزينة فوراً
-        Treasury.objects.create(
-            transaction_type='خرج',
-            amount=expense.amount,
-            reason=f"مصروف عام: {expense.title}"
-        )
+        # ERP-CORE-STABILIZATION-001:
+        # - Fixed AttributeError (expense.title → field is `type`)
+        # - Removed legacy flat-Treasury write; the authoritative ledger
+        #   entry is created by treasury.signals.handle_expense_treasury.
+        # - Atomic: if the ledger posting fails, the Expense row rolls back.
+        with transaction.atomic():
+            serializer.save()
 
 # 5. الخزينة
 class TreasuryViewSet(viewsets.ModelViewSet):
@@ -302,44 +304,72 @@ class InstallmentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def pay(self, request, pk=None):
         from django.db import transaction as db_transaction
-        from decimal import Decimal
+        from decimal import Decimal, InvalidOperation
         from treasury.models import TreasuryAccount, TreasuryTransaction
+        from treasury.signals import PAYMENT_TO_ACCOUNT
 
-        installment = self.get_object()
-        amount = float(request.data.get('amount', 0))
+        # ERP-INSTALLMENT-INTEGRITY-004B: Decimal math + strict guards.
+        # Overpayment is REJECTED (was silently capped) and canceled/paid
+        # plans can no longer accept payments.
+        # ERP-FINANCIAL-OPERATIONS-005: payment_method routes the collection
+        # to the matching treasury account (was hardcoded CASH).
+        try:
+            amount = Decimal(str(request.data.get('amount', '0')))
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({'error': 'قيمة المبلغ غير صالحة'}, status=400)
+
         if amount <= 0:
             return Response({'error': 'المبلغ يجب أن يكون أكبر من صفر'}, status=400)
 
-        actual_paid = min(amount, float(installment.remaining_amount))
-        new_remaining = max(0, float(installment.remaining_amount) - amount)
+        payment_method = request.data.get('payment_method', 'cash')
+        account_name = PAYMENT_TO_ACCOUNT.get(payment_method)
+        if not account_name:
+            return Response({'error': 'طريقة الدفع غير مدعومة'}, status=400)
 
         with db_transaction.atomic():
-            installment.remaining_amount = new_remaining
-            installment.is_paid = new_remaining <= 0
+            installment = Installment.objects.select_for_update().get(pk=pk)
+
+            if installment.status == 'canceled':
+                return Response(
+                    {'error': 'لا يمكن التحصيل على خطة تقسيط ملغاة'},
+                    status=400
+                )
+            if installment.is_paid or installment.remaining_amount <= Decimal('0'):
+                return Response(
+                    {'error': 'تم سداد خطة التقسيط بالكامل'},
+                    status=400
+                )
+            if amount > installment.remaining_amount:
+                return Response(
+                    {'error': f'المبلغ ({amount}) يتجاوز المتبقي ({installment.remaining_amount})'},
+                    status=400
+                )
+
+            installment.remaining_amount -= amount
+            installment.is_paid = installment.remaining_amount <= Decimal('0')
             installment.save()
 
             # ISS-07 FIX: record installment collection in Treasury Ledger
-            if actual_paid > 0:
-                acc, _ = TreasuryAccount.objects.get_or_create(
-                    name='CASH',
-                    defaults={'display_name': 'CASH', 'balance': Decimal('0')}
-                )
-                acc_locked = TreasuryAccount.objects.select_for_update().get(pk=acc.pk)
-                acc_locked.balance += Decimal(str(actual_paid))
-                acc_locked.save()
-                invoice_num = installment.sale.invoice_number if installment.sale else str(installment.pk)
-                TreasuryTransaction.objects.create(
-                    account=acc_locked,
-                    transaction_type='INCOME',
-                    category='INSTALLMENT',
-                    amount=Decimal(str(actual_paid)),
-                    balance_after=acc_locked.balance,
-                    description=f'تحصيل قسط — فاتورة {invoice_num}',
-                    reference_type='installment',
-                    reference_id=installment.pk,
-                    created_by=request.user,
-                    is_auto=True,
-                )
+            acc, _ = TreasuryAccount.objects.get_or_create(
+                name=account_name,
+                defaults={'display_name': account_name, 'balance': Decimal('0')}
+            )
+            acc_locked = TreasuryAccount.objects.select_for_update().get(pk=acc.pk)
+            acc_locked.balance += amount
+            acc_locked.save()
+            invoice_num = installment.sale.invoice_number if installment.sale else str(installment.pk)
+            TreasuryTransaction.objects.create(
+                account=acc_locked,
+                transaction_type='INCOME',
+                category='INSTALLMENT',
+                amount=amount,
+                balance_after=acc_locked.balance,
+                description=f'تحصيل قسط — فاتورة {invoice_num}',
+                reference_type='installment',
+                reference_id=installment.pk,
+                created_by=request.user,
+                is_auto=True,
+            )
 
         return Response({
             'success': True,
@@ -424,50 +454,70 @@ class SupplierViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def pay_debt(self, request, pk=None):
         from django.db import transaction as db_transaction
+        from decimal import InvalidOperation
         from treasury.models import TreasuryAccount, TreasuryTransaction
+        from treasury.signals import PAYMENT_TO_ACCOUNT
 
-        supplier = self.get_object()
-        amount = float(request.data.get('amount', 0))
+        # ERP-FINANCIAL-OPERATIONS-005: Decimal math, payment-method routing,
+        # overpayment rejection (was float + silent cap to balance).
+        try:
+            amount = Decimal(str(request.data.get('amount', '0')))
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({'error': 'قيمة المبلغ غير صالحة'}, status=400)
         if amount <= 0:
             return Response({'error': 'المبلغ يجب أن يكون أكبر من صفر'}, status=400)
 
+        payment_method = request.data.get('payment_method', 'cash')
+        account_name = PAYMENT_TO_ACCOUNT.get(payment_method)
+        if not account_name:
+            return Response({'error': 'طريقة الدفع غير مدعومة'}, status=400)
+
         with db_transaction.atomic():
-            supplier_locked = Supplier.objects.select_for_update().get(pk=supplier.pk)
-            actual_payment = min(amount, float(supplier_locked.balance))
-            new_balance = max(0, float(supplier_locked.balance) - actual_payment)
-            supplier_locked.balance = new_balance
+            supplier_locked = Supplier.objects.select_for_update().get(pk=pk)
+
+            if supplier_locked.balance <= Decimal('0'):
+                return Response(
+                    {'error': 'لا يوجد دين مستحق على هذا المورد'},
+                    status=400
+                )
+            if amount > supplier_locked.balance:
+                return Response(
+                    {'error': f'المبلغ ({amount}) يتجاوز الدين المستحق ({supplier_locked.balance})'},
+                    status=400
+                )
+
+            supplier_locked.balance -= amount
             supplier_locked.save()
 
             # Financial Integrity: record supplier payment in Treasury Ledger
-            if actual_payment > 0:
-                acc, _ = TreasuryAccount.objects.get_or_create(
-                    name='CASH',
-                    defaults={
-                        'display_name': 'الخزينة النقدية',
-                        'balance': Decimal('0')
-                    }
-                )
-                acc_locked = TreasuryAccount.objects.select_for_update().get(pk=acc.pk)
-                acc_locked.balance -= Decimal(str(actual_payment))
-                acc_locked.save()
+            acc, _ = TreasuryAccount.objects.get_or_create(
+                name=account_name,
+                defaults={
+                    'display_name': account_name,
+                    'balance': Decimal('0')
+                }
+            )
+            acc_locked = TreasuryAccount.objects.select_for_update().get(pk=acc.pk)
+            acc_locked.balance -= amount
+            acc_locked.save()
 
-                TreasuryTransaction.objects.create(
-                    account=acc_locked,
-                    transaction_type='EXPENSE',
-                    category='PURCHASE',
-                    amount=Decimal(str(actual_payment)),
-                    balance_after=acc_locked.balance,
-                    description=f'سداد دين مورد: {supplier.name}',
-                    reference_type='supplier_payment',
-                    reference_id=supplier.pk,
-                    created_by=request.user,
-                    is_auto=True,
-                )
+            TreasuryTransaction.objects.create(
+                account=acc_locked,
+                transaction_type='EXPENSE',
+                category='PURCHASE',
+                amount=amount,
+                balance_after=acc_locked.balance,
+                description=f'سداد دين مورد: {supplier_locked.name}',
+                reference_type='supplier_payment',
+                reference_id=supplier_locked.pk,
+                created_by=request.user,
+                is_auto=True,
+            )
 
         return Response({
             'success': True,
             'balance': supplier_locked.balance,
-            'paid_amount': actual_payment,
+            'paid_amount': amount,
         })
 
     @action(detail=True, methods=['get'], url_path='evaluations')
@@ -605,6 +655,149 @@ class SaleViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), CanMakeSales()]
         return [IsAuthenticated(), CanViewDashboard()]
 
+    # ── ERP-CORE-STABILIZATION-001: posted sales are immutable ──
+    # Sales may only be created, listed, or VOIDED via the dedicated action.
+    # Direct update/delete would desync stock, treasury and receivables.
+    def _immutable_response(self):
+        return Response(
+            {'error': 'الفواتير المرحلة لا يمكن تعديلها أو حذفها. استخدم الإلغاء (void) بدلاً من ذلك.',
+             'detail': 'POST /api/sales/{id}/void/ (مدير فقط)'},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+
+    def update(self, request, *args, **kwargs):
+        return self._immutable_response()
+
+    def partial_update(self, request, *args, **kwargs):
+        return self._immutable_response()
+
+    def destroy(self, request, *args, **kwargs):
+        return self._immutable_response()
+
+    @action(detail=True, methods=['post'], url_path='void')
+    def void(self, request, pk=None):
+        """
+        POST /api/sales/{id}/void/
+        Reverses a posted sale without deleting it:
+          - restores stock (writes StockMovement)
+          - posts compensating treasury entries (immutable ledger)
+          - reverses customer credit balance
+          - cancels installments and refunds collected payments
+        Requires sales:void permission (manager-level). Idempotent.
+        """
+        from accounts.permissions import has_permission
+        from audit.utils import log_action, get_client_ip
+        from treasury.models import TreasuryAccount, TreasuryTransaction
+
+        if not has_permission(request.user, 'sales', 'void'):
+            return Response(
+                {'error': 'غير مصرح بإلغاء فواتير البيع'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        reason = (request.data.get('reason') or '').strip()
+
+        try:
+            with transaction.atomic():
+                sale = Sale.objects.select_for_update().get(pk=pk)
+
+                if sale.status == 'voided':
+                    return Response(
+                        {'error': 'الفاتورة ملغاة بالفعل', 'detail': 'لا يمكن إلغاء فاتورة ملغاة مرة أخرى'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # 1) Restore stock + movement trail
+                for item in sale.items.all():
+                    if item.product_id:
+                        Product.objects.filter(pk=item.product_id).update(
+                            current_stock=models_F('current_stock') + item.quantity
+                        )
+                        StockMovement.objects.create(
+                            product_id=item.product_id,
+                            type='ADJUST',
+                            quantity=item.quantity,
+                            reason=f'استرجاع — إلغاء فاتورة {sale.invoice_number}'
+                        )
+
+                # 2) Compensating treasury entries (immutable: we never delete ledger rows)
+                def _reverse_txn(source_txn, desc):
+                    acc = TreasuryAccount.objects.select_for_update().get(
+                        pk=source_txn.account_id
+                    )
+                    acc.balance -= source_txn.amount
+                    acc.save()
+                    TreasuryTransaction.objects.create(
+                        account=acc,
+                        transaction_type='EXPENSE',
+                        category=source_txn.category,
+                        amount=source_txn.amount,
+                        balance_after=acc.balance,
+                        description=desc,
+                        reference_type='sale_void',
+                        reference_id=sale.pk,
+                        created_by=request.user,
+                        is_auto=True,
+                    )
+
+                if sale.payment_type in ('cash', 'vodafone_cash', 'instapay', 'card'):
+                    for txn in TreasuryTransaction.objects.filter(
+                        reference_type='sale', reference_id=sale.pk,
+                        transaction_type='INCOME'
+                    ):
+                        _reverse_txn(txn, f'عكس تحصيل — إلغاء فاتورة {sale.invoice_number}')
+
+                elif sale.payment_type == 'credit' and sale.customer_id:
+                    Customer.objects.filter(pk=sale.customer_id).update(
+                        balance=models_F('balance') - sale.final_amount
+                    )
+
+                elif sale.payment_type == 'installment':
+                    installments = list(sale.installments.all())
+                    # refund down-payment txn (ref_type='sale')
+                    for txn in TreasuryTransaction.objects.filter(
+                        reference_type='sale', reference_id=sale.pk,
+                        transaction_type='INCOME'
+                    ):
+                        _reverse_txn(txn, f'عكس مقدم — إلغاء فاتورة {sale.invoice_number}')
+                    # refund any collected installment payments (ref_type='installment')
+                    inst_ids = [i.pk for i in installments]
+                    if inst_ids:
+                        for txn in TreasuryTransaction.objects.filter(
+                            reference_type='installment', reference_id__in=inst_ids,
+                            transaction_type='INCOME'
+                        ):
+                            _reverse_txn(txn, f'رد قسط — إلغاء فاتورة {sale.invoice_number}')
+                    sale.installments.update(status='canceled')
+
+                # 3) Mark the sale voided
+                sale.status = 'voided'
+                sale.voided_at = timezone.now()
+                sale.voided_by = request.user
+                sale.void_reason = reason
+                sale.save(update_fields=['status', 'voided_at', 'voided_by', 'void_reason'])
+
+                log_action(
+                    user=request.user,
+                    action='VOID',
+                    model_name='Sale',
+                    object_id=sale.pk,
+                    object_repr=f'{sale.invoice_number} — {sale.final_amount}',
+                    ip_address=get_client_ip(request),
+                    extra_data={'reason': reason, 'payment_type': sale.payment_type},
+                )
+
+                return Response({
+                    'success': True,
+                    'message': f'تم إلغاء الفاتورة {sale.invoice_number} مع عكس كل الآثار المالية والمخزنية',
+                    'invoice_number': sale.invoice_number,
+                    'status': 'voided',
+                })
+        except Sale.DoesNotExist:
+            return Response({'error': 'الفاتورة غير موجودة'},
+                            status=status.HTTP_404_NOT_FOUND)
+
+
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
             from .serializers import SaleWriteSerializer
@@ -614,7 +807,8 @@ class SaleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         from django.db import transaction
-        from django.core.exceptions import ValidationError
+        # DRF ValidationError → proper HTTP 400 (django.core ValidationError → 500)
+        from rest_framework.serializers import ValidationError
         from .models import StoreSettings, Installment
         from decimal import Decimal
         import datetime
@@ -709,17 +903,26 @@ class SaleViewSet(viewsets.ModelViewSet):
             )
 
             # Deduct stock for each sale item
+            # ERP-CORE-STABILIZATION-001: atomic conditional UPDATE — the
+            # database row itself enforces current_stock >= qty, so two
+            # concurrent sales can never oversell (check-then-save raced).
             for item in sale.items.all():
-                if item.product:
-                    product = item.product
-                    if product.current_stock >= item.quantity:
-                        product.current_stock -= item.quantity
-                        product.save()
-                    else:
+                if item.product_id:
+                    qty = Decimal(str(item.quantity))
+                    updated = Product.objects.filter(
+                        pk=item.product_id,
+                        current_stock__gte=qty
+                    ).update(current_stock=models_F('current_stock') - qty)
+                    if not updated:
                         raise ValidationError(
-                            f"المخزون غير كافٍ للمنتج: {product.name} "
-                            f"(المطلوب: {item.quantity}, المتاح: {product.current_stock})"
+                            f"المخزون غير كافٍ للمنتج: {item.product.name}"
                         )
+                    StockMovement.objects.create(
+                        product_id=item.product_id,
+                        type='SALE',
+                        quantity=qty,
+                        reason=f'بيع — فاتورة {sale.invoice_number}'
+                    )
 
             # If credit: add to customer balance
             if payment_type == 'credit' and sale.customer:
@@ -745,15 +948,26 @@ class SaleViewSet(viewsets.ModelViewSet):
                         {'down_payment': f'المقدم ({down_payment}) لا يمكن أن يتجاوز إجمالي الفاتورة ({final_amount})'}
                     )
 
-                # ISS-05: Validate months_count
+                # ISS-05: Validate months_count.
+                # ERP-INSTALLMENT-INTEGRITY-004B: accept the legacy
+                # 'num_installments' alias — silently ignoring it used to
+                # produce 1-month plans with monthly_amount == amount.
+                months_raw = self.request.data.get(
+                    'months_count',
+                    self.request.data.get('num_installments', 1)
+                )
                 try:
-                    months_count = int(self.request.data.get('months_count', 1))
+                    months_count = int(months_raw)
                 except (ValueError, TypeError):
                     raise serializers.ValidationError({'months_count': 'عدد الأشهر غير صالح'})
 
                 if months_count < 1:
                     raise serializers.ValidationError(
                         {'months_count': 'عدد الأشهر يجب أن يكون 1 على الأقل'}
+                    )
+                if months_count > 120:
+                    raise serializers.ValidationError(
+                        {'months_count': 'عدد الأشهر لا يمكن أن يتجاوز 120'}
                     )
 
                 due_date_str = self.request.data.get('due_date', None)
@@ -818,10 +1032,10 @@ class DashboardView(APIView):
     def get(self, request):
         today = timezone.now().date()
 
-        # مبيعات اليوم
+        # مبيعات اليوم (exclude voided — ERP-CORE-STABILIZATION-001)
         today_sales = Sale.objects.filter(
             created_at__date=today
-        )
+        ).exclude(status='voided')
         total_sales_today = today_sales.aggregate(
             total=Sum('final_amount')
         )['total'] or 0
@@ -857,7 +1071,9 @@ class DashboardView(APIView):
 
         # مبيعات الشهر الحالي (ERP-DASH-001B)
         first_day_of_month = today.replace(day=1)
-        month_sales = Sale.objects.filter(created_at__date__gte=first_day_of_month)
+        month_sales = Sale.objects.filter(
+            created_at__date__gte=first_day_of_month
+        ).exclude(status='voided')
         total_sales_month = month_sales.aggregate(
             total=Sum('final_amount')
         )['total'] or 0
@@ -869,7 +1085,7 @@ class DashboardView(APIView):
             day = today - timedelta(days=i)
             day_total = Sale.objects.filter(
                 created_at__date=day
-            ).aggregate(
+            ).exclude(status='voided').aggregate(
                 total=Sum('final_amount')
             )['total'] or 0
             sales_chart.append({
@@ -963,12 +1179,14 @@ class AlertsView(APIView):
 
             overdue = Installment.objects.filter(
                 is_paid=False,
+                status='active',
                 due_date__lt=today,
                 remaining_amount__gt=0,
             ).select_related('sale__customer')[:10]
 
             due_today = Installment.objects.filter(
                 is_paid=False,
+                status='active',
                 due_date=today,
                 remaining_amount__gt=0,
             ).select_related('sale__customer')[:10]

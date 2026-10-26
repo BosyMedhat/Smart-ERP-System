@@ -104,11 +104,23 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
+        'core.throttling.ReadBurstThrottle',
+        'core.throttling.ReadDailyThrottle',
+        'core.throttling.WriteRateThrottle',
     ],
+    # Method-aware scopes (see core/throttling.py):
+    #   anon       — unauthenticated traffic incl. /login/ (brute-force guard)
+    #   read_burst — per-minute authenticated reads (kills retry loops)
+    #   read_daily — daily authenticated reads (covers heavy legit usage:
+    #                dashboard 4 req/min + products + alerts ≈ 3,500/day)
+    #   write      — mutations keep the original 1000/day budget
+    # Override per-environment via env vars, e.g. production may prefer
+    # DRF_THROTTLE_READ_DAILY=3000/day while dev can raise it.
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/day',
-        'user': '1000/day',
+        'anon': os.environ.get('DRF_THROTTLE_ANON', '100/day'),
+        'read_burst': os.environ.get('DRF_THROTTLE_READ_BURST', '60/minute'),
+        'read_daily': os.environ.get('DRF_THROTTLE_READ_DAILY', '5000/day'),
+        'write': os.environ.get('DRF_THROTTLE_WRITE', '1000/day'),
     },
 }
 

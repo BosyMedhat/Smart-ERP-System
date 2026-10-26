@@ -26,6 +26,7 @@ from inventory.views import (
     SupplierEvaluationViewSet,
     SupplierProductRankingViewSet,
     AlertsView,  # Smart Alerts API
+    get_pricing_config,  # ERP-CORE-STABILIZATION-001: wire pricing config endpoint
 )
 
 # إنشاء الـ Router الرئيسي للمشروع
@@ -60,6 +61,7 @@ urlpatterns = [
     path('api/reports/', include('reports.urls')),
     path('api/hr/', include('hr.urls')),
     path('api/audit/', include('audit.urls')),
+    path('api/pricing-config/', get_pricing_config, name='pricing-config'),
     path('api/products/barcode/<str:barcode>/', ProductByBarcodeView.as_view()),
     path('api/alerts/', AlertsView.as_view(), name='alerts'),
     path('api/accounts/', include('accounts.urls')),

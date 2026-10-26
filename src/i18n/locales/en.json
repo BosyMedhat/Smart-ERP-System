@@ -59,7 +59,25 @@
     "credit": "Credit",
     "pl": "P&L Report",
     "audit": "Audit Log",
-    "logout": "Logout"
+    "logout": "Logout",
+    "groups": {
+      "overview": "Overview",
+      "sales": "Sales & POS",
+      "inventory": "Inventory",
+      "purchasing": "Purchasing",
+      "customers": "Customers",
+      "finance": "Finance",
+      "hr": "Human Resources",
+      "reports": "Reports & Analytics",
+      "ai": "AI & Automation",
+      "admin": "Administration"
+    },
+    "posCustomers": "POS Customers",
+    "quotations": "Quotations",
+    "automation": "Automation",
+    "roles": "Roles & Permissions",
+    "profile": "Profile",
+    "mainMenu": "Main Menu"
   },
   "auth": {
     "login": "Login",
@@ -107,7 +125,8 @@
     "searchProduct": "Search product or barcode",
     "customer": "Customer",
     "downPayment": "Down Payment",
-    "months": "Number of Months"
+    "months": "Number of Months",
+    "subtotal": "Subtotal"
   },
   "inventory": {
     "title": "Inventory Management",
@@ -230,7 +249,12 @@
     "validationError": "Please check the entered data",
     "loadFailed": "Failed to load data",
     "saveFailed": "Failed to save data",
-    "deleteFailed": "Failed to delete data"
+    "deleteFailed": "Failed to delete data",
+    "accessDeniedTitle": "Access Denied",
+    "accessDeniedBody": "You do not have permission to view this page. Contact your administrator if you believe this is a mistake.",
+    "notFoundTitle": "Page Not Found",
+    "notFoundBody": "The link you are trying to reach does not exist or has been moved.",
+    "goHome": "Back to Home"
   },
   "notifications": {
     "savedSuccess": "Saved successfully",

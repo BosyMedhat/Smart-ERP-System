@@ -17,6 +17,7 @@ export async function fetchTransactions(params?: {
   category?: string;
   date_from?: string;
   date_to?: string;
+  search?: string;
 }): Promise<TreasuryTransaction[]> {
   const res = await apiClient.get('treasury/transactions/', { params });
   return res.data;

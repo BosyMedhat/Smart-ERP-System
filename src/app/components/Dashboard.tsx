@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../api/axiosConfig';
+import { usePolling } from '../hooks/usePolling';
 import { formatCurrency } from '../utils/currency';
 import { useTranslation } from 'react-i18next';
 import {
@@ -177,16 +178,16 @@ export function Dashboard({ onStartDemo }: DashboardProps = {}) {
     };
     
     loadAllData();
-    
-    // Refresh every 30 seconds
-    const interval = setInterval(() => {
-      fetchDashboard();
-      fetchShiftStatus();
-      fetchDebtors();
-      fetchDueInstallments();
-    }, 30000);
-    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refresh every 60 seconds, paused while the tab is hidden
+  usePolling(() => {
+    fetchDashboard();
+    fetchShiftStatus();
+    fetchDebtors();
+    fetchDueInstallments();
+  }, 60000);
 
 
   // Dynamic quick actions based on shift status

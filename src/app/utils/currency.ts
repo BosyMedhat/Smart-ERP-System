@@ -11,7 +11,7 @@
  * Components can listen for changes: window.addEventListener('currencyChanged', ...)
  */
 
-import apiClient from '../../api/axiosConfig';
+import { cachedGet } from './apiCache';
 
 // Currency symbol mapping
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -33,39 +33,42 @@ const CURRENCY_LOCALES: Record<string, string> = {
 let _currentCurrencyCode: string | null = null;
 
 /**
- * Fetch currency directly from StoreSettings API (Source of Truth)
- * Updates localStorage cache and notifies listeners
+ * Apply currency from an already-fetched StoreSettings object.
+ * Use this when the caller already has the settings payload — avoids a
+ * redundant GET /settings/1/.
+ */
+export const applyCurrencyData = (settingsData: any): string => {
+  const currency = settingsData?.currency;
+  if (currency && CURRENCY_SYMBOLS[currency]) {
+    _currentCurrencyCode = currency;
+    try {
+      const settings = localStorage.getItem('storeSettings');
+      const parsed = settings ? JSON.parse(settings) : {};
+      parsed.currency = currency;
+      localStorage.setItem('storeSettings', JSON.stringify(parsed));
+    } catch (e) {
+      console.warn('Failed to update currency cache in localStorage:', e);
+    }
+    window.dispatchEvent(new CustomEvent('currencyChanged', {
+      detail: { currency, symbol: CURRENCY_SYMBOLS[currency] }
+    }));
+    return currency;
+  }
+  return getCurrencyCode();
+};
+
+/**
+ * Fetch currency from StoreSettings API (Source of Truth).
+ * Uses the shared GET cache — deduplicated with other settings consumers.
  */
 export const fetchCurrencyFromAPI = async (): Promise<string> => {
   try {
-    const response = await apiClient.get('/settings/1/');
-    const currency = response.data?.currency;
-    
-    if (currency && CURRENCY_SYMBOLS[currency]) {
-      // Update in-memory cache
-      _currentCurrencyCode = currency;
-      
-      // Update localStorage cache (for persistence)
-      try {
-        const settings = localStorage.getItem('storeSettings');
-        const parsed = settings ? JSON.parse(settings) : {};
-        parsed.currency = currency;
-        localStorage.setItem('storeSettings', JSON.stringify(parsed));
-      } catch (e) {
-        console.warn('Failed to update currency cache in localStorage:', e);
-      }
-      
-      // Notify all listeners that currency has changed
-      window.dispatchEvent(new CustomEvent('currencyChanged', { 
-        detail: { currency, symbol: CURRENCY_SYMBOLS[currency] }
-      }));
-      
-      return currency;
-    }
+    const data = await cachedGet('/settings/1/', 60_000);
+    return applyCurrencyData(data);
   } catch (error) {
     console.error('Failed to fetch currency from API:', error);
   }
-  
+
   // Return cached value or fallback
   return getCurrencyCode();
 };

@@ -24,6 +24,7 @@ class InstallmentSerializer(serializers.ModelSerializer):
     invoice_number = serializers.CharField(source='sale.invoice_number', read_only=True)
     sale_final_amount = serializers.DecimalField(source='sale.final_amount', max_digits=12, decimal_places=2, read_only=True)
     monthly_amount = serializers.SerializerMethodField()
+    schedule = serializers.SerializerMethodField()
 
     def get_customer_name(self, obj):
         if obj.sale and obj.sale.customer:
@@ -31,9 +32,32 @@ class InstallmentSerializer(serializers.ModelSerializer):
         return 'عميل نقدي'
 
     def get_monthly_amount(self, obj):
+        # Regular payment = amount/months_count rounded to 2dp.
+        # The schedule absorbs any rounding remainder into the last payment.
+        from decimal import Decimal, ROUND_HALF_UP
         if obj.months_count and obj.months_count > 0:
-            return round(float(obj.amount) / obj.months_count, 2)
-        return float(obj.amount)
+            return (Decimal(str(obj.amount)) / obj.months_count).quantize(
+                Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return obj.amount
+
+    def get_schedule(self, obj):
+        # ERP-INSTALLMENT-INTEGRITY-004B: explicit schedule that reconciles
+        # exactly to `amount` — months-1 equal payments, last payment
+        # absorbs the rounding remainder (e.g. 100/3 -> 33.33,33.33,33.34).
+        from decimal import Decimal, ROUND_HALF_UP
+        amount = Decimal(str(obj.amount))
+        n = int(obj.months_count or 1)
+        if n < 1:
+            n = 1
+        monthly = (amount / n).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        payments = []
+        for i in range(1, n + 1):
+            if i < n:
+                payment = monthly
+            else:
+                payment = amount - monthly * (n - 1)
+            payments.append({'number': i, 'amount': str(payment)})
+        return payments
 
     class Meta:
         model = Installment
@@ -217,9 +241,13 @@ class SaleSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'invoice_number', 'customer', 'customer_name',
             'cashier', 'cashier_name', 'total_amount', 'discount_type', 'discount', 'tax_amount',
-            'final_amount', 'payment_type', 'notes', 'created_at', 'items'
+            'final_amount', 'payment_type', 'notes', 'created_at', 'items',
+            'status', 'voided_at', 'voided_by', 'void_reason'
         ]
-        read_only_fields = ['invoice_number', 'cashier', 'tax_amount', 'final_amount']
+        read_only_fields = [
+            'invoice_number', 'cashier', 'tax_amount', 'final_amount',
+            'status', 'voided_at', 'voided_by', 'void_reason'
+        ]
 
 class SaleItemWriteSerializer(serializers.ModelSerializer):
     """Serializer للكتابة (إنشاء) SaleItem"""

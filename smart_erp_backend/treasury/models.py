@@ -49,6 +49,8 @@ class TreasuryTransaction(models.Model):
         ('ELECTRICITY', 'كهرباء'),
         ('MAINTENANCE', 'صيانة'),
         ('MANUAL',      'إدخال يدوي'),
+        ('COLLECTION',  'تحصيل دين'),
+        ('SALE_VOID',   'عكس فاتورة ملغاة'),
         ('OTHER',       'أخرى'),
     ]
 

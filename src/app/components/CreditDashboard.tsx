@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { notify } from '@/lib/notifications';
 import { DollarSign, Phone, Mail, Search, X, TrendingDown } from 'lucide-react';
@@ -30,10 +30,15 @@ export function CreditDashboard() {
   const [showCollectModal, setShowCollectModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [collectAmount, setCollectAmount] = useState('');
+  const [collectMethod, setCollectMethod] = useState<'cash' | 'vodafone_cash' | 'instapay' | 'card'>('cash');
+  const [collecting, setCollecting] = useState(false);
+  const collectingRef = useRef(false);
+  const [loadError, setLoadError] = useState('');
   const [activeTab, setActiveTab] = useState<'debtors' | 'history'>('debtors');
 
   const fetchData = async () => {
     try {
+      setLoadError('');
       const [custRes, salesRes] = await Promise.all([
         apiClient.get('/customers/'),
         apiClient.get('/sales/?payment_type=credit'),
@@ -42,7 +47,10 @@ export function CreditDashboard() {
       setCustomers(allCustomers.filter((c: Customer) => Number(c.balance) > 0));
       const sales = Array.isArray(salesRes.data) ? salesRes.data : salesRes.data.results ?? [];
       setCreditSales(sales.filter((s: CreditSale & { payment_type: string }) => s.payment_type === 'credit'));
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setLoadError('تعذر تحميل بيانات المبيعات الآجلة');
+    }
     finally { setLoading(false); }
   };
 
@@ -56,19 +64,41 @@ export function CreditDashboard() {
   const totalDebt = customers.reduce((sum, c) => sum + Number(c.balance), 0);
 
   const handleCollect = async () => {
-    if (!selectedCustomer || !collectAmount) return;
+    if (!selectedCustomer || !collectAmount || collectingRef.current) return;
+    collectingRef.current = true;
+    setCollecting(true);
     try {
-      await apiClient.post(`/customers/${selectedCustomer.id}/collect/`, {
-        amount: parseFloat(collectAmount)
+      const res = await apiClient.post(`/customers/${selectedCustomer.id}/collect/`, {
+        amount: parseFloat(collectAmount),
+        payment_method: collectMethod,
+      });
+      notify.success('تم التحصيل بنجاح', {
+        description: `${selectedCustomer.name} — الرصيد المتبقي: ${formatCurrency(res.data?.balance ?? 0)}`,
       });
       await fetchData();
       setShowCollectModal(false);
       setCollectAmount('');
+      setCollectMethod('cash');
       setSelectedCustomer(null);
-    } catch (e) { notify.error('حدث خطأ أثناء التحصيل'); }
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || e?.response?.data?.detail || 'حدث خطأ أثناء التحصيل';
+      notify.error(msg);
+    } finally {
+      collectingRef.current = false;
+      setCollecting(false);
+    }
   };
 
   if (loading) return <div className="p-20 text-center text-muted-foreground font-bold">{t('common.loading')}</div>;
+  if (loadError) return (
+    <div className="h-full flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-4xl mb-2">⚠️</div>
+        <div className="text-red-500 mb-3">{loadError}</div>
+        <button onClick={fetchData} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">إعادة المحاولة</button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="h-full overflow-y-auto bg-background p-6 space-y-6 text-right font-sans" dir="rtl">
@@ -198,17 +228,47 @@ export function CreditDashboard() {
                   className="w-full px-4 py-3 border-2 border-input rounded-xl text-center text-2xl font-bold focus:outline-none focus:border-green-400 bg-background text-foreground"
                   value={collectAmount} onChange={e => setCollectAmount(e.target.value)} placeholder="0" />
               </div>
-              {collectAmount && (
+              <div>
+                <label className="block text-sm font-bold text-card-foreground mb-2">طريقة التحصيل</label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {([
+                    ['cash', '💵 كاش'],
+                    ['vodafone_cash', '📱 فودافون'],
+                    ['instapay', '📲 إنستاباي'],
+                    ['card', '💳 بطاقة'],
+                  ] as const).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setCollectMethod(key)}
+                      className={`py-2 rounded-lg text-xs font-bold transition-colors ${
+                        collectMethod === key
+                          ? 'bg-green-600 text-white'
+                          : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {collectAmount && parseFloat(collectAmount) > Number(selectedCustomer.balance) && (
+                <div className="bg-red-500/10 rounded-xl p-3 text-center text-sm border border-red-200/50 text-red-600 font-bold">
+                  المبلغ أكبر من الدين المستحق — سيُرفض من الخادم
+                </div>
+              )}
+              {collectAmount && parseFloat(collectAmount) <= Number(selectedCustomer.balance) && (
                 <div className="bg-green-500/10 rounded-xl p-3 text-center text-sm border border-green-200/50">
                   <span className="text-muted-foreground">المتبقي بعد التحصيل: </span>
                   <span className="font-bold text-green-600">
-                    {formatCurrency(Math.max(0, Number(selectedCustomer.balance) - parseFloat(collectAmount)))}
+                    {formatCurrency(Number(selectedCustomer.balance) - parseFloat(collectAmount))}
                   </span>
                 </div>
               )}
               <button onClick={handleCollect}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition">
-                تأكيد التحصيل ✅
+                disabled={collecting || !collectAmount || parseFloat(collectAmount) <= 0 || parseFloat(collectAmount) > Number(selectedCustomer.balance)}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed">
+                {collecting ? 'جارٍ التحصيل…' : 'تأكيد التحصيل ✅'}
               </button>
             </div>
           </div>

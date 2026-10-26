@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { Plus, X, Phone, Mail, MapPin, ShoppingCart, DollarSign, Building2, Search, Star, Trophy, TrendingUp, Lightbulb, ArrowDownUp, Package, Award } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../api/axiosConfig';
@@ -98,6 +98,9 @@ export function SuppliersScreen() {
   const [showPayModal, setShowPayModal] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState<'cash' | 'vodafone_cash' | 'instapay' | 'card'>('cash');
+  const [paying, setPaying] = useState(false);
+  const payingRef = useRef(false);
   const [supplierForm, setSupplierForm] = useState({ name: '', phone: '', email: '', company: '', address: '' });
   const [purchaseForm, setPurchaseForm] = useState({ supplier: '', product: '', quantity: '', cost_price: '', invoice_number: '', notes: '' });
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
@@ -241,13 +244,25 @@ export function SuppliersScreen() {
   };
 
   const handlePayDebt = async () => {
-    if (!selectedSupplier || !payAmount) return;
+    if (!selectedSupplier || !payAmount || payingRef.current) return;
+    const amt = parseFloat(payAmount);
+    if (isNaN(amt) || amt <= 0) { notify.error('أدخل مبلغًا صحيحًا'); return; }
+    if (amt > Number(selectedSupplier.balance)) { notify.error('المبلغ أكبر من الدين المستحق'); return; }
+    payingRef.current = true;
+    setPaying(true);
     try {
-      await apiClient.post(`/suppliers/${selectedSupplier.id}/pay_debt/`, { amount: parseFloat(payAmount) });
+      const res = await apiClient.post(`/suppliers/${selectedSupplier.id}/pay_debt/`, { amount: amt, payment_method: payMethod });
+      notify.success('تم تسجيل السداد', { description: `المتبقي: ${formatCurrency(res.data?.balance ?? 0)}` });
       fetchAll();
       setShowPayModal(false);
       setPayAmount('');
-    } catch (e) { notify.error('حدث خطأ'); }
+      setPayMethod('cash');
+    } catch (e: any) {
+      notify.error(e?.response?.data?.error || 'حدث خطأ أثناء السداد');
+    } finally {
+      payingRef.current = false;
+      setPaying(false);
+    }
   };
 
   const fetchEvaluations = async (supplierId?: number) => {
@@ -958,9 +973,40 @@ export function SuppliersScreen() {
                 <label className="block text-sm font-bold text-card-foreground mb-1">المبلغ المدفوع</label>
                 <input type="number" className="w-full px-4 py-3 border-2 border-border rounded-xl text-center text-xl font-bold focus:outline-none focus:border-green-400"
                   value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder="0" />
+                <button type="button" onClick={() => setPayAmount(String(selectedSupplier.balance))}
+                  className="mt-1.5 text-xs text-green-600 hover:text-green-700 font-bold">
+                  سداد كامل الدين ({formatCurrency(selectedSupplier.balance)})
+                </button>
               </div>
-              <button onClick={handlePayDebt} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl">
-                تأكيد السداد ✅
+              <div>
+                <label className="block text-sm font-bold text-card-foreground mb-2">طريقة الدفع</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { v: 'cash' as const, l: '💵 كاش' },
+                    { v: 'instapay' as const, l: '⚡ إنستاباي' },
+                    { v: 'vodafone_cash' as const, l: '📱 فودافون كاش' },
+                    { v: 'card' as const, l: '💳 بطاقة' },
+                  ].map(m => (
+                    <button key={m.v} type="button" onClick={() => setPayMethod(m.v)}
+                      className={`py-2 rounded-xl text-sm font-bold border-2 transition ${
+                        payMethod === m.v
+                          ? 'bg-green-600 border-green-600 text-white'
+                          : 'bg-muted border-transparent text-card-foreground hover:border-green-300'
+                      }`}>
+                      {m.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {payAmount && parseFloat(payAmount) > Number(selectedSupplier.balance) && (
+                <div className="bg-red-500/10 border border-red-200/50 rounded-xl p-3 text-center text-sm text-red-600">
+                  المبلغ أكبر من الدين المستحق — الحد الأقصى {formatCurrency(selectedSupplier.balance)}
+                </div>
+              )}
+              <button onClick={handlePayDebt}
+                disabled={paying || !payAmount || parseFloat(payAmount) <= 0 || parseFloat(payAmount) > Number(selectedSupplier.balance)}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed">
+                {paying ? 'جارٍ السداد…' : 'تأكيد السداد ✅'}
               </button>
             </div>
           </div>

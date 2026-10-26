@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { notify } from '@/lib/notifications';
 import { ConfirmDialog, useConfirm } from './ConfirmDialog';
 import { ProductModal } from './ProductModal';
+import { ProductImage } from './ProductImage';
 import { deleteProduct, getProducts } from '../../api/inventoryApi';
 import apiClient from '../../api/axiosConfig';
 import { formatCurrency } from '../utils/currency';
@@ -11,6 +12,9 @@ import { formatCurrency } from '../utils/currency';
 export function InventoryScreen() {
   const { t } = useTranslation();
   const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [updatingStock, setUpdatingStock] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('الكل');
   const [selectedSupplier, setSelectedSupplier] = useState('الكل');
@@ -32,10 +36,14 @@ export function InventoryScreen() {
   // دالة جلب البيانات لتحديث الجدول تلقائياً
   const fetchMyData = async () => {
     try {
+      setLoadError('');
       const data = await getProducts();
       setProducts(data || []);
     } catch (error) {
       console.error("خطأ في جلب البيانات:", error);
+      setLoadError('تعذر تحميل المنتجات — تحقق من الاتصال بالخادم');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -77,14 +85,25 @@ export function InventoryScreen() {
   };
 
   const handleUpdateStock = async () => {
-    if (!scannedProduct || !stockQuantity) return;
-    
+    if (!scannedProduct || !stockQuantity || updatingStock) return;
+
+    const delta = parseFloat(stockQuantity);
+    if (isNaN(delta)) {
+      notify.error('أدخل رقماً صالحاً');
+      return;
+    }
+    const newStock = Number(scannedProduct.current_stock || 0) + delta;
+    if (newStock < 0) {
+      notify.error(`لا يمكن أن يصبح المخزون سالباً (النتيجة: ${newStock})`);
+      return;
+    }
+
+    setUpdatingStock(true);
     try {
-      const newStock = parseFloat(scannedProduct.current_stock || 0) + parseFloat(stockQuantity);
       await apiClient.patch(`/products/${scannedProduct.id}/`, {
         current_stock: newStock
       });
-      
+
       // Refresh data and close modal
       await fetchMyData();
       setShowStockModal(false);
@@ -94,6 +113,8 @@ export function InventoryScreen() {
       notify.success(`تم تحديث المخزون: ${scannedProduct.name} - الكمية الجديدة: ${newStock}`);
     } catch (error) {
       notify.error('فشل تحديث المخزون');
+    } finally {
+      setUpdatingStock(false);
     }
   };
 
@@ -109,13 +130,27 @@ export function InventoryScreen() {
   const categories = ['الكل', ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))];
   const suppliers = ['الكل', ...Array.from(new Set(products.map((p) => p.supplier_name).filter(Boolean)))];
 
+  // Status is derived from stock (backend has no status field):
+  // out = 0, low = 0 < stock <= min_stock_level, available otherwise.
+  const stockStatus = (p: any): 'out' | 'low' | 'available' => {
+    const stock = Number(p.current_stock) || 0;
+    if (stock <= 0) return 'out';
+    if (stock <= Number(p.min_stock_level ?? 5)) return 'low';
+    return 'available';
+  };
+  const STATUS_LABEL: Record<string, string> = {
+    available: 'متوفر',
+    low: 'مخزون منخفض',
+    out: 'نفذت الكمية',
+  };
+
   const filteredProducts = products.filter((product) => {
-    const matchesSearch = searchQuery === '' || 
-                         (product.name && product.name.includes(searchQuery)) || 
+    const matchesSearch = searchQuery === '' ||
+                         (product.name && product.name.includes(searchQuery)) ||
                          (product.sku && product.sku.includes(searchQuery));
     const matchesCategory = selectedCategory === 'الكل' || product.category === selectedCategory;
     const matchesSupplier = selectedSupplier === 'الكل' || product.supplier_name === selectedSupplier;
-    const matchesStatus = selectedStatus === 'الكل' || product.status === selectedStatus;
+    const matchesStatus = selectedStatus === 'الكل' || stockStatus(product) === selectedStatus;
     return matchesSearch && matchesCategory && matchesSupplier && matchesStatus;
   });
 
@@ -224,8 +259,9 @@ export function InventoryScreen() {
 
         <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="border border-input rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500 bg-background text-foreground">
           <option value="الكل">الحالة: الكل</option>
-          <option value="متوفر">متوفر</option>
-          <option value="نفذت الكمية">نفذت الكمية</option>
+          <option value="available">متوفر</option>
+          <option value="low">مخزون منخفض</option>
+          <option value="out">نفذت الكمية</option>
         </select>
       </div>
 
@@ -245,7 +281,32 @@ export function InventoryScreen() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredProducts.map((product) => (
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-16 text-center text-muted-foreground">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3" />
+                    {t('common.loading')}
+                  </td>
+                </tr>
+              ) : loadError ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-16 text-center">
+                    <div className="text-4xl mb-2">⚠️</div>
+                    <div className="text-red-500 mb-3">{loadError}</div>
+                    <button onClick={fetchMyData} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">
+                      إعادة المحاولة
+                    </button>
+                  </td>
+                </tr>
+              ) : filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-16 text-center text-muted-foreground">
+                    <div className="text-4xl mb-2">📦</div>
+                    {products.length === 0 ? 'لا توجد منتجات بعد — أضف أول منتج' : t('common.noResults')}
+                  </td>
+                </tr>
+              ) : null}
+              {!loading && !loadError && filteredProducts.map((product) => (
                 <tr
                   key={product.id}
                   className={`transition-colors ${
@@ -255,22 +316,31 @@ export function InventoryScreen() {
                   }`}
                 >
                   <td className="px-4 py-3 font-mono text-muted-foreground">{product.barcode || product.sku}</td>
-                  <td className="px-4 py-3 font-bold text-card-foreground">{product.name}</td>
+                  <td className="px-4 py-3 font-bold text-card-foreground">
+                    <div className="flex items-center gap-2">
+                      <ProductImage src={product.image} alt={product.name} size="sm" />
+                      <span className="truncate">{product.name}</span>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <Users size={14} className="text-blue-400" />
                       {product.supplier_name || 'غير محدد'}
                     </div>
                   </td>
-                  <td className={`px-4 py-3 font-bold ${Number(product.current_stock) <= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  <td className={`px-4 py-3 font-bold ${stockStatus(product) === 'out' ? 'text-red-600' : stockStatus(product) === 'low' ? 'text-orange-600' : 'text-green-600'}`}>
                     {Number(product.current_stock).toFixed(0)} {product.unit}
                   </td>
                   {/* تصليح الحقول لتطابق الـ API واختفاء الـ NaN */}
                   <td className="px-4 py-3 text-muted-foreground">{formatCurrency(product.cost_price)}</td>
                   <td className="px-4 py-3 font-bold text-blue-600">{formatCurrency(product.retail_price)}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black ${Number(product.current_stock) > 0 ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-600'}`}>
-                      {Number(product.current_stock) > 0 ? 'متوفر' : 'نفذت الكمية'}
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black ${
+                      stockStatus(product) === 'out' ? 'bg-red-500/10 text-red-600'
+                      : stockStatus(product) === 'low' ? 'bg-orange-500/10 text-orange-600'
+                      : 'bg-green-500/10 text-green-600'
+                    }`}>
+                      {STATUS_LABEL[stockStatus(product)]}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
@@ -330,6 +400,15 @@ export function InventoryScreen() {
                 className="w-full px-4 py-3 border border-input rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-lg bg-background text-foreground"
                 autoFocus
               />
+              {stockQuantity !== '' && !isNaN(parseFloat(stockQuantity)) && (
+                <div className={`mt-2 text-sm font-bold text-center rounded-lg py-1.5 ${
+                  Number(scannedProduct.current_stock || 0) + parseFloat(stockQuantity) < 0
+                    ? 'text-red-600 bg-red-500/10'
+                    : 'text-green-600 bg-green-500/10'
+                }`}>
+                  الكمية بعد التحديث: {Number(scannedProduct.current_stock || 0) + parseFloat(stockQuantity)}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3">
@@ -341,10 +420,10 @@ export function InventoryScreen() {
               </button>
               <button
                 onClick={handleUpdateStock}
-                disabled={!stockQuantity}
+                disabled={!stockQuantity || updatingStock}
                 className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
               >
-                تحديث المخزون
+                {updatingStock ? 'جارٍ التحديث…' : 'تحديث المخزون'}
               </button>
             </div>
           </div>

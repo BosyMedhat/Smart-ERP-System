@@ -25,7 +25,8 @@ import {
   X,
 } from 'lucide-react';
 import apiClient from '../../api/axiosConfig';
-import { fetchCurrencyFromAPI } from '../utils/currency';
+import { cachedGet, seed } from '../utils/apiCache';
+import { applyCurrencyData } from '../utils/currency';
 import i18n from '../../i18n/index';
 import { useTranslation } from 'react-i18next';
 import { useTheme, type Theme } from '../providers/ThemeProvider';
@@ -146,8 +147,7 @@ export function Settings() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const response = await apiClient.get('/settings/1/');
-        const data = response.data;
+        const data = await cachedGet('/settings/1/', 60_000);
         setSettings({ ...defaultSettings, ...data });
         // Cache settings for Sidebar and other components
         localStorage.setItem('storeSettings', JSON.stringify(data));
@@ -243,11 +243,12 @@ export function Settings() {
       }
       
       setSettings({ ...defaultSettings, ...response.data });
-      // Cache updated settings
+      // Cache updated settings (shared cache + localStorage)
+      seed('/settings/1/', response.data);
       localStorage.setItem('storeSettings', JSON.stringify(response.data));
-      
-      // Refresh currency from API (triggers currencyChanged event for all components)
-      await fetchCurrencyFromAPI();
+
+      // Apply currency from the PATCH response — no extra GET needed
+      applyCurrencyData(response.data);
 
       // Apply theme color immediately
       document.documentElement.style.setProperty('--primary-color', settings.primary_color);
